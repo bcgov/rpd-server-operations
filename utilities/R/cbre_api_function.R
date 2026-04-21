@@ -35,7 +35,8 @@ extract_cbre_data <- function(
   end_time = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
   max_retries = 3,
   retry_delay = 2,
-  max_pages = NULL
+  max_pages = NULL,
+  ETL_ENV = Sys.getenv("ETL_ENV")
 ) {
   # Check required packages are available (but don't load them)
   required_packages <- c(
@@ -49,6 +50,10 @@ extract_cbre_data <- function(
   missing_packages <- required_packages[
     !sapply(required_packages, requireNamespace, quietly = TRUE)
   ]
+
+  if(ETL_ENV == "Muon"){
+    Sys.setenv(https_proxy = "https://142.34.229.249:8080/")
+  }
 
   if (length(missing_packages) > 0) {
     stop(
