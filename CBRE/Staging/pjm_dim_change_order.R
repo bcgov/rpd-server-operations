@@ -8,8 +8,6 @@ DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
 TABLE_NAME <- "pjm_dim_change_order"
 CBRE_TABLE_NAME <- "pjm_dim_change_order_vw"
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
 
 # Load libraries
 library(assertthat, quietly = TRUE, warn.conflicts = FALSE)
@@ -38,6 +36,9 @@ con <- dbConnect(
   database = DB_NAME,
   Trusted_Connection = "Yes"
 )
+
+target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+temp_table <- paste0("#", TABLE_NAME, "Temp")
 
 raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
 

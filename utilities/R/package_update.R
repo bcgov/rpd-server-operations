@@ -26,6 +26,7 @@ install.packages(c(
   "readr",
   "renv",
   "stringr",
+  "styler",
   "testthat",
   "tibble",
   "tidyr",
