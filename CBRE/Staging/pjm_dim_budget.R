@@ -9,9 +9,6 @@ SCHEMA_NAME <- "CbreStaging"
 TABLE_NAME <- "pjm_dim_budget"
 CBRE_TABLE_NAME <- "pjm_dim_budget_vw"
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -38,6 +35,9 @@ con <- dbConnect(
   database = DB_NAME,
   Trusted_Connection = "Yes"
 )
+
+target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+temp_table <- paste0("#", TABLE_NAME, "Temp")
 
 raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
 
@@ -136,7 +136,7 @@ tryCatch({
   );
   "))
 
-  # Write the current RoomAllocated tibble into the temp table
+  # Write the current tibble into the temp table
   dbWriteTable(
     con,
     name   = temp_table,
@@ -210,7 +210,7 @@ tryCatch({
     FROM ", temp_table, " AS src
     LEFT JOIN ", SCHEMA_NAME, ".", TABLE_NAME, " AS tgt
       ON tgt.budget_skey = src.budget_skey
-      WHERE tgt.budget_skey IS NULL;;
+      WHERE tgt.budget_skey IS NULL;
   ")
   )
 
