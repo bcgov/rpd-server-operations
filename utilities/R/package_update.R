@@ -68,7 +68,16 @@ pkgList <- c(
   "vroom"
 )
 
+# fullList <- pkgDep(pkgList, type = "source", Rversion = getRversion())
 fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
+
+# makeRepo(
+#   fullList,
+#   path = "C:/Projects/packagerepo",
+#   download = TRUE,
+#   type = "source",
+#   Rversion = getRversion()
+# )
 
 makeRepo(
   fullList,
