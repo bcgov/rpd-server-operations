@@ -77,19 +77,19 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
       RefreshDate         DATETIME2(3)   NOT NULL,
-      contact_skey,
-      first_name,
-      last_name,
-      email_id,
-      address_line_1,
-      address_line_2,
-      postal_code,
-      state,
-      country,
-      company_name,
-      job_title,
-      contact_id,
-      source_unique_id
+      contact_skey        INT            NOT NULL,
+      first_name          NVARCHAR(100)  NULL,
+      last_name           NVARCHAR(100)  NULL,
+      email_id            NVARCHAR(100)  NULL,
+      address_line_1      NVARCHAR(100)  NULL,
+      address_line_2      NVARCHAR(100)  NULL,
+      postal_code         NVARCHAR(100)  NULL,
+      state               NVARCHAR(100)  NULL,
+      country             NVARCHAR(100)  NULL,
+      company_name        NVARCHAR(100)  NULL,
+      job_title           NVARCHAR(100)  NULL,
+      contact_id          NVARCHAR(100)  NULL,
+      source_unique_id    NVARCHAR(100)  NULL
     );"
   )
 
@@ -113,9 +113,19 @@ tryCatch(
         temp_table,
         " (
         RefreshDate         DATETIME2(3)   NOT NULL,
-        project_role_skey   INT            NOT NULL,
-        project_role        NVARCHAR(100)  NULL,
-        source_unique_id    NVARCHAR(100)  NOT NULL
+        contact_skey        INT            NOT NULL,
+        first_name          NVARCHAR(100)  NULL,
+        last_name           NVARCHAR(100)  NULL,
+        email_id            NVARCHAR(100)  NULL,
+        address_line_1      NVARCHAR(100)  NULL,
+        address_line_2      NVARCHAR(100)  NULL,
+        postal_code         NVARCHAR(100)  NULL,
+        state               NVARCHAR(100)  NULL,
+        country             NVARCHAR(100)  NULL,
+        company_name        NVARCHAR(100)  NULL,
+        job_title           NVARCHAR(100)  NULL,
+        contact_id          NVARCHAR(100)  NULL,
+        source_unique_id    NVARCHAR(100)  NULL
       );"
       )
     )
@@ -137,8 +147,18 @@ tryCatch(
       UPDATE tgt
       SET
         tgt.RefreshDate       = src.RefreshDate,
-        tgt.project_role_skey = src.project_role_skey,
-        tgt.project_role      = src.project_role,
+        tgt.contact_skey      = src.contact_skey,
+        tgt.first_name        = src.first_name,
+        tgt.last_name         = src.last_name,
+        tgt.email_id          = src.email_id,
+        tgt.address_line_1    = src.address_line_1,
+        tgt.address_line_2    = src.address_line_2,
+        tgt.postal_code       = src.postal_code,
+        tgt.state             = src.state,
+        tgt.country           = src.country,
+        tgt.company_name      = src.company_name,
+        tgt.job_title         = src.job_title,
+        tgt.contact_id        = src.contact_id,
         tgt.source_unique_id  = src.source_unique_id
       FROM ",
         SCHEMA_NAME,
@@ -148,10 +168,9 @@ tryCatch(
       JOIN ",
         temp_table,
         " src
-        ON  tgt.project_role_skey = src.project_role_skey
+        ON  tgt.contact_skey = src.contact_skey
         WHERE
-            ISNULL(tgt.project_role, '')     <> ISNULL(src.project_role, '')
-         OR ISNULL(tgt.source_unique_id, '') <> ISNULL(src.source_unique_id, '');
+            ISNULL(tgt.contact_skey, '')     <> ISNULL(src.contact_skey, '');
       "
       )
     )
@@ -167,14 +186,34 @@ tryCatch(
         TABLE_NAME,
         " (
         RefreshDate,
-        project_role_skey,
-        project_role,
+        contact_skey,
+        first_name,
+        last_name,
+        email_id,
+        address_line_1,
+        address_line_2,
+        postal_code,
+        state,
+        country,
+        company_name,
+        job_title,
+        contact_id,
         source_unique_id
       )
       SELECT
         src.RefreshDate,
-        src.project_role_skey,
-        src.project_role,
+        src.contact_skey,
+        src.first_name,
+        src.last_name,
+        src.email_id,
+        src.address_line_1,
+        src.address_line_2,
+        src.postal_code,
+        src.state,
+        src.country,
+        src.company_name,
+        src.job_title,
+        src.contact_id,
         src.source_unique_id
       FROM ",
         temp_table,
@@ -184,8 +223,8 @@ tryCatch(
         ".",
         TABLE_NAME,
         " tgt
-        ON  tgt.project_role_skey = src.project_role_skey
-      WHERE tgt.project_role_skey IS NULL;
+        ON  tgt.contact_skey = src.contact_skey
+      WHERE tgt.contact_skey IS NULL;
       "
       )
     )
@@ -204,8 +243,9 @@ tryCatch(
       LEFT JOIN ",
         temp_table,
         " src
-        ON tgt.project_role_skey = src.project_role_skey
-      WHERE src.project_role_skey IS NULL;"
+        ON  tgt.contact_skey = src.contact_skey
+      WHERE tgt.contact_skey IS NULL;
+        "
       )
     )
 
