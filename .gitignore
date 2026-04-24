@@ -2,6 +2,9 @@
 .Renviron
 !.Renviron.example
 
+.Rprofile
+!.Rprofile.example
+
 .Rproj.user/
 
 /logs/
