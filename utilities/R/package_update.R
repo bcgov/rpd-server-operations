@@ -129,4 +129,5 @@ merged[is.na(merged$Version) | merged$Wanted != merged$Version, ]
 options(renv.config.install.transactional = FALSE)
 
 # run with
+options(renv.download.trace = TRUE)
 renv::restore(transactional = FALSE)
