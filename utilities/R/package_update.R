@@ -104,3 +104,29 @@ options(repos = c(LOCAL = "file:///E:/Projects/packagerepo"))
 # renv::restore(repos = getOption("repos"))
 
 install.packages(pkgList, repos = "file:///E:/Projects/packagerepo", type = "win.binary")
+
+options(renv.download.trace = TRUE)
+renv::restore()
+
+# Troubleshoot current hanging
+# See what versions the lockfile wants
+lockfile <- renv::lockfile_read()
+wanted <- sapply(lockfile$Packages, function(p) p$Version)
+wanted <- data.frame(Package = names(wanted), Wanted = wanted, stringsAsFactors = FALSE)
+
+# See what versions your local repo has
+available <- available.packages(
+  repos = "file:///E:/Projects/packagerepo",
+  type = "win.binary"
+)[, c("Package", "Version")]
+available <- as.data.frame(available, stringsAsFactors = FALSE)
+
+# Find mismatches
+merged <- merge(wanted, available, by = "Package", all.x = TRUE)
+merged[is.na(merged$Version) | merged$Wanted != merged$Version, ]
+
+# add to .Rprofile
+options(renv.config.install.transactional = FALSE)
+
+# run with
+renv::restore(transactional = FALSE)
