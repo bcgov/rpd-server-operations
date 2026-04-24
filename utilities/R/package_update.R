@@ -102,3 +102,5 @@ makeRepo(
 options(repos = c(LOCAL = "file:///E:/Projects/packagerepo"))
 # may need to call
 # renv::restore(repos = getOption("repos"))
+
+install.packages(pkgList, repos = "file:///E:/Projects/packagerepo", type = "win.binary")
