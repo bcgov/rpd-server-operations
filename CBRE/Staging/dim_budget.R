@@ -6,8 +6,8 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_dim_budget"
-CBRE_TABLE_NAME <- "pjm_dim_budget_vw"
+TABLE_NAME <- "dim_budget"
+CBRE_TABLE_NAME <- "dim_budget_vw"
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -39,7 +39,6 @@ con <- dbConnect(
 
 target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 temp_table <- paste0("#", TABLE_NAME, "Temp")
-
 raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
 
 cleaned_data <- raw_data |>
@@ -48,6 +47,7 @@ cleaned_data <- raw_data |>
   select_if(~ !all(. == '-1')) |>
   select_if(~ !all(. == "N/A")) |>
   select_if(~ !all(. == "-")) |>
+  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
   mutate(
     across(
       c(
@@ -55,13 +55,11 @@ cleaned_data <- raw_data |>
         budget_submitted_date,
         authorized_date,
         source_modified_ts,
-        edp_update_ts,
-        edp_create_ts
+        edp_update_ts
       ),
       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
   select(
     RefreshDate,
     budget_skey,
@@ -76,11 +74,10 @@ cleaned_data <- raw_data |>
     source_unique_id,
     source_partition_id,
     source_modified_ts,
-    edp_update_ts,
-    edp_create_ts
+    edp_update_ts
   )
 
-dbRemoveTable(con, target_table)
+# dbRemoveTable(con, target_table)
 
 if (!dbExistsTable(con, target_table)) {
   sql <- paste0(
@@ -89,22 +86,21 @@ if (!dbExistsTable(con, target_table)) {
     ".",
     TABLE_NAME,
     " (
-                RefreshDate               DATETIME2(3)  NOT NULL,
-                budget_skey               NVARCHAR(10)  NOT NULL,
-                budget_id                 NVARCHAR(10)  NOT NULL,
-                budget_number             NVARCHAR(5)   NOT NULL,
-                budget_type               NVARCHAR(100) NULL,
-                budget_subject            NVARCHAR(100) NULL,
-                budget_approval_status    NVARCHAR(20)  NULL,
-                budget_date               DATETIME2(3)  NULL,
-                budget_submitted_date     DATETIME2(3)  NULL,
-                authorized_date           DATETIME2(3)  NULL,
-                source_unique_id          NVARCHAR(10)  NOT NULL,
-                source_partition_id       NVARCHAR(10)  NOT NULL,
-                source_modified_ts        DATETIME2(3)  NULL,
-                edp_update_ts             DATETIME2(3)  NULL,
-                edp_create_ts             DATETIME2(3)  NULL
-                );"
+      RefreshDate                 DATETIME2(3)   NOT NULL,
+      budget_skey                 INT            NOT NULL,
+      budget_id                   INT            NOT NULL,
+      budget_number               NVARCHAR(10)   NULL,
+      budget_type                 NVARCHAR(30)   NULL,
+      budget_subject              NVARCHAR(150)  NULL,
+      budget_approval_status      NVARCHAR(30)   NULL,
+      budget_date                 DATETIME2(3)   NULL,
+      budget_submitted_date       DATETIME2(3)   NULL,
+      authorized_date             DATETIME2(3)   NULL,
+      source_unique_id            NVARCHAR(30)   NULL,
+      source_partition_id         NVARCHAR(30)   NULL,
+      source_modified_ts          DATETIME2(3)   NULL,
+      edp_update_ts               DATETIME2(3)   NULL
+      );"
   )
 
   dbExecute(con, sql)
@@ -114,41 +110,36 @@ if (!dbExistsTable(con, target_table)) {
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
-# Begin error handling and rollback of transaction on failure
 tryCatch(
   {
     if (dbExistsTable(con, temp_table)) {
       dbRemoveTable(con, temp_table)
     }
 
-    # Create temp table to hold new data
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
         temp_table,
         " (
-          RefreshDate               DATETIME2(3)  NOT NULL,
-          budget_skey               NVARCHAR(10)  NOT NULL,
-          budget_id                 NVARCHAR(10)  NOT NULL,
-          budget_number             NVARCHAR(5)   NOT NULL,
-          budget_type               NVARCHAR(100) NULL,
-          budget_subject            NVARCHAR(100) NULL,
-          budget_approval_status    NVARCHAR(20)  NULL,
-          budget_date               DATETIME2(3)  NULL,
-          budget_submitted_date     DATETIME2(3)  NULL,
-          authorized_date           DATETIME2(3)  NULL,
-          source_unique_id          NVARCHAR(10)  NOT NULL,
-          source_partition_id       NVARCHAR(10)  NOT NULL,
-          source_modified_ts        DATETIME2(3)  NULL,
-          edp_update_ts             DATETIME2(3)  NULL,
-          edp_create_ts             DATETIME2(3)  NULL
-  );
-  "
+        RefreshDate                 DATETIME2(3)   NOT NULL,
+        budget_skey                 INT            NOT NULL,
+        budget_id                   INT            NOT NULL,
+        budget_number               NVARCHAR(10)   NULL,
+        budget_type                 NVARCHAR(30)   NULL,
+        budget_subject              NVARCHAR(150)  NULL,
+        budget_approval_status      NVARCHAR(30)   NULL,
+        budget_date                 DATETIME2(3)   NULL,
+        budget_submitted_date       DATETIME2(3)   NULL,
+        authorized_date             DATETIME2(3)   NULL,
+        source_unique_id            NVARCHAR(30)   NOT NULL,
+        source_partition_id         NVARCHAR(30)   NOT NULL,
+        source_modified_ts          DATETIME2(3)   NULL,
+        edp_update_ts               DATETIME2(3)   NULL
+        );"
       )
     )
 
-    # Write the current tibble into the temp table
     dbWriteTable(
       con,
       name = temp_table,
@@ -157,13 +148,14 @@ tryCatch(
       overwrite = FALSE
     )
 
-    # Update existing rows in the target table
+    # Update existing rows in the target table that have changed
+
     n_updated <- dbExecute(
       con,
       paste0(
         "
     UPDATE tgt
-    SET
+      SET
         tgt.RefreshDate             = src.RefreshDate,
         tgt.budget_skey             = src.budget_skey,
         tgt.budget_id               = src.budget_id,
@@ -177,22 +169,21 @@ tryCatch(
         tgt.source_unique_id        = src.source_unique_id,
         tgt.source_partition_id     = src.source_partition_id,
         tgt.source_modified_ts      = src.source_modified_ts,
-        tgt.edp_update_ts           = src.edp_update_ts,
-        tgt.edp_create_ts           = src.edp_create_ts
-    FROM ",
+        tgt.edp_update_ts           = src.edp_update_ts
+      FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        " AS tgt
-    JOIN ",
+        " tgt
+      JOIN ",
         temp_table,
-        " AS src
-      ON  tgt.budget_skey = src.budget_skey;
-  "
+        " src
+        ON tgt.budget_skey = src.budget_skey;
+      "
       )
     )
 
-    # Insert new rows not already in the target
+    # Insert new rows that don't exist in the SQL table
     n_inserted <- dbExecute(
       con,
       paste0(
@@ -202,49 +193,67 @@ tryCatch(
         ".",
         TABLE_NAME,
         " (
-        RefreshDate,
-        budget_skey,
-        budget_id,
-        budget_number,
-        budget_type,
-        budget_subject,
-        budget_approval_status,
-        budget_date,
-        budget_submitted_date,
-        authorized_date,
-        source_unique_id,
-        source_partition_id,
-        source_modified_ts,
-        edp_update_ts,
-        edp_create_ts
+      RefreshDate,
+      budget_skey,
+      budget_id,
+      budget_number,
+      budget_type,
+      budget_subject,
+      budget_approval_status,
+      budget_date,
+      budget_submitted_date,
+      authorized_date,
+      source_unique_id,
+      source_partition_id,
+      source_modified_ts,
+      edp_update_ts
     )
     SELECT
-        src.RefreshDate,
-        src.budget_skey,
-        src.budget_id,
-        src.budget_number,
-        src.budget_type,
-        src.budget_subject,
-        src.budget_approval_status,
-        src.budget_date,
-        src.budget_submitted_date,
-        src.authorized_date,
-        src.source_unique_id,
-        src.source_partition_id,
-        src.source_modified_ts,
-        src.edp_update_ts,
-        src.edp_create_ts
+      src.RefreshDate,
+      src.budget_skey,
+      src.budget_id,
+      src.budget_number,
+      src.budget_type,
+      src.budget_subject,
+      src.budget_approval_status,
+      src.budget_date,
+      src.budget_submitted_date,
+      src.authorized_date,
+      src.source_unique_id,
+      src.source_partition_id,
+      src.source_modified_ts,
+      src.edp_update_ts
     FROM ",
         temp_table,
-        " AS src
+        " src
     LEFT JOIN ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        " AS tgt
+        " tgt
       ON tgt.budget_skey = src.budget_skey
-      WHERE tgt.budget_skey IS NULL;
-  "
+    WHERE tgt.budget_skey IS NULL;
+    "
+      )
+    )
+
+    # Delete old rows that don't exist in the SQL table
+    n_deleted <- dbExecute(
+      con,
+      paste0(
+        "
+      DELETE tgt
+        FROM ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        " tgt
+      LEFT JOIN ",
+        temp_table,
+        " src
+        ON  tgt.budget_skey = src.budget_skey
+      WHERE src.budget_skey IS NULL;
+        "
       )
     )
 
