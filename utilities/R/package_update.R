@@ -131,3 +131,6 @@ options(renv.config.install.transactional = FALSE)
 # run with
 options(renv.download.trace = TRUE)
 renv::restore(transactional = FALSE)
+
+
+# Okay, I think after all of the above the install was successful. I left it alone to do its thing over the weekend
