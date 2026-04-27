@@ -51,7 +51,7 @@ extract_cbre_data <- function(
     !sapply(required_packages, requireNamespace, quietly = TRUE)
   ]
 
-  if(ETL_ENV == "Muon"){
+  if (ETL_ENV == "Muon") {
     Sys.setenv(https_proxy = "https://142.34.229.249:8080/")
   }
 
@@ -467,7 +467,7 @@ retrieve_edp_export <- function(
 
     chunk <- resp |>
       resp_body_string() |>
-      readr::read_csv(col_types = cols(.default = "c"))
+      readr::read_csv(col_types = readr::cols(.default = "c"))
 
     all_data <- dplyr::bind_rows(all_data, chunk)
 
