@@ -29,13 +29,13 @@ install.packages(c(
   "testthat",
   "tibble",
   "tidyr",
+  "timetk",
   "vroom"
 ))
 
 library(miniCRAN)
 pkgList <- c(
-  "igraph",
-  "bit64"
+  "timetk"
 )
 pkgList <- c(
   "arrow",
@@ -83,13 +83,18 @@ fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
 # )
 
 makeRepo(
-  pkgList,
+  fullList,
   path = "C:/Projects/packagerepo",
   download = TRUE,
   type = "win.binary",
   Rversion = getRversion()
 )
 
+tools::write_PACKAGES(
+  "C:/Projects/packagerepo",
+  type = "win.binary",
+  verbose = TRUE
+)
 # Attempts to get Muon sorted out
 # getOption("repos")
 # renv::config$repos.override("file:///E:/Projects/packagerepo")
@@ -103,7 +108,11 @@ options(repos = c(LOCAL = "file:///E:/Projects/packagerepo"))
 # may need to call
 # renv::restore(repos = getOption("repos"))
 
-install.packages(pkgList, repos = "file:///E:/Projects/packagerepo", type = "win.binary")
+install.packages(
+  pkgList,
+  repos = "file:///E:/Projects/packagerepo",
+  type = "win.binary"
+)
 
 options(renv.download.trace = TRUE)
 renv::restore()
@@ -112,11 +121,15 @@ renv::restore()
 # See what versions the lockfile wants
 lockfile <- renv::lockfile_read()
 wanted <- sapply(lockfile$Packages, function(p) p$Version)
-wanted <- data.frame(Package = names(wanted), Wanted = wanted, stringsAsFactors = FALSE)
+wanted <- data.frame(
+  Package = names(wanted),
+  Wanted = wanted,
+  stringsAsFactors = FALSE
+)
 
 # See what versions your local repo has
 available <- available.packages(
-  repos = "file:///E:/Projects/packagerepo",
+  repos = "file:///C:/Projects/packagerepo",
   type = "win.binary"
 )[, c("Package", "Version")]
 available <- as.data.frame(available, stringsAsFactors = FALSE)
@@ -131,6 +144,5 @@ options(renv.config.install.transactional = FALSE)
 # run with
 options(renv.download.trace = TRUE)
 renv::restore(transactional = FALSE)
-
 
 # Okay, I think after all of the above the install was successful. I left it alone to do its thing over the weekend

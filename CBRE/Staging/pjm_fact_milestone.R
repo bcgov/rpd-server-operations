@@ -128,22 +128,25 @@ assert_that(
 # dbRemoveTable(con, target_table)
 
 if (!dbExistsTable(con, target_table)) {
-
   sql <- paste0(
-    "CREATE TABLE ", SCHEMA_NAME, ".", TABLE_NAME, " (
-      RefreshDate               DATETIME2(3)  NOT NULL,
-      project_skey              INT           NOT NULL,
-      milestone_skey            INT           NOT NULL,
-      milestone_id              INT           NOT NULL,
-      parent_milestone_id       INT           NULL,
-      milestone_desc            NVARCHAR(500) NULL,
+    "CREATE TABLE ",
+    SCHEMA_NAME,
+    ".",
+    TABLE_NAME,
+    " (
+      RefreshDate               DATETIME2(3)   NOT NULL,
+      project_skey              INT            NOT NULL,
+      milestone_skey            INT            NOT NULL,
+      milestone_id              INT            NOT NULL,
+      parent_milestone_id       INT            NULL,
+      milestone_desc            NVARCHAR(500)  NULL,
       milestone_notes           NVARCHAR(1000) NULL,
-      estimated_start_date      DATETIME2(3)  NULL,
-      revised_start_date        DATETIME2(3)  NULL,
-      actual_start_date         DATETIME2(3)  NULL,
-      estimated_end_date        DATETIME2(3)  NULL,
-      revised_end_date          DATETIME2(3)  NULL,
-      actual_end_date           DATETIME2(3)  NULL,
+      estimated_start_date      DATETIME2(3)   NULL,
+      revised_start_date        DATETIME2(3)   NULL,
+      actual_start_date         DATETIME2(3)   NULL,
+      estimated_end_date        DATETIME2(3)   NULL,
+      revised_end_date          DATETIME2(3)   NULL,
+      actual_end_date           DATETIME2(3)   NULL,
       project_start_milestone_f CHAR(1)        NULL,
       project_end_milestone_f   CHAR(1)        NULL,
       is_na_f                   CHAR(1)        NULL,
@@ -155,7 +158,9 @@ if (!dbExistsTable(con, target_table)) {
       source_created_ts         DATETIME2(3)   NULL,
       edp_update_ts             DATETIME2(3)   NULL,
 
-      CONSTRAINT PK_", TABLE_NAME, " PRIMARY KEY (
+      CONSTRAINT PK_",
+    TABLE_NAME,
+    " PRIMARY KEY (
         project_skey,
         milestone_skey
       )
@@ -169,16 +174,18 @@ if (!dbExistsTable(con, target_table)) {
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
-tryCatch({
+tryCatch(
+  {
+    if (dbExistsTable(con, temp_table)) {
+      dbRemoveTable(con, temp_table)
+    }
 
-  if (dbExistsTable(con, temp_table)) {
-    dbRemoveTable(con, temp_table)
-  }
-
-  dbExecute(
-    con,
-    paste0(
-      "CREATE TABLE ", temp_table, " (
+    dbExecute(
+      con,
+      paste0(
+        "CREATE TABLE ",
+        temp_table,
+        " (
         RefreshDate               DATETIME2(3)  NOT NULL,
 
         project_skey              INT           NOT NULL,
@@ -209,24 +216,23 @@ tryCatch({
         source_created_ts         DATETIME2(3)   NULL,
         edp_update_ts             DATETIME2(3)   NULL
       );"
+      )
     )
-  )
 
-  dbWriteTable(
-    con,
-    name      = temp_table,
-    value     = cleaned_data,
-    append    = TRUE,
-    overwrite = FALSE
-  )
+    dbWriteTable(
+      con,
+      name = temp_table,
+      value = cleaned_data,
+      append = TRUE,
+      overwrite = FALSE
+    )
 
+    # Update existing rows in the target table
 
-  # Update existing rows in the target table
-
-  n_updated <- dbExecute(
-    con,
-    paste0(
-      "
+    n_updated <- dbExecute(
+      con,
+      paste0(
+        "
       UPDATE tgt
       SET
         tgt.RefreshDate               = src.RefreshDate,
@@ -250,19 +256,29 @@ tryCatch({
         tgt.source_modified_ts        = src.source_modified_ts,
         tgt.source_created_ts         = src.source_created_ts,
         tgt.edp_update_ts             = src.edp_update_ts
-      FROM ", SCHEMA_NAME, ".", TABLE_NAME, " tgt
-      JOIN ", temp_table, " src
+      FROM ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        " tgt
+      JOIN ",
+        temp_table,
+        " src
         ON  tgt.project_skey   = src.project_skey
         AND tgt.milestone_skey = src.milestone_skey;
       "
+      )
     )
-  )
 
-  n_inserted <- dbExecute(
-    con,
-    paste0(
-      "
-      INSERT INTO ", SCHEMA_NAME, ".", TABLE_NAME, " (
+    n_inserted <- dbExecute(
+      con,
+      paste0(
+        "
+      INSERT INTO ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        " (
         RefreshDate,
         project_skey,
         milestone_skey,
@@ -311,22 +327,30 @@ tryCatch({
         src.source_modified_ts,
         src.source_created_ts,
         src.edp_update_ts
-      FROM ", temp_table, " src
-      LEFT JOIN ", SCHEMA_NAME, ".", TABLE_NAME, " tgt
+      FROM ",
+        temp_table,
+        " src
+      LEFT JOIN ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        " tgt
         ON  tgt.project_skey   = src.project_skey
         AND tgt.milestone_skey = src.milestone_skey
       WHERE tgt.project_skey IS NULL;
       "
+      )
     )
-  )
 
-  # Complete the transaction
-  dbCommit(con)
+    # Complete the transaction
+    dbCommit(con)
 
-  n_inserted <<- n_inserted
-  n_updated <<- n_updated
-  # Rollback transaction on failure
-}, error = function(e) {
-  dbRollback(con)
-  stop(e)
-})
+    n_inserted <<- n_inserted
+    n_updated <<- n_updated
+    # Rollback transaction on failure
+  },
+  error = function(e) {
+    dbRollback(con)
+    stop(e)
+  }
+)

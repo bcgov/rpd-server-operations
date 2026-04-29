@@ -47,7 +47,7 @@ cleaned_data <- raw_data |>
   select_if(~ !all(. == '-1')) |>
   select_if(~ !all(. == "N/A")) |>
   select_if(~ !all(. == "-")) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
   mutate(
     across(
       c(
