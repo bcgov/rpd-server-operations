@@ -51,19 +51,14 @@ woFile <- list.files(
   pattern = "WO Detail List"
 ) |>
   sort(decreasing = TRUE)
-ii = 1
-input <- read.csv(here(
-  "input",
-  woFile[ii]
-))
 
-max(input$Creation.Date)
-min(input$Creation.Date)
 for (ii in 1:length(woFile)) {
+  col_name <- gsub(".csv", "", gsub("WO Detail List_", "", woFile[ii]))
   input <- read.csv(here(
-    "data/input",
+    "input",
     woFile[ii]
-  ))
+  )) |>
+    mutate(ImportChunk = col_name, .before = everything())
   if (ii == 1) {
     WorkOrder <- input
   } else {
@@ -73,6 +68,7 @@ for (ii in 1:length(woFile)) {
 
 WorkOrder_Table <- WorkOrder |>
   select(
+    ImportChunk,
     Identifier = `Property.ID`,
     PriorityCode = `Priority.Code`,
     SLACompletionStatus = `SLA.Completion.Status`,
@@ -82,33 +78,35 @@ WorkOrder_Table <- WorkOrder |>
   ) |>
   # I think this is just to remove the timestamp portion of the date character string
   # maybe better ways to do this such as as.POSIXct()
-  mutate(CompletionDate = gsub("( [0-9]+:.*)", "", CompletionDate)) |>
+  # mutate(CompletionDate = gsub("( [0-9]+:.*)", "", CompletionDate)) |>
   mutate(
-    CompletionDate = as.Date(CompletionDate, format = "%m/%d/%Y"),
-    CreationDate = as.Date(CreationDate, format = "%m/%d/%Y")
+    CompletionDate = as.POSIXct(CompletionDate, format = "%m/%d/%Y %I:%M:%S %p")
   ) |>
-  mutate(
-    FYCreation = case_when(
-      # Won't go that far but how am I going to update over increasing fiscal years?
-      CreationDate |> timetk::between_time('2026-04-01', '2027-03-31') ~
-        "FY2526",
-      CreationDate |> timetk::between_time('2025-04-01', '2026-03-31') ~
-        "FY2526",
-      CreationDate |> timetk::between_time('2024-04-01', '2025-03-31') ~
-        "FY2425",
-      CreationDate |> timetk::between_time('2023-04-01', '2024-03-31') ~
-        "FY2324",
-      CreationDate |> timetk::between_time('2022-04-01', '2023-03-31') ~
-        "FY2223",
-      CreationDate |> timetk::between_time('2021-04-01', '2022-03-31') ~
-        "FY2122",
-      CreationDate |> timetk::between_time('2020-04-01', '2021-03-31') ~
-        "FY2021",
-    )
-  ) |>
+  mutate(CreationDate = as.POSIXct(CreationDate, format = "%m/%d/%Y")) |>
+  mutate(FYCreation = fiscal_year_label(CreationDate)) |>
+  # mutate(
+  #   FYCreation = case_when(
+  #     # Won't go that far but how am I going to update over increasing fiscal years?
+  #     CreationDate |> timetk::between_time('2026-04-01', '2027-03-31') ~
+  #       "FY2627",
+  #     CreationDate |> timetk::between_time('2025-04-01', '2026-03-31') ~
+  #       "FY2526",
+  #     CreationDate |> timetk::between_time('2024-04-01', '2025-03-31') ~
+  #       "FY2425",
+  #     CreationDate |> timetk::between_time('2023-04-01', '2024-03-31') ~
+  #       "FY2324",
+  #     CreationDate |> timetk::between_time('2022-04-01', '2023-03-31') ~
+  #       "FY2223",
+  #     CreationDate |> timetk::between_time('2021-04-01', '2022-03-31') ~
+  #       "FY2122",
+  #     CreationDate |> timetk::between_time('2020-04-01', '2021-03-31') ~
+  #       "FY2021",
+  #   )
+  # ) |>
   group_by(Identifier, FYCreation) |>
   summarise(
-    WorkOrderCount = n()
+    WorkOrderCount = n(),
+    .groups = "drop_last"
   ) |>
   pivot_wider(names_from = FYCreation, values_from = WorkOrderCount) |>
   mutate(across(starts_with("FY"), ~ replace_na(., 0))) |>
@@ -117,16 +115,12 @@ WorkOrder_Table <- WorkOrder |>
     names_to = "FYCreation",
     values_to = "WorkOrderCount"
   ) |>
-  ungroup() |>
-  left_join(FacilityDetail, by = join_by(Identifier)) |>
-  relocate(Name, Address, City, .after = Identifier) |>
-  select(-c(PropertyCode:GeoPrecision)) |>
-  filter(!is.na(Address))
+  ungroup()
 
 dbWriteTable(
   con,
   name = Id(SCHEMA_NAME, TABLE_NAME),
-  value = PMR3345,
+  value = WorkOrder_Table,
   append = FALSE,
   overwrite = TRUE
 )
