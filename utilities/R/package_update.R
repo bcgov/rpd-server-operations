@@ -1,10 +1,16 @@
-install.packages(c(
+library(miniCRAN)
+BioCpkgList <- c(
+  "BiocVersion"
+)
+
+pkgList <- c(
   "arrow",
   "assertthat",
   "AzureAuth",
   "AzureGraph",
   "AzureRMR",
   "base64enc",
+  "BiocManager",
   "DBI",
   "devtools",
   "dplyr",
@@ -31,56 +37,27 @@ install.packages(c(
   "tidyr",
   "timetk",
   "vroom"
-))
-
-library(miniCRAN)
-pkgList <- c(
-  "timetk"
-)
-pkgList <- c(
-  "arrow",
-  "assertthat",
-  "AzureAuth",
-  "AzureGraph",
-  "AzureRMR",
-  "base64enc",
-  "DBI",
-  "devtools",
-  "dplyr",
-  "fastmap",
-  "fs",
-  "here",
-  "httpuv",
-  "httr2",
-  "igraph",
-  "jsonlite",
-  "keyring",
-  "lubridate",
-  "magrittr",
-  "miniCRAN",
-  "odbc",
-  "openxlsx2",
-  "plyr",
-  "purrr",
-  "readr",
-  "renv",
-  "stringr",
-  "testthat",
-  "tibble",
-  "tidyr",
-  "vroom"
 )
 
-# fullList <- pkgDep(pkgList, type = "source", Rversion = getRversion())
+BiocManager::repositories()
+BiocRepo <- "https://bioconductor.org/packages/3.22/bioc"
+
+BioCfullList <- pkgDep(
+  BioCpkgList,
+  repos = BiocRepo,
+  type = "source",
+  Rversion = getRversion()
+)
 fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
 
-# makeRepo(
-#   fullList,
-#   path = "C:/Projects/packagerepo",
-#   download = TRUE,
-#   type = "source",
-#   Rversion = getRversion()
-# )
+makeRepo(
+  BioCfullList,
+  path = "C:/Projects/packagerepo",
+  repos = BiocRepo,
+  download = TRUE,
+  type = "source",
+  Rversion = getRversion()
+)
 
 makeRepo(
   fullList,
