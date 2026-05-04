@@ -50,7 +50,7 @@ BioCfullList <- pkgDep(
   Rversion = getRversion()
 )
 
-fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
+# fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
 
 makeRepo(
   BioCfullList,
