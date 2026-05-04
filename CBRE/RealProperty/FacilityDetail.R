@@ -55,6 +55,10 @@ query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Property")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
+query <- dbSendQuery(con, "SELECT * FROM RealProperty.FacilityZoning")
+ZoningData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
 Building <- BuildingData |>
   filter(PobcStatus == "Active") |>
   filter(BuildingId != "TBD") |>

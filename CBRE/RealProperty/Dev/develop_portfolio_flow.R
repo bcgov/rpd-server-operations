@@ -181,3 +181,16 @@ lands_report <- read_xlsx(
 
 # join both reports together
 Facility_Table <- rbind(buildings_report, lands_report)
+
+
+query <- dbSendQuery(con, "SELECT * FROM RealProperty.FixedAssetByCity")
+FAbyCDetail <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(con, "SELECT * FROM RealProperty.ProjectCosts")
+ProjectCosts <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(con, "SELECT * FROM RealProperty.FacilityZoning")
+FacilityZoning <- dbFetch(query, n = -1)
+dbClearResult(query)

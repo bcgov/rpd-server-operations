@@ -84,13 +84,19 @@ ProjectCosts <- read_xlsx(
   mutate(Total_Paid = round(Total_Paid, digits = 2)) |>
   mutate(
     CostPerSqM = case_when(
-      startsWith(Identifier, "B") & BuildingRentableArea > 0 ~ Total_Paid /
-        BuildingRentableArea,
+      startsWith(Identifier, "B") & BuildingRentableArea > 0 ~ round(
+        Total_Paid /
+          BuildingRentableArea,
+        digits = 2
+      ),
       .default = NA
     ),
     CostPerHA = case_when(
-      startsWith(Identifier, "N") & PropertyArea > 0 ~ Total_Paid /
-        PropertyArea,
+      startsWith(Identifier, "N") & PropertyArea > 0 ~ round(
+        Total_Paid /
+          PropertyArea,
+        digits = 2
+      ),
       .default = NA
     )
   )

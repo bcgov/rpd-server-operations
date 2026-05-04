@@ -1,3 +1,11 @@
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -13,8 +21,17 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("rpd-server-operations/utilities/R/cbre_api_function.R"))
-source(here::here("rpd-server-operations/utilities/R/event_logger.R"))
+source(here::here("utilities/R/cbre_api_function.R"))
+source(here::here("utilities/R/event_logger.R"))
+
+# Connect to SQL database
+con <- dbConnect(
+  odbc(),
+  driver = "ODBC Driver 17 for SQL Server",
+  server = SQL_SERVER,
+  database = DB_NAME,
+  Trusted_Connection = "Yes"
+)
 
 # Entities of interest
 pjm_fact_project_comment_vw
@@ -63,3 +80,23 @@ fm_report_worker_role_vw <- extract_cbre_data(
 
 
 fetch_edp_csv(c)
+
+
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.RoomAllocation")
+RoomAllocation <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- RoomAllocation |>
+  filter(RefreshDate == as.POSIXct("2026-04-23 14:51:11.039", tz = "UTC"))
+
+test2 <- RoomAllocation |>
+  filter(rmpct_bl_id == "B0092319")
+
+row1 <- test2[13, ]
+row2 <- test2[35, ]
+
+join_test <- row1 |>
+  left_join(
+    row2,
+    by = join_by(rmpct_bl_id, rmpct_fl_id, rmpct_rm_id, rmpct_ls_id)
+  )
