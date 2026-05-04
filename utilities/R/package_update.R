@@ -39,8 +39,9 @@ pkgList <- c(
   "vroom"
 )
 
-BiocManager::repositories()
-BiocRepo <- "https://bioconductor.org/packages/3.22/bioc"
+BiocRepos <- BiocManager::repositories()
+# BiocRepo <- "https://bioconductor.org/packages/3.22/bioc"
+BiocRepo <- unname(BiocRepos[1])
 
 BioCfullList <- pkgDep(
   BioCpkgList,
@@ -48,6 +49,7 @@ BioCfullList <- pkgDep(
   type = "source",
   Rversion = getRversion()
 )
+
 fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
 
 makeRepo(
@@ -55,7 +57,7 @@ makeRepo(
   path = "C:/Projects/packagerepo",
   repos = BiocRepo,
   download = TRUE,
-  type = "source",
+  type = "win.binary",
   Rversion = getRversion()
 )
 
