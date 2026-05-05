@@ -359,6 +359,7 @@ get_bearer_token <- function(base_url, username, credentials) {
     httr2::req_method("POST") |>
     httr2::req_perform() |>
     httr2::resp_body_json() |>
+    apply_proxy_if_needed() |>
     magrittr::extract2("access_token")
 }
 
