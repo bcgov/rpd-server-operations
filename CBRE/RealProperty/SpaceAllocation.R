@@ -144,7 +144,7 @@ Building <- BuildingData |>
   filter(BuildingId != "TBD") |>
   filter(linkAddress != "Dummy Building") |>
   left_join(
-    FacilityAddress,
+    FacilityDetail,
     by = join_by(BuildingId, PropertyId, SiteId, linkAddress, linkCity)
   ) |>
   select(
@@ -172,7 +172,7 @@ Building <- BuildingData |>
 Property <- PropertyData |>
   filter(PobcStatus == "Active") |>
   left_join(
-    FacilityAddress,
+    FacilityDetail,
     by = join_by(PropertyId, SiteId, linkAddress, linkCity)
   ) |>
   filter(is.na(BuildingId)) |>
