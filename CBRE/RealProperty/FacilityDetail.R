@@ -9,6 +9,8 @@ SCHEMA_NAME <- "RealProperty"
 TABLE_NAME <- "FacilityDetail"
 STAGE_TABLE <- paste0(TABLE_NAME, "_Stage")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+SCRIPT_NAME <- "FacilityDetail"
+API_NAME <- "BC Geocoder"
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -41,7 +43,6 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-
 # Query SQL Datasets ####
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Building")
 BuildingData <- dbFetch(query, n = -1)
@@ -53,10 +54,6 @@ dbClearResult(query)
 
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Property")
 PropertyData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-query <- dbSendQuery(con, "SELECT * FROM RealProperty.FacilityZoning")
-ZoningData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
 Building <- BuildingData |>
@@ -152,8 +149,8 @@ AddressList <- Table |>
   )
 
 # Use geocoder to improve addresses
-API_KEY = read.csv("C:/Projects/credentials/bc_geocoder_api_key.csv") |>
-  pull()
+API_KEY <- keyring::key_get(service = "BCGEOCODER_API")
+
 query_url = 'https://geocoder.api.gov.bc.ca/addresses.geojson?addressString='
 
 for (ii in 1:nrow(AddressList)) {
@@ -241,7 +238,7 @@ FacilityDetail <- Table |>
   filter(count == 1 | (count == 2 & !is.na(BuildingId))) |>
   select(-count)
 
-# dbRemoveTable(con, Id(schema = "RealProperty", table = "FacilityDetail"))
+# dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
 if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     " CREATE TABLE ",
