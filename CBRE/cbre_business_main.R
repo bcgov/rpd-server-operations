@@ -1,7 +1,7 @@
 # orchestrator_staging.R
 # Sourced by Task Scheduler via Rscript.exe
 # Runs all CBRE staging scripts, continues on error
-
+source(here::here("renv/activate.R"))
 source(here::here("utilities/R/event_logger.R"))
 
 ORCHESTRATOR_NAME <- "cbre_business"
