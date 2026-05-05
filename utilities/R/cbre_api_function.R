@@ -51,10 +51,6 @@ extract_cbre_data <- function(
     !sapply(required_packages, requireNamespace, quietly = TRUE)
   ]
 
-  if (ETL_ENV == "Muon") {
-    Sys.setenv(https_proxy = "https://142.34.229.249:8080/")
-  }
-
   if (length(missing_packages) > 0) {
     stop(
       "Missing required packages: ",
@@ -128,6 +124,7 @@ extract_cbre_data <- function(
               endTime = end_time,
               format = "json"
             )) |>
+            apply_proxy_if_needed() |>
             httr2::req_perform()
 
           # Check response status
@@ -476,4 +473,15 @@ retrieve_edp_export <- function(
   }
 
   all_data
+}
+
+
+apply_proxy_if_needed <- function(
+  req,
+  etl_env = Sys.getenv("ETL_ENV", unset = "UNKNOWN")
+) {
+  if (etl_env == "Muon") {
+    req <- httr2::req_proxy(req, url = "https://142.34.229.249:8080/")
+  }
+  req
 }
