@@ -357,9 +357,9 @@ get_bearer_token <- function(base_url, username, credentials) {
     ) |>
     httr2::req_url_query(grant_type = "client_credentials") |>
     httr2::req_method("POST") |>
+    apply_proxy_if_needed() |>
     httr2::req_perform() |>
     httr2::resp_body_json() |>
-    apply_proxy_if_needed() |>
     magrittr::extract2("access_token")
 }
 
@@ -482,7 +482,7 @@ apply_proxy_if_needed <- function(
   etl_env = Sys.getenv("ETL_ENV", unset = "UNKNOWN")
 ) {
   if (etl_env == "Muon") {
-    req <- httr2::req_proxy(req, url = "https://142.34.229.249:8080/")
+    req <- req |> httr2::req_proxy("142.34.229.249", 8080)
   }
   req
 }
