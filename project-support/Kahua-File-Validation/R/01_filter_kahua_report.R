@@ -11,19 +11,19 @@ source("C:/Projects/rpd-utilities/R/cbre_api_function.R")
 
 # Validate that the sorting works consistently as we bring in new files
 kahuaFiles <- list.files(
-  "Kahua-File-Validation/input",
+  "input/KahuaPayable",
   pattern = "(RPDKahuaPayable)"
 ) |>
   sort(decreasing = TRUE)
 
 pastKFile <- openxlsx2::read_xlsx(paste0(
-  "Kahua-File-Validation/input/",
+  "input/KahuaPayable/",
   kahuaFiles[2]
 )) |>
   select(`Line ID`)
 
 currentKFile <- openxlsx2::read_xlsx(paste0(
-  "Kahua-File-Validation/input/",
+  "input/KahuaPayable/",
   kahuaFiles[1]
 ))
 
@@ -44,7 +44,7 @@ output <- currentKFile |>
 openxlsx2::write_xlsx(
   output,
   paste0(
-    "Kahua-File-Validation/output/RPDKahuaPayableFiltered-",
+    "output/KahuaPayable/RPDKahuaPayableFiltered-",
     Sys.Date(),
     ".xlsx"
   ),
