@@ -347,7 +347,19 @@ Building_Final <- Building_Start |>
     linkAddress,
     linkCity,
     Source
-  )
+  ) |>
+  # Handle weird edge case with B0029637 - N0001220 as part of dual property identifier for parking
+  rowwise() |>
+  mutate(
+    # check_flag = if_else(is.na(TotalRentableLand), "YES", "NO"),
+    TotalRentableLand = case_when(
+      is.na(TotalRentableLand) ~ Dual_Properties$TotalRentableLand[
+        Dual_Properties$PropertyId == PropertyId
+      ][[1]],
+      .default = TotalRentableLand
+    )
+  ) |>
+  ungroup()
 
 Property_Start <- Property |>
   filter(!PropertyId %in% Building_Start$rm_bl_id) |>
