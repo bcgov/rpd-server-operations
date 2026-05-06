@@ -31,6 +31,7 @@ options(scipen = 999)
 options(digits = 7)
 
 # Load helper functions
+source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
@@ -161,6 +162,7 @@ for (ii in 1:nrow(AddressList)) {
   )
   req <- request(paste0(query_url, location)) |>
     req_headers(API_KEY = API_KEY) |>
+    apply_proxy_if_needed() |>
     req_perform()
   resp <- req |> resp_body_json()
   AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
