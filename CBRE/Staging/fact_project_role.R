@@ -6,12 +6,12 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "dim_project_role"
-CBRE_TABLE_NAME <- "dim_project_role_vw"
+TABLE_NAME <- "fact_project_role"
+CBRE_TABLE_NAME <- "fact_project_role_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "dim_project_role"
+SCRIPT_NAME <- "fact_project_role"
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -41,26 +41,6 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-edp_tables <- list(
-  # "dim_project_activity_vw",
-  "dim_project_role_vw"
-  # "fact_budget_vw",
-  # "fact_invoice_vw",
-  # "fact_project_activity_vw"
-)
-# ---- submit all exports ----
-# jobs <- lapply(edp_tables, function(tbl) {
-#   submit_edp_export(
-#     edp_table = tbl
-#   )
-# })
-
-results <- lapply(jobs, function(job) {
-  retrieve_edp_export(job$file_id)
-})
-
-# raw_data <- read.csv("C:/Projects/dim_project_role_vw.csv")
-
 raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
 
 clean_data <- raw_data |>
@@ -81,8 +61,9 @@ clean_data <- raw_data |>
   select(
     RefreshDate,
     edp_update_ts,
+    project_skey,
     project_role_skey,
-    project_role,
+    contact_skey,
     source_unique_id,
     source_system_code
   )

@@ -8,6 +8,10 @@ DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
 TABLE_NAME <- "fact_invoice"
 CBRE_TABLE_NAME <- "fact_invoice_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "fact_invoice"
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)

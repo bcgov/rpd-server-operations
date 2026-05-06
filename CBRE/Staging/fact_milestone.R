@@ -6,12 +6,12 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "dim_project_role"
-CBRE_TABLE_NAME <- "dim_project_role_vw"
+TABLE_NAME <- "fact_milestone"
+CBRE_TABLE_NAME <- "fact_milestone_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "dim_project_role"
+SCRIPT_NAME <- "fact_milestone"
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -30,7 +30,6 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 # Load helper functions
 source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
 
 # Connect to SQL database
 con <- dbConnect(
@@ -40,26 +39,6 @@ con <- dbConnect(
   database = DB_NAME,
   Trusted_Connection = "Yes"
 )
-
-edp_tables <- list(
-  # "dim_project_activity_vw",
-  "dim_project_role_vw"
-  # "fact_budget_vw",
-  # "fact_invoice_vw",
-  # "fact_project_activity_vw"
-)
-# ---- submit all exports ----
-# jobs <- lapply(edp_tables, function(tbl) {
-#   submit_edp_export(
-#     edp_table = tbl
-#   )
-# })
-
-results <- lapply(jobs, function(job) {
-  retrieve_edp_export(job$file_id)
-})
-
-# raw_data <- read.csv("C:/Projects/dim_project_role_vw.csv")
 
 raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
 
@@ -73,17 +52,45 @@ clean_data <- raw_data |>
   mutate(
     across(
       c(
-        edp_update_ts
+        edp_update_ts,
+        source_created_ts,
+        source_modified_ts
       ),
       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
+  mutate(
+    across(
+      c(
+        estimated_start_date,
+        revised_start_date,
+        actual_start_date,
+        estimated_end_date,
+        revised_end_date,
+        actual_end_date
+      ),
+      as.POSIXct
+    )
+  ) |>
   select(
-    RefreshDate,
+    project_skey,
+    milestone_skey,
+    responsible_contact_skey,
     edp_update_ts,
-    project_role_skey,
-    project_role,
+    milestone_id,
+    milestone_desc,
+    estimated_start_date,
+    revised_start_date,
+    actual_start_date,
+    estimated_end_date,
+    revised_end_date,
+    actual_end_date,
+    milestone_notes,
+    serial_number,
+    source_created_ts,
+    source_modified_ts,
     source_unique_id,
+    source_partition_id,
     source_system_code
   )
 
