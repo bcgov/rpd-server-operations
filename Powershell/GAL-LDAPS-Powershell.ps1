@@ -8,7 +8,7 @@ Add-Type -AssemblyName System.DirectoryServices.Protocols
 
 $LdapHost   = "keel.idir.bcgov"
 $Port       = 636
-$OutputCSV  = "E:\Projects\rpd-server-operations\input\gal_users.csv"
+$OutputCSV  = "E:\Projects\rpd-server-operations\input\Powershell\gal_users.csv"
 $LdapFilter = "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 
 $AttributesOfInterest = @(

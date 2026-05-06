@@ -28,7 +28,7 @@ library(openxlsx2, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-ldaps <- read.csv(here::here("input/gal_users.csv"))
+ldaps <- read.csv(here::here("input/Powershell/gal_users.csv"))
 
 output <- ldaps |>
   filter(employeeid != "") |>
