@@ -225,6 +225,9 @@ Leasing <- LeasingData |>
   filter(ls_status %in% c("Active", "Holdover"))
 
 # Assemble Tables ############################################################
+Dual_Properties <- PropertyData |>
+  filter(PobcStatus == "Active") |>
+  select(PropertyId, TotalRentableLand)
 
 Building_Start <- RoomTotal |>
   full_join(
@@ -293,10 +296,10 @@ Building_Start <- RoomTotal |>
     CustomerCategory = dp_customer_category,
     DivisionName = dv_name,
     DepartmentName = dp_name,
-    TotalRentableLand = NA,
     Source = "Building"
   ) |>
-  filter(!is.na(Tenure))
+  filter(!is.na(Tenure)) |>
+  left_join(Dual_Properties, by = join_by(rm_bl_id == PropertyId))
 
 
 Building_Final <- Building_Start |>
@@ -419,6 +422,8 @@ Property_Final <- Property_Start |>
 
 SpaceAllocation <- Building_Final |>
   union(Property_Final) |>
+  group_by(PropertyId) |>
+  tidyr::fill(TotalRentableLand, .direction = "updown") |>
   mutate(
     BCPNumber = case_when(
       Tenure == "MANAGED" & Source == "Building" ~ BuildingId,
