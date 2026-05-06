@@ -162,7 +162,6 @@ for (ii in 1:nrow(AddressList)) {
   )
   req <- request(paste0(query_url, location)) |>
     req_headers(API_KEY = API_KEY) |>
-    apply_proxy_if_needed() |>
     req_perform()
   resp <- req |> resp_body_json()
   AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
