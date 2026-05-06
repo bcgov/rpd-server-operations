@@ -1,3 +1,5 @@
+source(here::here("renv/activate.R"))
+
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
