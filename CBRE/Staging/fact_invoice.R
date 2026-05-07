@@ -41,9 +41,6 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
-
 edp_tables <- list(
   # "dim_project_activity_vw",
   # "dim_project_role_vw",
@@ -64,7 +61,7 @@ results <- lapply(jobs, function(job) {
 
 raw_data <- read.csv("C:/Projects/fact_invoice_vw.csv")
 
-cleaned_data <- raw_data |>
+clean_data <- raw_data |>
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
@@ -135,7 +132,7 @@ cleaned_data <- raw_data |>
     edp_update_ts
   )
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -202,15 +199,15 @@ dbBegin(con)
 
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
         RefreshDate                      DATETIME2(3)    NOT NULL,
         project_skey                     INT             NOT NULL,
@@ -260,8 +257,8 @@ tryCatch(
 
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
@@ -317,7 +314,7 @@ tryCatch(
         TABLE_NAME,
         " tgt
       JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " src
         ON  tgt.project_skey       = src.project_skey
         AND tgt.invoice_skey       = src.invoice_skey
@@ -422,7 +419,7 @@ tryCatch(
         src.source_modified_ts,
         src.edp_update_ts
       FROM ",
-        temp_table,
+        TEMP_TABLE,
         " src
       LEFT JOIN ",
         SCHEMA_NAME,
