@@ -32,6 +32,15 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 ldaps <- read.csv(here::here("input/Powershell/gal_users.csv"))
 
+# Connect to SQL database
+con <- dbConnect(
+  odbc(),
+  driver = "ODBC Driver 17 for SQL Server",
+  server = "windfarm.idir.bcgov\\CA_TST",
+  database = "BuildingIntelligence",
+  Trusted_Connection = "Yes"
+)
+
 output <- ldaps |>
   filter(employeeid != "") |>
   filter(bcgovhrcompany == "GOV")
