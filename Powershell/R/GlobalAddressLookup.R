@@ -9,7 +9,7 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "RealProperty"
 TABLE_NAME <- "GlobalAddressLookup"
-# STAGE_TABLE <- paste0(TABLE_NAME, "_Stage")
+STAGE_TABLE <- paste0(TABLE_NAME, "_Stage")
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 SCRIPT_NAME <- "GlobalAddressLookup"
@@ -241,19 +241,17 @@ dbBegin(con)
 
 tryCatch(
   {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
-    }
+    stage_id <- DBI::Id(
+      schema = SCHEMA_NAME,
+      table = STAGE_TABLE
+    )
 
-    # Create temp table to hold new data
-    dbExecute(
-      con,
-      paste0(
-        "
-    CREATE TABLE  ",
+    if (!dbExistsTable(con, stage_id)) {
+      sql <- paste0(
+        " CREATE TABLE ",
         SCHEMA_NAME,
         ".",
-        TEMP_TABLE,
+        STAGE_TABLE,
         " (
         RefreshDate               DATETIME2(3)    NOT NULL,
         FirstName                 NVARCHAR(100)   NOT NULL,
@@ -288,77 +286,64 @@ tryCatch(
     );
   "
       )
-    )
 
+      dbExecute(con, sql)
+    }
+
+    # Clear staging (DELETE, not DROP)
+    dbExecute(con, paste0("DELETE FROM ", SCHEMA_NAME, ".", STAGE_TABLE))
+
+    # Write into staging table the current Issues
     dbWriteTable(
       con,
-      name = TEMP_TABLE,
+      name = DBI::Id(schema = SCHEMA_NAME, table = STAGE_TABLE),
       value = GlobalAddressLookup,
       append = TRUE,
       overwrite = FALSE
     )
 
-    dbExecute(
+    # Check staging table has data
+    rows <- dbGetQuery(
       con,
       paste0(
-        "DELETE FROM ",
+        "
+  SELECT COUNT(*) AS n FROM ",
         SCHEMA_NAME,
         ".",
-        TABLE_NAME,
-        ";"
+        STAGE_TABLE
       )
     )
 
-    n_inserted <- dbExecute(
+    if (rows$n == 0) {
+      stop('Staging table is empty — aborting swap')
+    }
+
+    n_inserted <<- rows |> pull(n)
+
+    dbExecute(
       con,
-      paste0(
-        "INSERT INTO ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        "(
-        RefreshDate,
-        FirstName,
-        LastName,
-        Company,
-        Department,
-        Office,
-        JobTitle,
-        Displayname,
-        EmailAddress,
-        EmployeeId,
-        GeoFlag,
-        Prefix,
-        Address,
-        City,
-        Score,
-        Precision,
-        LinkAddress,
-        linkCity,
-        linkPostalCode,
-        bcgovaccountstatus,
-        bcgovaccounttype,
-        bcgovemploymenttype,
-        bcgovhrcity,
-        bcgovhrdepartmentid,
-        bcgovhrpositionnumber,
-        bcgovhrstatus,
-        bcgovhrcompany,
-        bcgovhrbusinessunit,
-        bcgovhrlocationcode,
-        mailboxorgcode
-      )
-       SELECT * FROM ",
-        TEMP_TABLE,
-        ";"
-      )
+      "
+  -- Ensure the old table name does not already exist
+  IF OBJECT_ID('RealProperty.GlobalAddressLookup_Old', 'U') IS NOT NULL
+    DROP TABLE RealProperty.GlobalAddressLookup_Old;
+
+  -- Rename current table out of the way
+  EXEC sp_rename
+    'RealProperty.GlobalAddressLookup',
+    'GlobalAddressLookup_Old',
+    'OBJECT';
+
+  -- Rename staging table into place
+  EXEC sp_rename
+    'RealProperty.GlobalAddressLookup_Stage',
+    'GlobalAddressLookup',
+    'OBJECT';
+"
     )
 
     # Complete the transaction
     dbCommit(con)
-    #     n_deleted <<- n_deleted
-    n_inserted <<- n_inserted
-    #     n_updated <<- n_updated
+
     #     # Rollback transaction on failure
   },
   error = function(e) {
