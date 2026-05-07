@@ -32,6 +32,11 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 ldaps <- read.csv(here::here("input/Powershell/gal_users.csv"))
 
+# Load helper functions
+source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/event_logger.R"))
+source(here::here("./utilities/R/sql_helper_functions.R"))
+
 # Connect to SQL database
 con <- dbConnect(
   odbc(),
