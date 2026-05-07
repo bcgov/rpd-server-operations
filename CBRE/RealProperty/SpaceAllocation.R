@@ -7,7 +7,6 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "RealProperty"
 TABLE_NAME <- "SpaceAllocation"
-# STAGE_TABLE <- paste0(TABLE_NAME, "_Stage")
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 SCRIPT_NAME <- "SpaceAllocation"
