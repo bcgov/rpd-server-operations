@@ -291,54 +291,52 @@ tryCatch(
       table = STAGE_TABLE
     )
 
-    if (dbExistsTable(con, stage_id)) {
-      dbRemoveTable(con, stage_id)
-    }
-
-    # Create temp table to hold new data
-    dbExecute(
-      con,
-      paste0(
-        "
-    CREATE TABLE ",
+    if (!dbExistsTable(con, stage_id)) {
+      sql <- paste0(
+        " CREATE TABLE ",
         SCHEMA_NAME,
         ".",
         STAGE_TABLE,
         " (
-        RefreshDate             DATETIME2(3)    NOT NULL,
-        Identifier              NVARCHAR(50)    NOT NULL,
-        BuildingId              NVARCHAR(50)    NULL,
-        PropertyId              NVARCHAR(50)    NULL,
-        SiteId                  NVARCHAR(50)    NULL,
-        Name                    NVARCHAR(255)   NULL,
-        GeoFlag                 BIT             NULL,
-        Address                 NVARCHAR(255)   NULL,
-        City                    NVARCHAR(100)   NULL,
-        Tenure                  NVARCHAR(50)    NULL,
-        PrimaryUse              NVARCHAR(100)   NULL,
-        FacilityType            NVARCHAR(100)   NULL,
-        StrategicClassification NVARCHAR(100)   NULL,
-        BuildingUsableArea      DECIMAL(18,2)   NULL,
-        BuildingRentableArea    DECIMAL(18,2)   NULL,
-        BuildingDate            DATETIME2(3)    NULL,
-        PropertyArea            DECIMAL(18,2)   NULL,
-        linkAddress             NVARCHAR(255)   NULL,
-        linkCity                NVARCHAR(100)   NULL,
-        geoAddress              NVARCHAR(255)   NULL,
-        geoCity                 NVARCHAR(100)   NULL,
-        Precision               DECIMAL(5,2)    NULL,
-        Score                   DECIMAL(5,2)    NULL,
-        lat                     NVARCHAR(32)    NULL,
-        lon                     NVARCHAR(32)    NULL
-    );
-    "
+          RefreshDate             DATETIME2(3)    NOT NULL,
+          Identifier              NVARCHAR(50)    NOT NULL,
+          BuildingId              NVARCHAR(50)    NULL,
+          PropertyId              NVARCHAR(50)    NULL,
+          SiteId                  NVARCHAR(50)    NULL,
+          Name                    NVARCHAR(255)   NULL,
+          GeoFlag                 BIT             NULL,
+          Address                 NVARCHAR(255)   NULL,
+          City                    NVARCHAR(100)   NULL,
+          Tenure                  NVARCHAR(50)    NULL,
+          PrimaryUse              NVARCHAR(100)   NULL,
+          FacilityType            NVARCHAR(100)   NULL,
+          StrategicClassification NVARCHAR(100)   NULL,
+          BuildingUsableArea      DECIMAL(18,2)   NULL,
+          BuildingRentableArea    DECIMAL(18,2)   NULL,
+          BuildingDate            DATETIME2(3)    NULL,
+          PropertyArea            DECIMAL(18,2)   NULL,
+          linkAddress             NVARCHAR(255)   NULL,
+          linkCity                NVARCHAR(100)   NULL,
+          geoAddress              NVARCHAR(255)   NULL,
+          geoCity                 NVARCHAR(100)   NULL,
+          Precision               DECIMAL(5,2)    NULL,
+          Score                   DECIMAL(5,2)    NULL,
+          lat                     NVARCHAR(32)    NULL,
+          lon                     NVARCHAR(32)    NULL
+          );
+  "
       )
-    )
+
+      dbExecute(con, sql)
+    }
+
+    # Clear staging (DELETE, not DROP)
+    dbExecute(con, paste0("DELETE FROM ", SCHEMA_NAME, ".", STAGE_TABLE))
 
     # Write into staging table the current Issues
     dbWriteTable(
       con,
-      name = stage_id,
+      name = DBI::Id(schema = SCHEMA_NAME, table = STAGE_TABLE),
       value = FacilityDetail,
       append = TRUE,
       overwrite = FALSE

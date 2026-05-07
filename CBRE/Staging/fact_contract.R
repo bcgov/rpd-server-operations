@@ -6,12 +6,12 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "fact_project"
-CBRE_TABLE_NAME <- "fact_project_vw"
+TABLE_NAME <- "fact_contract"
+CBRE_TABLE_NAME <- "fact_contract_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "fact_project"
+SCRIPT_NAME <- "fact_contract"
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -62,25 +62,48 @@ clean_data <- raw_data |>
     RefreshDate,
     edp_update_ts,
     project_skey,
-    property_skey,
-    project_phase,
-    building_use_type_skey,
+    contract_skey,
+    contract_id,
+    record_type,
+    cost_type,
+    status_code,
+    contract_item_skey,
+    contract_item_id,
+    line_number,
+    project_activity_skey,
+    vendor_project_manager_skey,
+    vendor_company_skey,
+    vendor_contact_skey,
+    client_contact_skey,
     client_company_skey,
-    charter_date,
-    charter_date_approved_1,
-    charter_date_approved_2,
-    target_finish_date,
-    project_duration,
-    estimated_pjm_fees,
-    estimated_budget,
-    gross_area,
-    gross_area_uom,
-    usable_area,
-    usable_area_uom,
-    rentable_area,
-    rentable_area_uom,
+    original_contract_amount,
+    contract_gross_total_amount,
+    contract_item_desc,
+    cost_current_total,
+    cost_estimated,
+    cost_estimated_quantity,
+    cost_estimated_total,
+    cost_original_total_value,
+    cost_pending_commitments,
+    cost_pending_commitments_uom,
+    cost_pending_commitments_total,
+    cost_pending_commitments_quantity,
+    contract_items_total_amount,
+    approved_changes_amount,
+    compensation,
+    executed_changes_amount,
+    executed_changes_contract_amount,
+    cost_items_total_total_value,
+    cost_estimated_uom,
+    cost_pending_commitments,
+    cost_pending_commitments_quantity,
+    scope_of_work,
+    contract_item_notes,
+    kahua_po_number,
     source_unique_id,
-    source_system_code
+    source_partition_id,
+    source_system_code,
+    source_created_ts
   )
 
 dbWriteTable(con, TARGET_TABLE, clean_data)
