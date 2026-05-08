@@ -45,7 +45,7 @@ edp_tables <- list(
   # "dim_project_activity_vw",
   # "dim_project_role_vw",
   # "fact_budget_vw",
-  "fact_invoice_vw",
+  "fact_invoice_vw"
   # "fact_project_activity_vw"
 )
 # ---- submit all exports ----
@@ -59,9 +59,10 @@ results <- lapply(jobs, function(job) {
   retrieve_edp_export(job$file_id)
 })
 
-raw_data <- read.csv("C:/Projects/fact_invoice_vw.csv")
+raw_data <- results
 
 clean_data <- raw_data |>
+  purrr::pluck(1) |>
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
@@ -81,10 +82,39 @@ clean_data <- raw_data |>
   mutate(
     across(
       c(
+        balance_to_finish,
+        balance_to_finish_with_retainage,
+        current_payment_due,
+        payables_billed_total,
+        payables_remaining_total,
+        payables_remitted_total,
+        payables_withheld_total,
+        previous_total_earned,
+        previous_work_completed,
+        scheduled_value,
+        total_to_date,
+        total_to_date_percent,
+        total_retainage,
+        total_earned_to_date,
+        work_completed_to_date,
+        work_completed_this_period,
         work_retainage,
-        work_completed_to_date
+        work_retainage_percent
       ),
       as.double
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        project_skey,
+        invoice_skey,
+        invoice_item_skey,
+        project_activity_skey,
+        change_order_skey,
+        change_order_item_skey
+      ),
+      as.integer
     )
   ) |>
   select(
@@ -132,6 +162,10 @@ clean_data <- raw_data |>
     edp_update_ts
   )
 
+# dbRemoveTable(con, TARGET_TABLE)
+dbWriteTable(con, TARGET_TABLE, clean_data)
+
+# Figure this part out later
 if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
@@ -180,15 +214,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       source_system_code               NVARCHAR(50)   NULL,
       source_created_ts                DATETIME2(3)   NULL,
       source_modified_ts               DATETIME2(3)   NULL,
-      edp_update_ts                    DATETIME2(3)   NULL,
-
-      CONSTRAINT PK_",
-    TABLE_NAME,
-    " PRIMARY KEY (
-        project_skey,
-        invoice_skey,
-        invoice_item_skey
-      )
+      edp_update_ts                    DATETIME2(3)   NULL
     );"
   )
 

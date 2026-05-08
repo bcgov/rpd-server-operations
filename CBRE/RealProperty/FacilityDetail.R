@@ -7,7 +7,7 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "RealProperty"
 TABLE_NAME <- "FacilityDetail"
-STAGE_TABLE <- paste0(TABLE_NAME, "_Stage")
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 SCRIPT_NAME <- "FacilityDetail"
 API_NAME <- "BC Geocoder"
@@ -280,23 +280,27 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
-# Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    stage_id <- DBI::Id(
-      schema = SCHEMA_NAME,
-      table = STAGE_TABLE
-    )
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
+    }
 
-    if (!dbExistsTable(con, stage_id)) {
-      sql <- paste0(
-        " CREATE TABLE ",
+    # Create temp table to hold new data
+    dbExecute(
+      con,
+      paste0(
+        "
+    CREATE TABLE  ",
         SCHEMA_NAME,
         ".",
-        STAGE_TABLE,
+        TEMP_TABLE,
         " (
           RefreshDate             DATETIME2(3)    NOT NULL,
           Identifier              NVARCHAR(50)    NOT NULL,
@@ -326,64 +330,72 @@ tryCatch(
           );
   "
       )
+  )
 
-      dbExecute(con, sql)
-    }
+  dbWriteTable(
+    con,
+    name = TEMP_TABLE,
+    value = FacilityDetail,
+    append = TRUE,
+    overwrite = FALSE
+  )
 
-    # Clear staging (DELETE, not DROP)
-    dbExecute(con, paste0("DELETE FROM ", SCHEMA_NAME, ".", STAGE_TABLE))
-
-    # Write into staging table the current Issues
-    dbWriteTable(
-      con,
-      name = DBI::Id(schema = SCHEMA_NAME, table = STAGE_TABLE),
-      value = FacilityDetail,
-      append = TRUE,
-      overwrite = FALSE
+  dbExecute(
+    con,
+    paste0(
+      "DELETE FROM ",
+      SCHEMA_NAME,
+      ".",
+      TABLE_NAME,
+      ";"
     )
+  )
 
-    # Check staging table has data
-    rows <- dbGetQuery(
-      con,
-      paste0(
-        "
-  SELECT COUNT(*) AS n FROM ",
-        SCHEMA_NAME,
-        ".",
-        STAGE_TABLE
+  n_inserted <- dbExecute(
+    con,
+    paste0(
+      "INSERT INTO ",
+      SCHEMA_NAME,
+      ".",
+      TABLE_NAME,
+      "(
+        RefreshDate,
+        Identifier,
+        BuildingId,
+        PropertyId,
+        SiteId,
+        Name,
+        GeoFlag,
+        Address,
+        City,
+        Tenure,
+        PrimaryUse,
+        FacilityType,
+        StrategicClassification,
+        BuildingUsableArea,
+        BuildingRentableArea,
+        BuildingDate,
+        PropertyArea,
+        linkCity,
+        linkAddress,
+        geoAddress,
+        geoCity,
+        Precision,
+        Score,
+        lat,
+        lon
       )
+      SELECT * FROM ",
+      TEMP_TABLE,
+      ";"
     )
-
-    if (rows$n == 0) {
-      stop('Staging table is empty — aborting swap')
-    }
-
-    n_inserted <<- rows |> pull(n)
-
-    dbExecute(
-      con,
-      "
-  -- Ensure the old table name does not already exist
-  IF OBJECT_ID('RealProperty.FacilityDetail_Old', 'U') IS NOT NULL
-    DROP TABLE RealProperty.FacilityDetail_Old;
-
-  -- Rename current table out of the way
-  EXEC sp_rename
-    'RealProperty.FacilityDetail',
-    'FacilityDetail_Old',
-    'OBJECT';
-
-  -- Rename staging table into place
-  EXEC sp_rename
-    'RealProperty.FacilityDetail_Stage',
-    'FacilityDetail',
-    'OBJECT';
-"
-    )
+  )
 
     # Complete the transaction
     dbCommit(con)
-
+    #     n_deleted <<- n_deleted
+    n_inserted <<- n_inserted
+    #     n_updated <<- n_updated
     # rollback transaction on fail, completion of error handling
   },
   error = function(e) {
@@ -391,3 +403,24 @@ tryCatch(
     stop(e)
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = NA,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)

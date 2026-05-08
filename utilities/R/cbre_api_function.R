@@ -432,6 +432,7 @@ retrieve_edp_export <- function(
         httr2::req_url_path_append(file_id) |>
         httr2::req_headers("file-num" = "1") |>
         httr2::req_auth_bearer_token(bearer_token) |>
+        apply_proxy_if_needed() |>
         httr2::req_perform(),
       silent = TRUE
     )
@@ -461,6 +462,7 @@ retrieve_edp_export <- function(
       httr2::req_url_path_append(file_id) |>
       httr2::req_headers("file-num" = fileNumber) |>
       httr2::req_auth_bearer_token(bearer_token) |>
+      apply_proxy_if_needed() |>
       httr2::req_perform()
 
     chunk <- resp |>
