@@ -424,3 +424,4 @@ if (is.null(etl_error)) {
     message = substr(etl_error$message, 1, 500)
   )
   stop(etl_error)
+}
