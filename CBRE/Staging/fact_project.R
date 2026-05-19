@@ -58,6 +58,18 @@ clean_data <- raw_data |>
       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
+  mutate(
+    across(
+      c(
+        estimated_budget,
+        estimated_pjm_fees,
+        gross_area,
+        rentable_area,
+        usable_area
+      ),
+      as.double
+    )
+  ) |>
   select(
     RefreshDate,
     edp_update_ts,

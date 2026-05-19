@@ -44,6 +44,14 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
+dynamo <- dbConnect(
+  odbc(),
+  driver = "ODBC Driver 17 for SQL Server",
+  server = "dynamo.idir.bcgov\\CA_PRD",
+  database = "RPD",
+  Trusted_Connection = "Yes"
+)
+
 # Query SQL Datasets ####
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Building")
 BuildingData <- dbFetch(query, n = -1)
@@ -56,6 +64,22 @@ dbClearResult(query)
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Property")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
+
+query <- dbSendQuery(dynamo, "SELECT * FROM [IDIR\\EBORTHIS].RPD_LAND")
+LandData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+Lands <- LandData |>
+  select(
+    PropertyId = LAND_NUMBER,
+    lat,
+    lon,
+  ) |>
+  group_by(PropertyId) |>
+  summarise(
+    lat = first(lat),
+    lon = first(lon)
+  )
 
 Building <- BuildingData |>
   filter(PobcStatus == "Active") |>
@@ -123,10 +147,9 @@ Property <- PropertyData |>
     BuildingUsableArea,
     BuildingRentableArea,
     BuildingDate,
-    PropertyArea = TotalRentableLand,
-    lat,
-    lon
-  )
+    PropertyArea = TotalRentableLand
+  ) |>
+  left_join(Lands, by = join_by(PropertyId))
 
 Table <- Building |>
   union(Property) |>

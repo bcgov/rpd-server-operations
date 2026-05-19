@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "fact_project_activity"
-CBRE_TABLE_NAME <- "fact_project_activity_vw"
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -24,9 +13,25 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "fact_project_activity"
+CBRE_TABLE_NAME <- "fact_project_activity_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "fact_project_activity"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -37,40 +42,26 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
-
-edp_tables <- list(
-  # "dim_project_activity_vw",
-  # "dim_project_role_vw",
-  # "fact_budget_vw",
-  # "fact_invoice_vw",
-  "fact_project_activity_vw"
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
 )
-# ---- submit all exports ----
-# jobs <- lapply(edp_tables, function(tbl) {
-#   submit_edp_export(
-#     edp_table = tbl
-#   )
-# })
 
-results <- lapply(jobs, function(job) {
-  retrieve_edp_export(job$file_id)
-})
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
-file_id <- jobs[[2]]$file_id
-
-jobs[[2]]$edp_table
-output <- retrieve_edp_export(file_id = file_id)
-
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
-
-fact_proj_activity_data <- raw_data
-
-write.csv(fact_proj_activity_data, "C:/Projects/fact_project_activity_vw.csv")
-fact_proj_activity_data <- read.csv("C:/Projects/fact_project_activity_vw.csv")
-
-cleaned_data <- fact_proj_activity_data |>
+clean_data <- raw_data |>
+  purrr::pluck("data") |>
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
@@ -83,6 +74,15 @@ cleaned_data <- fact_proj_activity_data |>
         edp_update_ts
       ),
       as.POSIXct
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        project_skey,
+        project_activity_skey
+      ),
+      as.character
     )
   ) |>
   mutate(
@@ -140,9 +140,9 @@ cleaned_data <- fact_proj_activity_data |>
     edp_update_ts
   )
 
-# dbRemoveTable(con, target_table)
+# dbRemoveTable(con, TARGET_TABLE)
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -150,8 +150,8 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
       RefreshDate                            DATETIME2(3)   NOT NULL,
-      project_skey                           INT            NOT NULL,
-      project_activity_skey                  INT            NOT NULL,
+      project_skey                           NVARCHAR(20)   NOT NULL,
+      project_activity_skey                  NVARCHAR(20)   NOT NULL,
       record_type                            NVARCHAR(20)   NULL,
       paid                                   DECIMAL(18,2)  NULL,
       retained                               DECIMAL(18,2)  NULL,
@@ -174,37 +174,34 @@ if (!dbExistsTable(con, target_table)) {
       payables_remaining_total_value         DECIMAL(18,2)  NULL,
       source_system_code                     NVARCHAR(50)   NULL,
       source_unique_id                       NVARCHAR(50)   NULL,
-      edp_update_ts                          DATETIME2(3)   NULL,
-
-      CONSTRAINT PK_",
-    TABLE_NAME,
-    " PRIMARY KEY (
-        project_skey,
-        project_activity_skey
-      )
+      edp_update_ts                          DATETIME2(3)   NULL
     );"
   )
 
   dbExecute(con, sql)
 }
 
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
+
 dbBegin(con)
 
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
         RefreshDate                            DATETIME2(3)   NOT NULL,
-        project_skey                           INT            NOT NULL,
-        project_activity_skey                  INT            NOT NULL,
+        project_skey                           NVARCHAR(20)   NOT NULL,
+        project_activity_skey                  NVARCHAR(20)   NOT NULL,
         record_type                            NVARCHAR(20)   NULL,
         paid                                   DECIMAL(18,2)  NULL,
         retained                               DECIMAL(18,2)  NULL,
@@ -234,53 +231,76 @@ tryCatch(
 
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
 
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT project_skey, project_activity_skey
+           FROM ",
+        TEMP_TABLE,
+        "
+           GROUP BY project_skey, project_activity_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
+
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate project_skey & project_activity_skey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    # -- Update matched rows --
     n_updated <- dbExecute(
       con,
       paste0(
-        "
-      UPDATE tgt
-      SET
-        tgt.RefreshDate                            = src.RefreshDate,
-        tgt.record_type                            = src.record_type,
-        tgt.paid                                   = src.paid,
-        tgt.retained                               = src.retained,
-        tgt.invoiced                               = src.invoiced,
-        tgt.budget_adjustments_total_value         = src.budget_adjustments_total_value,
-        tgt.budget_approved_changes_total_value    = src.budget_approved_changes_total_value,
-        tgt.budget_approved_adjustment_total_value = src.budget_approved_adjustment_total_value,
-        tgt.budget_approved_total_value            = src.budget_approved_total_value,
-        tgt.budget_estimated_total_value           = src.budget_estimated_total_value,
-        tgt.budget_contract_approved_total_value   = src.budget_contract_approved_total_value,
-        tgt.cost_approved_total_value              = src.cost_approved_total_value,
-        tgt.cost_projected_changes_total_value     = src.cost_projected_changes_total_value,
-        tgt.cost_pending_changes_total_value       = src.cost_pending_changes_total_value,
-        tgt.cost_pending_commitments_total_value   = src.cost_pending_commitments_total_value,
-        tgt.cost_approved_changes_total_value      = src.cost_approved_changes_total_value,
-        tgt.cost_original_total_value              = src.cost_original_total_value,
-        tgt.cost_estimated_total_value             = src.cost_estimated_total_value,
-        tgt.balance_to_complete                    = src.balance_to_complete,
-        tgt.awarded_amount                         = src.awarded_amount,
-        tgt.payables_remaining_total_value         = src.payables_remaining_total_value,
-        tgt.source_system_code                     = src.source_system_code,
-        tgt.source_unique_id                       = src.source_unique_id,
-        tgt.edp_update_ts                          = src.edp_update_ts
-      FROM ",
+        "UPDATE tgt
+         SET
+           tgt.RefreshDate                    = src.RefreshDate,
+           tgt.record_type                    = src.record_type,
+           tgt.paid                           = src.paid,
+           tgt.retained                       = src.retained,
+           tgt.invoiced                       = src.invoiced,
+           tgt.budget_adjustments_total_value = src.budget_adjustments_total_value,
+           tgt.budget_approved_changes_total_value = src.budget_approved_changes_total_value,
+           tgt.budget_approved_adjustment_total_value = src.budget_approved_adjustment_total_value,
+           tgt.budget_approved_total_value    = src.budget_approved_total_value,
+           tgt.budget_estimated_total_value   = src.budget_estimated_total_value,
+           tgt.budget_contract_approved_total_value = src.budget_contract_approved_total_value,
+           tgt.cost_approved_total_value      = src.cost_approved_total_value,
+           tgt.cost_projected_changes_total_value = src.cost_projected_changes_total_value,
+           tgt.cost_pending_changes_total_value = src.cost_pending_changes_total_value,
+           tgt.cost_pending_commitments_total_value = src.cost_pending_commitments_total_value,
+           tgt.cost_approved_changes_total_value = src.cost_approved_changes_total_value,
+           tgt.cost_original_total_value      = src.cost_original_total_value,
+           tgt.cost_estimated_total_value     = src.cost_estimated_total_value,
+           tgt.balance_to_complete            = src.balance_to_complete,
+           tgt.awarded_amount                 = src.awarded_amount,
+           tgt.payables_remaining_total_value = src.payables_remaining_total_value,
+           tgt.source_system_code             = src.source_system_code,
+           tgt.source_unique_id               = src.source_unique_id,
+           tgt.edp_update_ts                  = src.edp_update_ts
+         FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
         " tgt
-      JOIN ",
-        temp_table,
+         INNER JOIN ",
+        TEMP_TABLE,
         " src
-        ON  tgt.project_skey          = src.project_skey
-        AND tgt.project_activity_skey = src.project_activity_skey;
-      "
+           ON tgt.project_skey = src.project_skey
+           AND tgt.project_activity_skey = src.project_activity_skey;"
       )
     )
 
@@ -348,7 +368,7 @@ tryCatch(
         src.source_unique_id,
         src.edp_update_ts
       FROM ",
-        temp_table,
+        TEMP_TABLE,
         " src
       LEFT JOIN ",
         SCHEMA_NAME,
@@ -364,11 +384,36 @@ tryCatch(
 
     dbCommit(con)
 
-    n_inserted <<- n_inserted
+    # Hoist counts to outer scope for logging
     n_updated <<- n_updated
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

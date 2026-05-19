@@ -289,63 +289,14 @@ tryCatch(
       overwrite = FALSE
     )
 
-    n_updated <- dbExecute(
+    dbExecute(
       con,
       paste0(
-        "
-      UPDATE tgt
-      SET
-        tgt.RefreshDate                      = src.RefreshDate,
-        tgt.project_activity_skey            = src.project_activity_skey,
-        tgt.change_order_skey                = src.change_order_skey,
-        tgt.change_order_item_skey           = src.change_order_item_skey,
-        tgt.record_type                      = src.record_type,
-        tgt.invoice_status                   = src.invoice_status,
-        tgt.invoice_desc                     = src.invoice_desc,
-        tgt.invoice_item_id                  = src.invoice_item_id,
-        tgt.contract_skey                    = src.contract_skey,
-        tgt.contract_line_skey               = src.contract_line_skey,
-        tgt.to_contact_skey                  = src.to_contact_skey,
-        tgt.from_contact_skey                = src.from_contact_skey,
-        tgt.to_company_skey                  = src.to_company_skey,
-        tgt.from_company_skey                = src.from_company_skey,
-        tgt.change_order_item_id             = src.change_order_item_id,
-        tgt.line_number                      = src.line_number,
-        tgt.work_completed_this_period       = src.work_completed_this_period,
-        tgt.work_completed_to_date           = src.work_completed_to_date,
-        tgt.work_retainage                   = src.work_retainage,
-        tgt.work_retainage_percent           = src.work_retainage_percent,
-        tgt.payables_billed_total            = src.payables_billed_total,
-        tgt.payables_withheld_total          = src.payables_withheld_total,
-        tgt.payables_remitted_total          = src.payables_remitted_total,
-        tgt.balance_to_finish                = src.balance_to_finish,
-        tgt.balance_to_finish_with_retainage = src.balance_to_finish_with_retainage,
-        tgt.previous_total_earned            = src.previous_total_earned,
-        tgt.previous_work_completed          = src.previous_work_completed,
-        tgt.total_to_date                    = src.total_to_date,
-        tgt.total_earned_to_date             = src.total_earned_to_date,
-        tgt.total_to_date_percent            = src.total_to_date_percent,
-        tgt.total_retainage                  = src.total_retainage,
-        tgt.scheduled_value                  = src.scheduled_value,
-        tgt.current_payment_due              = src.current_payment_due,
-        tgt.source_unique_id                 = src.source_unique_id,
-        tgt.source_partition_id              = src.source_partition_id,
-        tgt.source_system_code               = src.source_system_code,
-        tgt.source_created_ts                = src.source_created_ts,
-        tgt.source_modified_ts               = src.source_modified_ts,
-        tgt.edp_update_ts                    = src.edp_update_ts
-      FROM ",
+        "DELETE FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        " tgt
-      JOIN ",
-        TEMP_TABLE,
-        " src
-        ON  tgt.project_skey       = src.project_skey
-        AND tgt.invoice_skey       = src.invoice_skey
-        AND tgt.invoice_item_skey  = src.invoice_item_skey;
-      "
+        ";"
       )
     )
 
