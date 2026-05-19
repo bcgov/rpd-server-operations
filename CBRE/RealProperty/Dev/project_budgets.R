@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-
-options(scipen = 999)
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -28,6 +17,17 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+
+options(scipen = 999)
 
 # Connect to SQL database
 con <- dbConnect(
@@ -64,8 +64,21 @@ FactProjectActivityData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
 # Review ACR Report and recreate
-Project_K1000191 <- DimProjectData |>
-  filter(project_number == "K1000191") |>
+ProjectReview <- DimProjectData |>
+  # filter(project_number == "K1000191") |>
+  filter(
+    project_number %in%
+      c(
+        "K1009600",
+        "K1010993",
+        "K1012638",
+        "K1012745",
+        "K1012778",
+        "K1012921",
+        "K1011138",
+        "K1010408"
+      )
+  ) |>
   select(
     project_number,
     project_skey,
@@ -104,4 +117,89 @@ Project_K1000191 <- DimProjectData |>
   ) |>
   filter(budget_status == "Approved") |>
   arrange(project_number, budget_desc) |>
-  left_join(FactProjectActivityData, by = join_by(pro))
+  mutate(
+    across(
+      c(
+        project_skey,
+        project_activity_skey
+      ),
+      as.character
+    )
+  ) |>
+  left_join(
+    FactProjectActivityData,
+    by = join_by(project_skey, project_activity_skey)
+  ) |>
+  left_join(DimProjectActivityData, by = join_by(project_activity_skey)) |>
+  select(
+    project_number,
+    project_skey,
+    project_name,
+    scope_desc,
+    project_phase,
+    budget_status,
+    budget_skey,
+    project_activity_skey,
+    budget_desc,
+    budget_item_skey,
+    budget_item_id,
+    approved_total_budget_value,
+    estimated_budget_total_value,
+    approved_budget_capital_total,
+    estimated_budget_capital,
+    budget_capital_value,
+    approved_budget_expense,
+    estimated_budget_expense,
+    budget_expense_amount,
+    record_type,
+    paid,
+    retained,
+    invoiced,
+    code,
+    code_type,
+    code_parent,
+    activity_desc,
+    budget_adjustments_total_value,
+    budget_approved_changes_total_value,
+    budget_approved_adjustment_total_value,
+    budget_approved_total_value,
+    budget_estimated_total_value,
+    budget_contract_approved_total_value,
+    cost_approved_total_value,
+    cost_projected_changes_total_value,
+    cost_pending_changes_total_value,
+    cost_pending_commitments_total_value,
+    cost_approved_changes_total_value,
+    cost_original_total_value,
+    cost_estimated_total_value,
+    balance_to_complete,
+    awarded_amount,
+    payables_remaining_total_value
+  ) #|>
+select(
+  ProjectNumber = project_number,
+  ProjectName = project_name,
+  # Project Status,
+  # Project Manager,
+  ActivityCode = code,
+  Description = activity_desc,
+  budget_desc,
+  # PreliminaryBudget, # this one is a bad example as all zeroes.
+  ApprovedBudget = budget_approved_total_budget_value,
+  Adjustments = budget_approved_adjustment_total_value,
+  ApprovedBudgetChanges = budget_approved_changes_total_value,
+  CurrentBudget = cost_approved_total_value,
+  OriginalCommitted = cost_original_total_value,
+  ApprovedChanges = cost_approved_changes_total_value,
+  CurrentCommitted = awarded_amount, # Unsure if this makes sense as the correct column
+  # PendingCommitments,
+  # PendingChanges,
+  # ProjectedExposure,
+  # AnticipatedFinalCost,
+  # Variance,
+  # VariancePercentage,
+  Invoiced = invoiced,
+  Retained = retained,
+  Paid = paid,
+  Remaining = payables_remaining_total_value
+)

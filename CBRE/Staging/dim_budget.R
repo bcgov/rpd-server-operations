@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "dim_budget"
-CBRE_TABLE_NAME <- "dim_budget_vw"
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -24,9 +13,25 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "dim_budget"
+CBRE_TABLE_NAME <- "dim_budget_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "dim_budget"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -37,9 +42,30 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_budget")
+DimBudgetData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+DimBudgetData <- DimBudgetData |>
+  mutate(
+    across(
+      c(
+        budget_skey
+      ),
+      as.character
+    )
+  )
+
+range(DimBudgetData$edp_update_ts)
+# [1] "2025-05-21 11:52:30 UTC" "2026-04-27 11:43:04 UTC"
+
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  # start_time = etl_window$start_time,
+  start_time = "2026-04-27T00:00:00Z",
+  # end_time = etl_window$end_time
+  end_time = "2026-05-19T00:00:00Z"
+)
 
 cleaned_data <- raw_data |>
   select_if(~ !all(is.na(.))) |>
@@ -60,6 +86,14 @@ cleaned_data <- raw_data |>
       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
+  mutate(
+    across(
+      c(
+        budget_skey
+      ),
+      as.character
+    )
+  ) |>
   select(
     RefreshDate,
     budget_skey,
@@ -77,9 +111,9 @@ cleaned_data <- raw_data |>
     edp_update_ts
   )
 
-# dbRemoveTable(con, target_table)
+# dbRemoveTable(con, TARGET_TABLE)
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -87,7 +121,7 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
       RefreshDate                 DATETIME2(3)   NOT NULL,
-      budget_skey                 INT            NOT NULL,
+      budget_skey                 NVARCHAR(20)   NOT NULL,
       budget_id                   INT            NOT NULL,
       budget_number               NVARCHAR(10)   NULL,
       budget_type                 NVARCHAR(30)   NULL,
@@ -112,18 +146,18 @@ dbBegin(con)
 
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
         RefreshDate                 DATETIME2(3)   NOT NULL,
-        budget_skey                 INT            NOT NULL,
+        budget_skey                 NVARCHAR(20)   NOT NULL,
         budget_id                   INT            NOT NULL,
         budget_number               NVARCHAR(10)   NULL,
         budget_type                 NVARCHAR(30)   NULL,
@@ -142,12 +176,23 @@ tryCatch(
 
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = DimBudgetData,
       append = TRUE,
       overwrite = FALSE
     )
 
+    # Temporary delete to remove current data to allow fix of budget_skey data type.
+    dbExecute(
+      con,
+      paste0(
+        "DELETE FROM ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        ";"
+      )
+    )
     # Update existing rows in the target table that have changed
 
     n_updated <- dbExecute(
@@ -176,7 +221,7 @@ tryCatch(
         TABLE_NAME,
         " tgt
       JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " src
         ON tgt.budget_skey = src.budget_skey;
       "
@@ -224,7 +269,7 @@ tryCatch(
       src.source_modified_ts,
       src.edp_update_ts
     FROM ",
-        temp_table,
+        TEMP_TABLE,
         " src
     LEFT JOIN ",
         SCHEMA_NAME,
@@ -234,26 +279,6 @@ tryCatch(
       ON tgt.budget_skey = src.budget_skey
     WHERE tgt.budget_skey IS NULL;
     "
-      )
-    )
-
-    # Delete old rows that don't exist in the SQL table
-    n_deleted <- dbExecute(
-      con,
-      paste0(
-        "
-      DELETE tgt
-        FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        " tgt
-      LEFT JOIN ",
-        temp_table,
-        " src
-        ON  tgt.budget_skey = src.budget_skey
-      WHERE src.budget_skey IS NULL;
-        "
       )
     )
 
