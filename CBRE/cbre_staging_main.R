@@ -13,7 +13,9 @@ scripts <- c(
   "CBRE/Staging/archibus_rmpct.R",
   "CBRE/Staging/archibus_ls.R",
   "CBRE/Staging/archibus_dv.R",
-  "CBRE/Staging/archibus_dp.R"
+  "CBRE/Staging/archibus_dp.R",
+  "CBRE/Staging/dim_project_activity.R",
+  "CBRE/Staging/fact_project_activity.R"
 )
 
 for (script in scripts) {
