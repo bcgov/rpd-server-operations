@@ -75,7 +75,9 @@ clean_data <- raw_data |>
         bl_area_rm_dp,
         bl_area_serv,
         bl_area_usable,
-        bl_area_vert_pen
+        bl_area_vert_pen,
+        bl_lat,
+        bl_lon
       ),
       as.double
     )
@@ -198,8 +200,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         bl_area_serv            DECIMAL(18,5) NULL,
         bl_area_usable          DECIMAL(18,5) NULL,
         bl_area_vert_pen        DECIMAL(18,5) NULL,
-        bl_lat                  NVARCHAR(30)  NULL,
-        bl_lon                  NVARCHAR(30)  NULL
+        bl_lat                  DECIMAL(9,6)  NULL,
+        bl_lon                  DECIMAL(9,6)  NULL
       );"
   )
   dbExecute(con, sql)
@@ -273,8 +275,8 @@ tryCatch(
       bl_area_serv            DECIMAL(18,5) NULL,
       bl_area_usable          DECIMAL(18,5) NULL,
       bl_area_vert_pen        DECIMAL(18,5) NULL,
-      bl_lat                  NVARCHAR(30)  NULL,
-      bl_lon                  NVARCHAR(30)  NULL
+      bl_lat                  DECIMAL(9, 6) NULL,
+      bl_lon                  DECIMAL(9, 6) NULL
     );
   "
       )

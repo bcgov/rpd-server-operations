@@ -1,17 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "FacilityDetail"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "FacilityDetail"
-API_NAME <- "BC Geocoder"
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -34,6 +20,20 @@ options(digits = 7)
 source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "RealProperty"
+TABLE_NAME <- "FacilityDetail"
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+SCRIPT_NAME <- "FacilityDetail"
+API_NAME <- "BC Geocoder"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -293,8 +293,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     geoCity                 NVARCHAR(100)   NULL,
     Precision               DECIMAL(5,2)    NULL,
     Score                   DECIMAL(5,2)    NULL,
-    lat                     NVARCHAR(32)    NULL,
-    lon                     NVARCHAR(32)    NULL
+    lat                     DECIMAL(9,6)    NULL,
+    lon                     DECIMAL(9,6)    NULL
   );
   "
   )
@@ -348,40 +348,40 @@ tryCatch(
           geoCity                 NVARCHAR(100)   NULL,
           Precision               DECIMAL(5,2)    NULL,
           Score                   DECIMAL(5,2)    NULL,
-          lat                     NVARCHAR(32)    NULL,
-          lon                     NVARCHAR(32)    NULL
+          lat                     DECIMAL(9,6)    NULL,
+          lon                     DECIMAL(9,6)    NULL
           );
   "
       )
-  )
-
-  dbWriteTable(
-    con,
-    name = TEMP_TABLE,
-    value = FacilityDetail,
-    append = TRUE,
-    overwrite = FALSE
-  )
-
-  dbExecute(
-    con,
-    paste0(
-      "DELETE FROM ",
-      SCHEMA_NAME,
-      ".",
-      TABLE_NAME,
-      ";"
     )
-  )
 
-  n_inserted <- dbExecute(
-    con,
-    paste0(
-      "INSERT INTO ",
-      SCHEMA_NAME,
-      ".",
-      TABLE_NAME,
-      "(
+    dbWriteTable(
+      con,
+      name = TEMP_TABLE,
+      value = FacilityDetail,
+      append = TRUE,
+      overwrite = FALSE
+    )
+
+    dbExecute(
+      con,
+      paste0(
+        "DELETE FROM ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        ";"
+      )
+    )
+
+    n_inserted <- dbExecute(
+      con,
+      paste0(
+        "INSERT INTO ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        "(
         RefreshDate,
         Identifier,
         BuildingId,
@@ -409,10 +409,10 @@ tryCatch(
         lon
       )
       SELECT * FROM ",
-      TEMP_TABLE,
-      ";"
+        TEMP_TABLE,
+        ";"
+      )
     )
-  )
 
     # Complete the transaction
     dbCommit(con)

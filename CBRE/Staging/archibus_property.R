@@ -1,18 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "Property"
-CBRE_TABLE_NAME <- "archibus_property"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-API_NAME <- "CBRE"
-SCRIPT_NAME <- "Property"
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -30,6 +15,22 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 # Load helper functions
 source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
+ETL_STATUS <- "DEV"
+
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "Property"
+CBRE_TABLE_NAME <- "archibus_property"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "Property"
+
 
 # Connect to SQL database
 con <- dbConnect(
@@ -69,7 +70,9 @@ clean_data <- raw_data |>
         property_area_bl_usable,
         property_area_land_acres,
         property_area_lease_meas,
-        property_area_lease_neg
+        property_area_lease_neg,
+        property_lat,
+        property_lon,
       ),
       as.double
     )
@@ -150,8 +153,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         MarketValue                  DECIMAL(18,2)  NULL,
         TotalRentableLand            DECIMAL(18,2)  NULL,
         OccupancyStatus              NVARCHAR(30)   NULL,
-        lat                          NVARCHAR(30)   NULL,
-        lon                          NVARCHAR(30)   NULL,
+        lat                          DECIMAL(9,6)   NULL,
+        lon                          DECIMAL(9,6)   NULL,
         property_area_bl_gross_int   DECIMAL(18,2)  NULL,
         property_area_bl_rentable    DECIMAL(18,2)  NULL,
         property_area_bl_usable      DECIMAL(18,2)  NULL,
@@ -207,8 +210,8 @@ tryCatch(
         MarketValue                  DECIMAL(18,2)  NULL,
         TotalRentableLand            DECIMAL(18,2)  NULL,
         OccupancyStatus              NVARCHAR(30)   NULL,
-        lat                          NVARCHAR(30)   NULL,
-        lon                          NVARCHAR(30)   NULL,
+        lat                          DECIMAL(9,6)   NULL,
+        lon                          DECIMAL(9,6)   NULL,
         property_area_bl_gross_int   DECIMAL(18,2)  NULL,
         property_area_bl_rentable    DECIMAL(18,2)  NULL,
         property_area_bl_usable      DECIMAL(18,2)  NULL,
