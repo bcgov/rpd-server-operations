@@ -1,18 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "SpaceAllocation"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "SpaceAllocation"
-API_NAME <- "None"
-
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -34,6 +19,21 @@ options(digits = 7)
 # Load helper functions
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "RealProperty"
+TABLE_NAME <- "SpaceAllocation"
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+SCRIPT_NAME <- "SpaceAllocation"
+API_NAME <- "None"
+
 
 # Connect to SQL database
 con <- dbConnect(

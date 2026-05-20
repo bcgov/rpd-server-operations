@@ -22,7 +22,8 @@ scripts <- c(
   "CBRE/Staging/fact_project.R",
   "CBRE/Staging/dim_project_role.R",
   "CBRE/Staging/fact_project_role.R",
-  "CBRE/Staging/dim_contact.R"
+  "CBRE/Staging/dim_contact.R",
+  "CBRE/Staging/pjm_fact_project.R"
 )
 
 for (script in scripts) {

@@ -45,7 +45,7 @@ con <- dbConnect(
 # Query API
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
-  start_time = paste0("2020-01-01T00:00:00Z"),
+  start_time = etl_window$start_time,
   end_time = etl_window$end_time
 )
 
@@ -247,14 +247,42 @@ tryCatch(
       ))
     }
 
-    dbExecute(
+    # -- Update matched rows --
+    n_updated <- dbExecute(
       con,
       paste0(
-        "DELETE FROM ",
+        "UPDATE tgt
+         SET
+           tgt.RefreshDate              = src.RefreshDate,
+           tgt.edp_update_ts            = src.edp_update_ts,
+           tgt.property_skey            = src.property_skey,
+           tgt.project_phase            = src.project_phase,
+           tgt.building_use_type_skey   = src.building_use_type_skey,
+           tgt.client_company_skey      = src.client_company_skey,
+           tgt.charter_date             = src.charter_date,
+           tgt.charter_date_approved_1  = src.charter_date_approved_1,
+           tgt.charter_date_approved_2  = src.charter_date_approved_2,
+           tgt.target_finish_date       = src.target_finish_date,
+           tgt.project_duration         = src.project_duration,
+           tgt.estimated_pjm_fees       = src.estimated_pjm_fees,
+           tgt.estimated_budget         = src.estimated_budget,
+           tgt.gross_area               = src.gross_area,
+           tgt.gross_area_uom           = src.gross_area_uom,
+           tgt.usable_area              = src.usable_area,
+           tgt.usable_area_uom          = src.usable_area_uom,
+           tgt.rentable_area            = src.rentable_area,
+           tgt.rentable_area_uom        = src.rentable_area_uom,
+           tgt.source_unique_id         = src.source_unique_id,
+           tgt.source_system_code       = src.source_system_code
+         FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        ";"
+        " tgt
+         INNER JOIN ",
+        TEMP_TABLE,
+        " src
+           ON tgt.project_skey = src.project_skey;"
       )
     )
 
@@ -332,9 +360,10 @@ tryCatch(
     dbCommit(con)
 
     # Hoist counts to outer scope for logging
+    n_updated <<- n_updated
     n_inserted <<- n_inserted
 
-    cat("ETL complete — inserted:", n_inserted, "\n")
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
@@ -349,7 +378,7 @@ if (is.null(etl_error)) {
     table_name = TABLE_NAME,
     status = "SUCCESS",
     n_inserted = n_inserted,
-    n_updated = NA,
+    n_updated = n_updated,
     n_deleted = NA,
     message = "ETL completed successfully"
   )
