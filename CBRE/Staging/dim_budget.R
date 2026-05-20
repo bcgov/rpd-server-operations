@@ -42,19 +42,27 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
+
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
+
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_budget")
 DimBudgetData <- dbFetch(query, n = -1)
 dbClearResult(query)
-
-DimBudgetData <- DimBudgetData |>
-  mutate(
-    across(
-      c(
-        budget_skey
-      ),
-      as.character
-    )
-  )
 
 range(DimBudgetData$edp_update_ts)
 # [1] "2025-05-21 11:52:30 UTC" "2026-04-27 11:43:04 UTC"
@@ -64,15 +72,18 @@ raw_data <- call_cbre_api(
   # start_time = etl_window$start_time,
   start_time = "2026-04-27T00:00:00Z",
   # end_time = etl_window$end_time
-  end_time = "2026-05-19T00:00:00Z"
+  end_time = "2026-05-20T00:00:00Z"
 )
 
-cleaned_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+clean_data <- raw_data |>
+  purrr::pluck("data") |>
+  # # comment out these after initial data analysis as risk of
+  # # losing columns in small data loads
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   mutate(RefreshDate = as.POSIXct(Sys.time())) |>
   mutate(
     across(
@@ -141,9 +152,15 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
+
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
+
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
+# Begin error handling and rollback of transaction on failure
 tryCatch(
   {
     if (dbExistsTable(con, TEMP_TABLE)) {
@@ -177,24 +194,36 @@ tryCatch(
     dbWriteTable(
       con,
       name = TEMP_TABLE,
-      value = DimBudgetData,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
 
-    # Temporary delete to remove current data to allow fix of budget_skey data type.
-    dbExecute(
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
       con,
       paste0(
-        "DELETE FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        ";"
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT budget_skey
+           FROM ",
+        TEMP_TABLE,
+        "
+           GROUP BY budget_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
       )
-    )
-    # Update existing rows in the target table that have changed
+    )$n
 
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate budget_skey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    # Update existing rows in the target table that have changed
     n_updated <- dbExecute(
       con,
       paste0(
@@ -285,12 +314,36 @@ tryCatch(
     # Complete the transaction
     dbCommit(con)
 
-    n_inserted <<- n_inserted
+    # Hoist counts to outer scope for logging
     n_updated <<- n_updated
-    # Rollback transaction on failure
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

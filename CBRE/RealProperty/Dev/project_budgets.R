@@ -63,22 +63,34 @@ query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fact_project_activity")
 FactProjectActivityData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_project_role")
+DimProjectRoleData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fact_project_role")
+FactProjectRoleData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_contact")
+DimContactData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
 # Review ACR Report and recreate
 ProjectReview <- DimProjectData |>
-  # filter(project_number == "K1000191") |>
-  filter(
-    project_number %in%
-      c(
-        "K1009600",
-        "K1010993",
-        "K1012638",
-        "K1012745",
-        "K1012778",
-        "K1012921",
-        "K1011138",
-        "K1010408"
-      )
-  ) |>
+  filter(project_number == "K1000191") |>
+  # filter(
+  #   project_number %in%
+  #     c(
+  #       "K1009600",
+  #       "K1010993",
+  #       "K1012638",
+  #       "K1012745",
+  #       "K1012778",
+  #       "K1012921",
+  #       "K1011138",
+  #       "K1010408"
+  #     )
+  # ) |>
   select(
     project_number,
     project_skey,
@@ -175,31 +187,48 @@ ProjectReview <- DimProjectData |>
     balance_to_complete,
     awarded_amount,
     payables_remaining_total_value
-  ) #|>
-select(
-  ProjectNumber = project_number,
-  ProjectName = project_name,
-  # Project Status,
-  # Project Manager,
-  ActivityCode = code,
-  Description = activity_desc,
-  budget_desc,
-  # PreliminaryBudget, # this one is a bad example as all zeroes.
-  ApprovedBudget = budget_approved_total_budget_value,
-  Adjustments = budget_approved_adjustment_total_value,
-  ApprovedBudgetChanges = budget_approved_changes_total_value,
-  CurrentBudget = cost_approved_total_value,
-  OriginalCommitted = cost_original_total_value,
-  ApprovedChanges = cost_approved_changes_total_value,
-  CurrentCommitted = awarded_amount, # Unsure if this makes sense as the correct column
-  # PendingCommitments,
-  # PendingChanges,
-  # ProjectedExposure,
-  # AnticipatedFinalCost,
-  # Variance,
-  # VariancePercentage,
-  Invoiced = invoiced,
-  Retained = retained,
-  Paid = paid,
-  Remaining = payables_remaining_total_value
-)
+  ) |>
+  select(
+    ProjectNumber = project_number,
+    ProjectName = project_name,
+    # Project Status,
+    # Project Manager,
+    ActivityCode = code,
+    Description = activity_desc,
+    budget_desc,
+    # PreliminaryBudget, # this one is a bad example as all zeroes.
+    ApprovedBudget = budget_approved_total_value,
+    Adjustments = budget_approved_adjustment_total_value,
+    ApprovedBudgetChanges = budget_approved_changes_total_value,
+    CurrentBudget = cost_approved_total_value,
+    OriginalCommitted = cost_original_total_value,
+    ApprovedChanges = cost_approved_changes_total_value,
+    CurrentCommitted = awarded_amount, # Unsure if this makes sense as the correct column
+    # PendingCommitments,
+    # PendingChanges,
+    # ProjectedExposure,
+    # AnticipatedFinalCost,
+    # Variance,
+    # VariancePercentage,
+    Invoiced = invoiced,
+    Retained = retained,
+    Paid = paid,
+    Remaining = payables_remaining_total_value
+  ) |>
+  filter(
+    !if_all(
+      c(
+        CurrentBudget,
+        CurrentCommitted,
+        Invoiced,
+        Retained,
+        Paid,
+        Remaining
+      ),
+      ~ .x == 0
+    )
+  ) |>
+  arrange(
+    ProjectNumber,
+    ActivityCode
+  )

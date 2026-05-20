@@ -409,6 +409,6 @@ get_etl_window <- function(today = Sys.Date()) {
 
   list(
     start_time = paste0(today - lookback_days, "T00:00:00Z"),
-    end_time = paste0(today, "T00:00:00Z")
+    end_time = paste0(today, "T", format(Sys.time(), "%H:%M:%S"), "Z")
   )
 }

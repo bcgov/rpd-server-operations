@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "dim_project"
-CBRE_TABLE_NAME <- "dim_project_vw"
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -24,9 +13,25 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "dim_project"
+CBRE_TABLE_NAME <- "dim_project_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "dim_project"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -37,17 +42,33 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = paste0("2020-01-01T00:00:00Z"),
+  end_time = etl_window$end_time
+)
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
-cleaned_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+clean_data <- raw_data |>
+  purrr::pluck("data") |>
+  # # comment out these after initial data analysis as risk of
+  # # losing columns in small data loads
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   mutate(
     across(
       c(
@@ -73,7 +94,15 @@ cleaned_data <- raw_data |>
       as.double
     )
   ) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
+  mutate(
+    across(
+      c(
+        project_skey
+      ),
+      as.character
+    )
+  ) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
   select(
     RefreshDate,
     project_skey,
@@ -160,9 +189,9 @@ cleaned_data <- raw_data |>
     csf_clientbillingstatus
   )
 
-# dbRemoveTable(con, target_table)
+# dbRemoveTable(con, TARGET_TABLE)
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -170,7 +199,7 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
           RefreshDate                   DATETIME2(3)   NOT NULL,
-          project_skey                  INT            NOT NULL,
+          project_skey                  NVARCHAR(20)   NOT NULL,
           project_id                    INT            NOT NULL,
           project_number                NVARCHAR(20)   NULL,
           project_name                  NVARCHAR(200)  NULL,
@@ -259,14 +288,19 @@ if (!dbExistsTable(con, target_table)) {
 }
 
 # Database Transaction ####
+
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
+
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
 # Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     # Create temp table to hold new data
@@ -274,10 +308,10 @@ tryCatch(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
           RefreshDate                   DATETIME2(3)   NOT NULL,
-          project_skey                  INT            NOT NULL,
+          project_skey                  NVARCHAR(20)   NOT NULL,
           project_id                    INT            NOT NULL,
           project_number                NVARCHAR(20)   NULL,
           project_name                  NVARCHAR(200)  NULL,
@@ -367,116 +401,48 @@ tryCatch(
     # Write the current tibble into the temp table
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
 
-    # Update existing rows in the target table
-    n_updated <- dbExecute(
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
       con,
       paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT project_skey
+           FROM ",
+        TEMP_TABLE,
         "
-    UPDATE tgt
-    SET
-        tgt.RefreshDate                   = src.RefreshDate,
-        tgt.project_skey                  = src.project_skey,
-        tgt.project_id                    = src.project_id,
-        tgt.project_number                = src.project_number,
-        tgt.project_name                  = src.project_name,
-        tgt.client_project_number         = src.client_project_number,
-        tgt.client_project_status         = src.client_project_status,
-        tgt.project_created_date          = src.project_created_date,
-        tgt.source_created_ts             = src.source_created_ts,
-        tgt.source_unique_id              = src.source_unique_id,
-        tgt.edp_update_ts                 = src.edp_update_ts,
-        tgt.source_partition_id           = src.source_partition_id,
-        tgt.sub_industry_type             = src.sub_industry_type,
-        tgt.risk_status                   = src.risk_status,
-        tgt.schedule_health               = src.schedule_health,
-        tgt.budget_health                 = src.budget_health,
-        tgt.overall_project_health        = src.overall_project_health,
-        tgt.client_industry               = src.client_industry,
-        tgt.cbre_organization             = src.cbre_organization,
-        tgt.cbre_operating_model          = src.cbre_operating_model,
-        tgt.is_active                     = src.is_active,
-        tgt.risks_assumptions_constraints = src.risks_assumptions_constraints,
-        tgt.project_comment               = src.project_comment,
-        tgt.project_type                  = src.project_type,
-        tgt.scope_desc                    = src.scope_desc,
-        tgt.delivery_account              = src.delivery_account,
-        tgt.project_quality               = src.project_quality,
-        tgt.proj_mngmnt_deliverables      = src.proj_mngmnt_deliverables,
-        tgt.project_decision_framework    = src.project_decision_framework,
-        tgt.communications                = src.communications,
-        tgt.core_project_team             = src.core_project_team,
-        tgt.project_schedule              = src.project_schedule,
-        tgt.project_budget                = src.project_budget,
-        tgt.project_scope                 = src.project_scope,
-        tgt.project_objective             = src.project_objective,
-        tgt.csf_pjmfeepercentage          = src.csf_pjmfeepercentage,
-        tgt.csf_partitionid               = src.csf_partitionid,
-        tgt.charter_approved_offline_f    = src.charter_approved_offline_f,
-        tgt.csf_totalforecastfinalcost    = src.csf_totalforecastfinalcost,
-        tgt.csf_agreementnumber           = src.csf_agreementnumber,
-        tgt.byp_online_client_approval    = src.byp_online_client_approval,
-        tgt.csf_migratedprojectid         = src.csf_migratedprojectid,
-        tgt.csf_clientrecoverable         = src.csf_clientrecoverable,
-        tgt.csf_branchchildorg            = src.csf_branchchildorg,
-        tgt.csf_proposeduseagreement      = src.csf_proposeduseagreement,
-        tgt.csf_modifieddatetime          = src.csf_modifieddatetime,
-        tgt.csf_id                        = src.csf_id,
-        tgt.csf_prevreportedfyytdvowcomp  = src.csf_prevreportedfyytdvowcomp,
-        tgt.csf_workcomplete              = src.csf_workcomplete,
-        tgt.csf_fundingsource             = src.csf_fundingsource,
-        tgt.csf_estimatetype              = src.csf_estimatetype,
-        tgt.int_engage_letter_executed    = src.int_engage_letter_executed,
-        tgt.csf_last_updated              = src.csf_last_updated,
-        tgt.csf_ministryparentorg         = src.csf_ministryparentorg,
-        tgt.csf_transaction_flag          = src.csf_transaction_flag,
-        tgt.csf_fundingtype               = src.csf_fundingtype,
-        tgt.csf_chargeaction              = src.csf_chargeaction,
-        tgt.csf_pmosource                 = src.csf_pmosource,
-        tgt.csf_programtype               = src.csf_programtype,
-        tgt.csf_domainpartitionid         = src.csf_domainpartitionid,
-        tgt.csf_servicetype               = src.csf_servicetype,
-        tgt.csf_leaseid                   = src.csf_leaseid,
-        tgt.csf_projectsubtype            = src.csf_projectsubtype,
-        tgt.csf_complexity                = src.csf_complexity,
-        tgt.csf_identifiedproject         = src.csf_identifiedproject,
-        tgt.csf_aresnumber                = src.csf_aresnumber,
-        tgt.csf_ytdworkcomplete           = src.csf_ytdworkcomplete,
-        tgt.csf_wsiregion                 = src.csf_wsiregion,
-        tgt.csf_projecttype               = src.csf_projecttype,
-        tgt.standard_project_type         = src.standard_project_type,
-        tgt.csf_createddatetime           = src.csf_createddatetime,
-        tgt.qualify_for_fusion_f          = src.qualify_for_fusion_f,
-        tgt.fusion_dir_response_status    = src.fusion_dir_response_status,
-        tgt.fusion_project_type           = src.fusion_project_type,
-        tgt.budget_comments               = src.budget_comments,
-        tgt.risk_comments                 = src.risk_comments,
-        tgt.schedule_comments             = src.schedule_comments,
-        tgt.csf_projadminnotes            = src.csf_projadminnotes,
-        tgt.csf_rpdlaborrecoverypercent   = src.csf_rpdlaborrecoverypercent,
-        tgt.csf_scopehealthcomments       = src.csf_scopehealthcomments,
-        tgt.record_type                   = src.record_type,
-        tgt.csf_scopehealth               = src.csf_scopehealth,
-        tgt.csf_clientbillingstatus       = src.csf_clientbillingstatus
-    FROM ",
+           GROUP BY project_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
+
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate project_skey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    dbExecute(
+      con,
+      paste0(
+        "DELETE FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        " AS tgt
-    JOIN ",
-        temp_table,
-        " AS src
-      ON  tgt.project_skey = src.project_skey;
-  "
+        ";"
       )
     )
 
-    # Insert new rows not already in the target
+    # Insert data into the SQL table
     n_inserted <- dbExecute(
       con,
       paste0(
@@ -655,7 +621,7 @@ tryCatch(
         src.csf_scopehealth,
         src.csf_clientbillingstatus
     FROM ",
-        temp_table,
+        TEMP_TABLE,
         " AS src
     LEFT JOIN ",
         SCHEMA_NAME,
@@ -671,12 +637,35 @@ tryCatch(
     # Complete the transaction
     dbCommit(con)
 
+    # Hoist counts to outer scope for logging
     n_inserted <<- n_inserted
-    n_updated <<- n_updated
-    # Rollback transaction on failure
+
+    cat("ETL complete — inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = NA,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

@@ -25,14 +25,13 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "dim_project_role"
-CBRE_TABLE_NAME <- "dim_project_role_vw"
+TABLE_NAME <- "dim_contact"
+CBRE_TABLE_NAME <- "dim_contact_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 etl_window <- get_etl_window()
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "dim_project_role"
-
+SCRIPT_NAME <- "dim_contact"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -43,12 +42,11 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-# range(DimProjectRoleData$edp_update_ts)
-# [1] "2026-05-06 01:38:14 UTC" "2026-05-06 04:48:56 UTC"
 # Query API
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = etl_window$start_time,
+  # start_time = paste0("2020-01-01T00:00:00Z"),
   end_time = etl_window$end_time
 )
 
@@ -84,7 +82,16 @@ clean_data <- raw_data |>
   mutate(
     across(
       c(
-        project_role_skey
+        contact_skey
+      ),
+      as.character
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        department_name,
+        city_name
       ),
       as.character
     )
@@ -92,8 +99,19 @@ clean_data <- raw_data |>
   select(
     RefreshDate,
     edp_update_ts,
-    project_role_skey,
-    project_role,
+    contact_skey,
+    contact_id,
+    job_title,
+    department_name,
+    company_name,
+    address_line_1,
+    address_line_2,
+    city_name,
+    province = state,
+    postal_code,
+    first_name,
+    last_name,
+    email_id,
     source_unique_id,
     source_system_code
   )
@@ -107,12 +125,23 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     ".",
     TABLE_NAME,
     " (
-      RefreshDate         DATETIME2(3)  NOT NULL,
-      edp_update_ts       DATETIME2(3)  NULL,
-      project_role_skey   NVARCHAR(20)  NOT NULL,
-      project_role        NVARCHAR(100) NULL,
-      source_unique_id    NVARCHAR(100) NULL,
-      source_system_code  NVARCHAR(50)  NULL
+      RefreshDate         DATETIME2(3)   NOT NULL,
+      edp_update_ts       DATETIME2(3)   NULL,
+      contact_skey        NVARCHAR(20)   NOT NULL,
+      contact_id          NVARCHAR(20)   NULL,
+      job_title           NVARCHAR(100)  NULL,
+      department_name     NVARCHAR(100)  NULL,
+      company_name        NVARCHAR(150)  NULL,
+      address_line_1      NVARCHAR(150)  NULL,
+      address_line_2      NVARCHAR(150)  NULL,
+      city_name           NVARCHAR(100)  NULL,
+      province            NVARCHAR(50)   NULL,
+      postal_code         NVARCHAR(20)   NULL,
+      first_name          NVARCHAR(100)  NULL,
+      last_name           NVARCHAR(100)  NULL,
+      email_id            NVARCHAR(150)  NULL,
+      source_unique_id    NVARCHAR(50)   NULL,
+      source_system_code  NVARCHAR(50)   NULL
     );"
   )
 
@@ -141,12 +170,23 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-          RefreshDate         DATETIME2(3)  NOT NULL,
-          edp_update_ts       DATETIME2(3)  NULL,
-          project_role_skey   NVARCHAR(20)  NOT NULL,
-          project_role        NVARCHAR(100) NULL,
-          source_unique_id    NVARCHAR(100) NULL,
-          source_system_code  NVARCHAR(50)  NULL
+          RefreshDate         DATETIME2(3)   NOT NULL,
+          edp_update_ts       DATETIME2(3)   NULL,
+          contact_skey        NVARCHAR(20)   NOT NULL,
+          contact_id          NVARCHAR(20)   NULL,
+          job_title           NVARCHAR(100)  NULL,
+          department_name     NVARCHAR(100)  NULL,
+          company_name        NVARCHAR(150)  NULL,
+          address_line_1      NVARCHAR(150)  NULL,
+          address_line_2      NVARCHAR(150)  NULL,
+          city_name           NVARCHAR(100)  NULL,
+          province            NVARCHAR(50)   NULL,
+          postal_code         NVARCHAR(20)   NULL,
+          first_name          NVARCHAR(100)  NULL,
+          last_name           NVARCHAR(100)  NULL,
+          email_id            NVARCHAR(150)  NULL,
+          source_unique_id    NVARCHAR(50)   NULL,
+          source_system_code  NVARCHAR(50)   NULL
         );"
       )
     )
@@ -165,11 +205,11 @@ tryCatch(
       paste0(
         "SELECT COUNT(*) AS n
          FROM (
-           SELECT project_role_skey
+           SELECT contact_skey
            FROM ",
         TEMP_TABLE,
         "
-           GROUP BY project_role_skey
+           GROUP BY contact_skey
            HAVING COUNT(*) > 1
          ) dupes;"
       )
@@ -177,7 +217,7 @@ tryCatch(
 
     if (dup_count > 0) {
       stop(paste0(
-        "Duplicate project_role_skey values detected in source data (",
+        "Duplicate contact_skey values detected in source data (",
         dup_count,
         " keys affected). Rolling back."
       ))
@@ -191,7 +231,18 @@ tryCatch(
          SET
            tgt.RefreshDate        = src.RefreshDate,
            tgt.edp_update_ts      = src.edp_update_ts,
-           tgt.project_role       = src.project_role,
+           tgt.contact_id         = src.contact_id,
+           tgt.job_title          = src.job_title,
+           tgt.department_name    = src.department_name,
+           tgt.company_name       = src.company_name,
+           tgt.address_line_1     = src.address_line_1,
+           tgt.address_line_2     = src.address_line_2,
+           tgt.city_name          = src.city_name,
+           tgt.province           = src.province,
+           tgt.postal_code        = src.postal_code,
+           tgt.first_name         = src.first_name,
+           tgt.last_name          = src.last_name,
+           tgt.email_id           = src.email_id,
            tgt.source_unique_id   = src.source_unique_id,
            tgt.source_system_code = src.source_system_code
          FROM ",
@@ -202,7 +253,7 @@ tryCatch(
          INNER JOIN ",
         TEMP_TABLE,
         " src
-           ON tgt.project_role_skey = src.project_role_skey;"
+           ON tgt.contact_skey = src.contact_skey;"
       )
     )
 
@@ -218,16 +269,38 @@ tryCatch(
         " (
           RefreshDate,
           edp_update_ts,
-          project_role_skey,
-          project_role,
+          contact_skey,
+          contact_id,
+          job_title,
+          department_name,
+          company_name,
+          address_line_1,
+          address_line_2,
+          city_name,
+          province,
+          postal_code,
+          first_name,
+          last_name,
+          email_id,
           source_unique_id,
           source_system_code
         )
         SELECT
           src.RefreshDate,
           src.edp_update_ts,
-          src.project_role_skey,
-          src.project_role,
+          src.contact_skey,
+          src.contact_id,
+          src.job_title,
+          src.department_name,
+          src.company_name,
+          src.address_line_1,
+          src.address_line_2,
+          src.city_name,
+          src.province,
+          src.postal_code,
+          src.first_name,
+          src.last_name,
+          src.email_id,
           src.source_unique_id,
           src.source_system_code
         FROM ",
@@ -238,15 +311,14 @@ tryCatch(
         ".",
         TABLE_NAME,
         " tgt
-          ON tgt.project_role_skey = src.project_role_skey
-        WHERE tgt.project_role_skey IS NULL;
+          ON tgt.contact_skey = src.contact_skey
+        WHERE tgt.contact_skey IS NULL;
         "
       )
     )
 
     dbCommit(con)
 
-    # Hoist counts to outer scope for logging
     n_updated <<- n_updated
     n_inserted <<- n_inserted
 
