@@ -42,13 +42,37 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fact_budget")
-FactBudgetData <- dbFetch(query, n = -1)
-dbClearResult(query)
+# query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fact_budget")
+# FactBudgetData <- dbFetch(query, n = -1)
+# dbClearResult(query)
 
-raw_data <- all_data
+# FactBudgetData <- FactBudgetData |>
+#   mutate(
+#     across(
+#       c(
+#         project_skey,
+#         project_activity_skey,
+#         budget_skey,
+#         approved_by_skey,
+#         authorized_by_skey,
+#         submitted_by_skey,
+#         budget_item_skey
+#       ),
+#       as.character
+#     )
+#   )
+# range(FactBudgetData$edp_update_ts)
+# [1] "2025-01-09 04:36:00 UTC" "2026-04-27 04:48:49 UTC"
 
-cleaned_data <- raw_data |>
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  # start_time = etl_window$start_time,
+  start_time = "2026-04-27T00:00:00Z",
+  end_time = etl_window$end_time
+)
+
+clean_data <- raw_data |>
+  purrr::pluck("data") |>
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
@@ -91,7 +115,7 @@ cleaned_data <- raw_data |>
         submitted_by_skey,
         budget_item_skey
       ),
-      as.integer
+      as.character
     )
   ) |>
   mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
@@ -131,8 +155,8 @@ cleaned_data <- raw_data |>
     source_modified_ts
   )
 
-# dbRemoveTable(con, target_table)
-if (!dbExistsTable(con, target_table)) {
+# dbRemoveTable(con, TARGET_TABLE)
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -140,16 +164,16 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
         RefreshDate                     DATETIME2(3)  NOT NULL,
-        project_skey                    INT           NOT NULL,
-        project_activity_skey           INT           NULL,
-        budget_skey                     INT           NOT NULL,
-        approved_by_skey                INT           NULL,
-        authorized_by_skey              INT           NULL,
-        submitted_by_skey               INT           NULL,
+        project_skey                    NVARCHAR(20)  NOT NULL,
+        project_activity_skey           NVARCHAR(20)  NULL,
+        budget_skey                     NVARCHAR(20)  NOT NULL,
+        approved_by_skey                NVARCHAR(20)  NULL,
+        authorized_by_skey              NVARCHAR(20)  NULL,
+        submitted_by_skey               NVARCHAR(20)  NULL,
         record_type                     NVARCHAR(20)  NULL,
         costtype                        NVARCHAR(20)  NULL,
         budget_desc                     NVARCHAR(250) NULL,
-        budget_item_skey                INT           NOT NULL,
+        budget_item_skey                NVARCHAR(20)  NOT NULL,
         budget_item_id                  NVARCHAR(20)  NULL,
         approved_total_budget_value     DECIMAL(18,2) NULL,
         approved_budget_capital_total   DECIMAL(18,2) NULL,
@@ -185,8 +209,8 @@ dbBegin(con)
 # Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     # Create temp table to hold new data
@@ -194,19 +218,19 @@ tryCatch(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
           RefreshDate                     DATETIME2(3)  NOT NULL,
-          project_skey                    INT           NOT NULL,
-          project_activity_skey           INT           NULL,
-          budget_skey                     INT           NOT NULL,
-          approved_by_skey                INT           NULL,
-          authorized_by_skey              INT           NULL,
-          submitted_by_skey               INT           NULL,
+          project_skey                    NVARCHAR(20)  NOT NULL,
+          project_activity_skey           NVARCHAR(20)  NULL,
+          budget_skey                     NVARCHAR(20)  NOT NULL,
+          approved_by_skey                NVARCHAR(20)  NULL,
+          authorized_by_skey              NVARCHAR(20)  NULL,
+          submitted_by_skey               NVARCHAR(20)  NULL,
           record_type                     NVARCHAR(20)  NULL,
           costtype                        NVARCHAR(20)  NULL,
           budget_desc                     NVARCHAR(250) NULL,
-          budget_item_skey                INT           NULL,
+          budget_item_skey                NVARCHAR(20)  NOT NULL,
           budget_item_id                  NVARCHAR(20)  NULL,
           approved_total_budget_value     DECIMAL(18,2) NULL,
           approved_budget_capital_total   DECIMAL(18,2) NULL,
@@ -237,65 +261,66 @@ tryCatch(
     # Write the current tibble into the temp table
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      # value = cleaned_data,
+      value = FactBudgetData,
       append = TRUE,
       overwrite = FALSE
     )
 
     # Update existing rows in the target table
-    n_updated <- dbExecute(
-      con,
-      paste0(
-        "
-    UPDATE tgt
-    SET
-      tgt.RefreshDate                   = src.RefreshDate,
-      tgt.project_skey                  = src.project_skey,
-      tgt.project_activity_skey         = src.project_activity_skey,
-      tgt.budget_skey                   = src.budget_skey,
-      tgt.approved_by_skey              = src.approved_by_skey,
-      tgt.authorized_by_skey            = src.authorized_by_skey,
-      tgt.submitted_by_skey             = src.submitted_by_skey,
-      tgt.record_type                   = src.record_type,
-      tgt.costtype                      = src.costtype,
-      tgt.budget_desc                   = src.budget_desc,
-      tgt.budget_item_skey              = src.budget_item_skey,
-      tgt.budget_item_id                = src.budget_item_id,
-      tgt.approved_total_budget_value   = src.approved_total_budget_value,
-      tgt.approved_budget_capital_total = src.approved_budget_capital_total,
-      tgt.estimated_budget_capital      = src.estimated_budget_capital,
-      tgt.approved_budget_expense       = src.approved_budget_expense,
-      tgt.estimated_budget_total_value  = src.estimated_budget_total_value,
-      tgt.budget_capital_value          = src.budget_capital_value,
-      tgt.budget_status                 = src.budget_status,
-      tgt.budget_item_total_value       = src.budget_item_total_value,
-      tgt.estimated_budget_uom          = src.estimated_budget_uom,
-      tgt.estimated_budget_quantity     = src.estimated_budget_quantity,
-      tgt.budget_expense_amount         = src.budget_expense_amount,
-      tgt.budget_notes                  = src.budget_notes,
-      tgt.estimated_budget_expense      = src.estimated_budget_expense,
-      tgt.line_number                   = src.line_number,
-      tgt.approved_budget_expense_total = src.approved_budget_expense_total,
-      tgt.estimated_budget_per_uom      = src.estimated_budget_per_uom,
-      tgt.edp_update_ts                 = src.edp_update_ts,
-      tgt.source_unique_id              = src.source_unique_id,
-      tgt.source_system_code            = src.source_system_code,
-      tgt.source_partition_id           = src.source_partition_id,
-      tgt.source_modified_ts            = src.source_modified_ts
-    FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        " AS tgt
-    JOIN ",
-        temp_table,
-        " AS src
-      ON  tgt.budget_skey = src.budget_skey
-      AND tgt.project_skey = src.project_skey;
-  "
-      )
-    )
+    #   n_updated <- dbExecute(
+    #     con,
+    #     paste0(
+    #       "
+    #   UPDATE tgt
+    #   SET
+    #     tgt.RefreshDate                   = src.RefreshDate,
+    #     tgt.project_skey                  = src.project_skey,
+    #     tgt.project_activity_skey         = src.project_activity_skey,
+    #     tgt.budget_skey                   = src.budget_skey,
+    #     tgt.approved_by_skey              = src.approved_by_skey,
+    #     tgt.authorized_by_skey            = src.authorized_by_skey,
+    #     tgt.submitted_by_skey             = src.submitted_by_skey,
+    #     tgt.record_type                   = src.record_type,
+    #     tgt.costtype                      = src.costtype,
+    #     tgt.budget_desc                   = src.budget_desc,
+    #     tgt.budget_item_skey              = src.budget_item_skey,
+    #     tgt.budget_item_id                = src.budget_item_id,
+    #     tgt.approved_total_budget_value   = src.approved_total_budget_value,
+    #     tgt.approved_budget_capital_total = src.approved_budget_capital_total,
+    #     tgt.estimated_budget_capital      = src.estimated_budget_capital,
+    #     tgt.approved_budget_expense       = src.approved_budget_expense,
+    #     tgt.estimated_budget_total_value  = src.estimated_budget_total_value,
+    #     tgt.budget_capital_value          = src.budget_capital_value,
+    #     tgt.budget_status                 = src.budget_status,
+    #     tgt.budget_item_total_value       = src.budget_item_total_value,
+    #     tgt.estimated_budget_uom          = src.estimated_budget_uom,
+    #     tgt.estimated_budget_quantity     = src.estimated_budget_quantity,
+    #     tgt.budget_expense_amount         = src.budget_expense_amount,
+    #     tgt.budget_notes                  = src.budget_notes,
+    #     tgt.estimated_budget_expense      = src.estimated_budget_expense,
+    #     tgt.line_number                   = src.line_number,
+    #     tgt.approved_budget_expense_total = src.approved_budget_expense_total,
+    #     tgt.estimated_budget_per_uom      = src.estimated_budget_per_uom,
+    #     tgt.edp_update_ts                 = src.edp_update_ts,
+    #     tgt.source_unique_id              = src.source_unique_id,
+    #     tgt.source_system_code            = src.source_system_code,
+    #     tgt.source_partition_id           = src.source_partition_id,
+    #     tgt.source_modified_ts            = src.source_modified_ts
+    #   FROM ",
+    #       SCHEMA_NAME,
+    #       ".",
+    #       TABLE_NAME,
+    #       " AS tgt
+    #   JOIN ",
+    #       temp_table,
+    #       " AS src
+    #     ON  tgt.budget_skey = src.budget_skey
+    #     AND tgt.project_skey = src.project_skey;
+    # "
+    #     )
+    #   )
 
     # Insert new rows not already in the target
     n_inserted <- dbExecute(
@@ -376,7 +401,7 @@ tryCatch(
         src.source_partition_id,
         src.source_modified_ts
     FROM ",
-        temp_table,
+        TEMP_TABLE,
         " AS src
     LEFT JOIN ",
         SCHEMA_NAME,
@@ -394,7 +419,7 @@ tryCatch(
     dbCommit(con)
 
     n_inserted <<- n_inserted
-    n_updated <<- n_updated
+    # n_updated <<- n_updated
     # Rollback transaction on failure
   },
   error = function(e) {
