@@ -49,15 +49,26 @@ raw_data <- call_cbre_api(
   end_time = etl_window$end_time
 )
 
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
+
 clean_data <- raw_data |>
   purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   mutate(RefreshDate = as.POSIXct(Sys.time())) |>
   mutate(
     across(

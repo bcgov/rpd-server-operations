@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_dim_project_role"
-CBRE_TABLE_NAME <- "pjm_dim_project_role_vw"
-
 # Load libraries
 library(assertthat, quietly = TRUE, warn.conflicts = FALSE)
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -25,9 +14,25 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "pjm_dim_project_role"
+CBRE_TABLE_NAME <- "pjm_dim_project_role_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "pjm_dim_project_role"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -38,28 +43,61 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
-cleaned_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
+clean_data <- raw_data |>
+  purrr::pluck("data") |>
+  # # comment out these after initial data analysis as risk of
+  # # losing columns in small data loads
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
+  mutate(
+    across(
+      c(
+        project_role_skey
+      ),
+      as.character
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        edp_update_ts
+      ),
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
+    )
+  ) |>
   select(
     RefreshDate,
     project_role_skey,
     project_role,
-    source_unique_id
+    source_unique_id,
+    edp_update_ts
   )
 
-# dbRemoveTable(con, target_table)
+# dbRemoveTable(con, TARGET_TABLE)
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -67,9 +105,10 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
       RefreshDate         DATETIME2(3)   NOT NULL,
-      project_role_skey   INT            NOT NULL,
+      project_role_skey   NVARCHAR(20)   NOT NULL,
       project_role        NVARCHAR(100)  NULL,
-      source_unique_id    NVARCHAR(100)  NOT NULL
+      source_unique_id    NVARCHAR(100)  NOT NULL,
+      edp_update_ts       DATETIME2(3)   NOT NULL
     );"
   )
 
@@ -77,39 +116,69 @@ if (!dbExistsTable(con, target_table)) {
 }
 
 # Database Transaction ####
+
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
+
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
+# Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
         RefreshDate         DATETIME2(3)   NOT NULL,
-        project_role_skey   INT            NOT NULL,
+        project_role_skey   NVARCHAR(20)   NOT NULL,
         project_role        NVARCHAR(100)  NULL,
-        source_unique_id    NVARCHAR(100)  NOT NULL
+        source_unique_id    NVARCHAR(100)  NOT NULL,
+        edp_update_ts       DATETIME2(3)   NOT NULL
       );"
       )
     )
 
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
 
-    # Update existing rows in the target table that have changed
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT project_role_skey
+           FROM ",
+        TEMP_TABLE,
+        "
+           GROUP BY project_role_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
 
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate project_role_skey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    # -- Update matched rows --
     n_updated <- dbExecute(
       con,
       paste0(
@@ -117,7 +186,6 @@ tryCatch(
       UPDATE tgt
       SET
         tgt.RefreshDate       = src.RefreshDate,
-        tgt.project_role_skey = src.project_role_skey,
         tgt.project_role      = src.project_role,
         tgt.source_unique_id  = src.source_unique_id
       FROM ",
@@ -126,13 +194,9 @@ tryCatch(
         TABLE_NAME,
         " tgt
       JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " src
-        ON  tgt.project_role_skey = src.project_role_skey
-        WHERE
-            ISNULL(tgt.project_role, '')     <> ISNULL(src.project_role, '')
-         OR ISNULL(tgt.source_unique_id, '') <> ISNULL(src.source_unique_id, '');
-      "
+        ON  tgt.project_role_skey = src.project_role_skey;"
       )
     )
 
@@ -149,15 +213,17 @@ tryCatch(
         RefreshDate,
         project_role_skey,
         project_role,
-        source_unique_id
+        source_unique_id,
+        edp_update_ts
       )
       SELECT
         src.RefreshDate,
         src.project_role_skey,
         src.project_role,
-        src.source_unique_id
+        src.source_unique_id,
+        src.edp_update_ts
       FROM ",
-        temp_table,
+        TEMP_TABLE,
         " src
       LEFT JOIN ",
         SCHEMA_NAME,
@@ -170,34 +236,39 @@ tryCatch(
       )
     )
 
-    # Delete old rows that don't exist in the SQL table
-    n_deleted <- dbExecute(
-      con,
-      paste0(
-        "
-      DELETE tgt
-        FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        " tgt
-      LEFT JOIN ",
-        temp_table,
-        " src
-        ON tgt.project_role_skey = src.project_role_skey
-      WHERE src.project_role_skey IS NULL;"
-      )
-    )
-
     # Complete the transaction
     dbCommit(con)
 
-    n_inserted <<- n_inserted
+    # Hoist counts to outer scope for logging
     n_updated <<- n_updated
-    # Rollback transaction on failure
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

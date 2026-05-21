@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_dim_budget"
-CBRE_TABLE_NAME <- "pjm_dim_budget_vw"
-
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -24,9 +13,25 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "pjm_dim_budget"
+CBRE_TABLE_NAME <- "pjm_dim_budget_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "pjm_dim_budget"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -37,12 +42,28 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
-cleaned_data <- raw_data |>
+clean_data <- raw_data |>
+  # purrr::pluck("data") |>
+  # # comment out these after initial data analysis as risk of
+  # # losing columns in small data loads
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
@@ -59,6 +80,14 @@ cleaned_data <- raw_data |>
         edp_create_ts
       ),
       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        budget_skey
+      ),
+      as.character
     )
   ) |>
   mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
@@ -80,45 +109,50 @@ cleaned_data <- raw_data |>
     edp_create_ts
   )
 
-dbRemoveTable(con, target_table)
+# dbRemoveTable(con, TARGET_TABLE)
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
     ".",
     TABLE_NAME,
     " (
-                RefreshDate               DATETIME2(3)  NOT NULL,
-                budget_skey               NVARCHAR(10)  NOT NULL,
-                budget_id                 NVARCHAR(10)  NOT NULL,
-                budget_number             NVARCHAR(5)   NOT NULL,
-                budget_type               NVARCHAR(100) NULL,
-                budget_subject            NVARCHAR(100) NULL,
-                budget_approval_status    NVARCHAR(20)  NULL,
-                budget_date               DATETIME2(3)  NULL,
-                budget_submitted_date     DATETIME2(3)  NULL,
-                authorized_date           DATETIME2(3)  NULL,
-                source_unique_id          NVARCHAR(10)  NOT NULL,
-                source_partition_id       NVARCHAR(10)  NOT NULL,
-                source_modified_ts        DATETIME2(3)  NULL,
-                edp_update_ts             DATETIME2(3)  NULL,
-                edp_create_ts             DATETIME2(3)  NULL
-                );"
+        RefreshDate               DATETIME2(3)  NOT NULL,
+        budget_skey               NVARCHAR(20)  NOT NULL,
+        budget_id                 NVARCHAR(10)  NOT NULL,
+        budget_number             NVARCHAR(5)   NOT NULL,
+        budget_type               NVARCHAR(100) NULL,
+        budget_subject            NVARCHAR(100) NULL,
+        budget_approval_status    NVARCHAR(20)  NULL,
+        budget_date               DATETIME2(3)  NULL,
+        budget_submitted_date     DATETIME2(3)  NULL,
+        authorized_date           DATETIME2(3)  NULL,
+        source_unique_id          NVARCHAR(10)  NOT NULL,
+        source_partition_id       NVARCHAR(10)  NOT NULL,
+        source_modified_ts        DATETIME2(3)  NULL,
+        edp_update_ts             DATETIME2(3)  NULL,
+        edp_create_ts             DATETIME2(3)  NULL
+        );"
   )
 
   dbExecute(con, sql)
 }
 
 # Database Transaction ####
+
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
+
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
 # Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     # Create temp table to hold new data
@@ -126,7 +160,7 @@ tryCatch(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
           RefreshDate               DATETIME2(3)  NOT NULL,
           budget_skey               NVARCHAR(10)  NOT NULL,
@@ -151,11 +185,35 @@ tryCatch(
     # Write the current tibble into the temp table
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
+
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT budget_skey
+           FROM ",
+        TEMP_TABLE,
+        "
+           GROUP BY budget_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
+
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate budget_skey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
 
     # Update existing rows in the target table
     n_updated <- dbExecute(
@@ -185,7 +243,7 @@ tryCatch(
         TABLE_NAME,
         " AS tgt
     JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " AS src
       ON  tgt.budget_skey = src.budget_skey;
   "
@@ -235,7 +293,7 @@ tryCatch(
         src.edp_update_ts,
         src.edp_create_ts
     FROM ",
-        temp_table,
+        TEMP_TABLE,
         " AS src
     LEFT JOIN ",
         SCHEMA_NAME,
@@ -251,12 +309,36 @@ tryCatch(
     # Complete the transaction
     dbCommit(con)
 
-    n_inserted <<- n_inserted
+    # Hoist counts to outer scope for logging
     n_updated <<- n_updated
-    # Rollback transaction on failure
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

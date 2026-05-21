@@ -77,20 +77,24 @@ query <- dbSendQuery(
   con,
   "SELECT * FROM RealProperty.FacilityDetail"
 )
-FacilityDetail <- dbFetch(query, n = -1) |>
+
+FacilityDetail <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+FacilityDetail <- FacilityDetail |>
   select(
     BuildingId,
     PropertyId,
     SiteId,
-    linkAddress,
-    linkCity,
     GeoFlag,
     City,
     Address,
+    linkAddress,
+    linkCity,
     Precision,
     Score
   )
-dbClearResult(query)
+
 
 # Format Data Tables #########################################################
 
