@@ -17,18 +17,8 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_dim_budget"
 CBRE_TABLE_NAME <- "pjm_dim_project_vw"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+
 
 # Query API
 chunk_1 <- call_cbre_api(
@@ -84,8 +74,9 @@ raw_data <- rbind(
   chunk_2$data,
   chunk_3$data,
   chunk_4$data,
-  chunk_5$data,
-  chunk_6$data,
-  chunk_7$data,
-  chunk_8$data
+  chunk_5$data
+  # ,
+  # chunk_6$data,
+  # chunk_7$data,
+  # chunk_8$data
 )

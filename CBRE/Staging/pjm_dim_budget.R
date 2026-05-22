@@ -61,14 +61,14 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
 }
 
 clean_data <- raw_data |>
-  # purrr::pluck("data") |>
+  purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   mutate(
     across(
       c(

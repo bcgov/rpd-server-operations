@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_dim_contact"
-CBRE_TABLE_NAME <- "pjm_dim_contact_vw"
-
 # Load libraries
 library(assertthat, quietly = TRUE, warn.conflicts = FALSE)
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -25,9 +14,21 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "pjm_dim_contact"
+CBRE_TABLE_NAME <- "pjm_dim_contact_vw"
+
 
 # Connect to SQL database
 con <- dbConnect(
@@ -252,12 +253,35 @@ tryCatch(
     # Complete the transaction
     dbCommit(con)
 
-    n_inserted <<- n_inserted
     n_updated <<- n_updated
-    # Rollback transaction on failure
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}
