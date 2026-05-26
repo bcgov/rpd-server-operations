@@ -60,13 +60,6 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
   stop("No new data from API")
 }
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_budget")
-DimBudgetData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-range(DimBudgetData$edp_update_ts)
-# [1] "2025-05-21 11:52:30 UTC" "2026-04-27 11:43:04 UTC"
-
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
   # start_time = etl_window$start_time,

@@ -30,6 +30,7 @@ scripts <- c(
   "CBRE/Staging/pjm_dim_budget.R",
   "CBRE/Staging/pjm_fact_project_role.R",
   "CBRE/Staging/pjm_dim_project_role.R",
+  "CBRE/Staging/fm_fact_workorder.R",
   "CBRE/Staging/pjm_fact_project_activity.R",
   "CBRE/Staging/pjm_dim_project_activity.R"
 )

@@ -28,7 +28,11 @@ DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
 TABLE_NAME <- "pjm_dim_contact"
 CBRE_TABLE_NAME <- "pjm_dim_contact_vw"
-
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "pjm_dim_contact"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -39,18 +43,50 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
-cleaned_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
+clean_data <- raw_data |>
+  purrr::pluck("data") |>
+  # # comment out these after initial data analysis as risk of
+  # # losing columns in small data loads
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
+  mutate(
+    across(
+      c(
+        contact_skey
+      ),
+      as.character
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        edp_update_ts
+      ),
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+    )
+  ) |>
   select(
     RefreshDate,
     contact_skey,
@@ -65,12 +101,13 @@ cleaned_data <- raw_data |>
     company_name,
     job_title,
     contact_id,
-    source_unique_id
+    source_unique_id,
+    edp_update_ts
   )
 
-# dbRemoveTable(con, target_table)
+# dbRemoveTable(con, TARGET_TABLE)
 
-if (!dbExistsTable(con, target_table)) {
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -78,7 +115,7 @@ if (!dbExistsTable(con, target_table)) {
     TABLE_NAME,
     " (
       RefreshDate         DATETIME2(3)   NOT NULL,
-      contact_skey        INT            NOT NULL,
+      contact_skey        NVARCHAR(20)   NOT NULL,
       first_name          NVARCHAR(100)  NULL,
       last_name           NVARCHAR(100)  NULL,
       email_id            NVARCHAR(100)  NULL,
@@ -90,7 +127,8 @@ if (!dbExistsTable(con, target_table)) {
       company_name        NVARCHAR(100)  NULL,
       job_title           NVARCHAR(100)  NULL,
       contact_id          NVARCHAR(100)  NULL,
-      source_unique_id    NVARCHAR(100)  NULL
+      source_unique_id    NVARCHAR(100)  NULL,
+      edp_update_ts       DATETIME2(3)   NULL
     );"
   )
 
@@ -103,18 +141,18 @@ dbBegin(con)
 
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
         RefreshDate         DATETIME2(3)   NOT NULL,
-        contact_skey        INT            NOT NULL,
+        contact_skey        NVARCHAR(20)   NOT NULL,
         first_name          NVARCHAR(100)  NULL,
         last_name           NVARCHAR(100)  NULL,
         email_id            NVARCHAR(100)  NULL,
@@ -126,15 +164,16 @@ tryCatch(
         company_name        NVARCHAR(100)  NULL,
         job_title           NVARCHAR(100)  NULL,
         contact_id          NVARCHAR(100)  NULL,
-        source_unique_id    NVARCHAR(100)  NULL
+        source_unique_id    NVARCHAR(100)  NULL,
+        edp_update_ts       DATETIME2(3)   NULL
       );"
       )
     )
 
     dbWriteTable(
       con,
-      name = temp_table,
-      value = cleaned_data,
+      name = TEMP_TABLE,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
@@ -167,7 +206,7 @@ tryCatch(
         TABLE_NAME,
         " tgt
       JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " src
         ON  tgt.contact_skey = src.contact_skey
         WHERE
@@ -217,7 +256,7 @@ tryCatch(
         src.contact_id,
         src.source_unique_id
       FROM ",
-        temp_table,
+        TEMP_TABLE,
         " src
       LEFT JOIN ",
         SCHEMA_NAME,
@@ -242,7 +281,7 @@ tryCatch(
         TABLE_NAME,
         " tgt
       LEFT JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " src
         ON  tgt.contact_skey = src.contact_skey
       WHERE tgt.contact_skey IS NULL;

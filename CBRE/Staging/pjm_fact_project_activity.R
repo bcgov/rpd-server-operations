@@ -77,6 +77,7 @@ clean_data <- raw_data |>
         edp_update_ts
       ),
       as.POSIXct
+      #       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
   mutate(

@@ -70,13 +70,13 @@ chunk_8 <- call_cbre_api(
 )
 
 raw_data <- rbind(
-  chunk_1$data,
-  chunk_2$data,
-  chunk_3$data,
-  chunk_4$data,
-  chunk_5$data
+  # chunk_1$data,
+  # chunk_2$data,
+  # chunk_3$data,
+  # chunk_4$data,
+  # chunk_5$data
   # ,
-  # chunk_6$data,
-  # chunk_7$data,
-  # chunk_8$data
+  chunk_6$data,
+  chunk_7$data,
+  chunk_8$data
 )

@@ -43,7 +43,7 @@ con <- dbConnect(
 
 raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
 
-cleaned_data <- raw_data |>
+clean_data <- raw_data |>
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
@@ -378,7 +378,7 @@ tryCatch(
     dbWriteTable(
       con,
       name = TEMP_TABLE,
-      value = cleaned_data,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
