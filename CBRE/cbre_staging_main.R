@@ -14,6 +14,7 @@ scripts <- c(
   "CBRE/Staging/archibus_ls.R",
   "CBRE/Staging/archibus_dv.R",
   "CBRE/Staging/archibus_dp.R",
+  # Claude Review
   "CBRE/Staging/dim_project_activity.R",
   "CBRE/Staging/fact_project_activity.R",
   "CBRE/Staging/dim_budget.R",
@@ -33,6 +34,15 @@ scripts <- c(
   "CBRE/Staging/fm_fact_workorder.R",
   "CBRE/Staging/pjm_fact_project_activity.R",
   "CBRE/Staging/pjm_dim_project_activity.R"
+  # Claude Reviewed up to here
+  #   fin_dim_general_ledger
+  # fin_fact_general_ledger_actuals
+  #   fin_dim_invoice_line
+  #  fin_dim_invoice
+  # fin_dim_cost_center_hierarchy
+  # fin_fact_cost_distribution_detail
+  # fact_invoice # update skey datatype and refresh to current
+  # dim_invoice
 )
 
 for (script in scripts) {

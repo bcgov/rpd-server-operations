@@ -1,14 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "kahua_master_hierarchy"
-CBRE_TABLE_NAME <- "kahua_master_hierarchy"
-
 # Load libraries
 library(assertthat, quietly = TRUE, warn.conflicts = FALSE)
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -28,6 +17,18 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
+
+# Set necessary variables
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "kahua_master_hierarchy"
+CBRE_TABLE_NAME <- "kahua_master_hierarchy"
 
 # Connect to SQL database
 con <- dbConnect(

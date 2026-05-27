@@ -17,6 +17,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
+# Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -46,7 +47,6 @@ con <- dbConnect(
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = etl_window$start_time,
-  # start_time = paste0("2020-01-01T00:00:00Z"),
   end_time = etl_window$end_time
 )
 
@@ -76,7 +76,7 @@ clean_data <- raw_data |>
       c(
         edp_update_ts
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
   mutate(

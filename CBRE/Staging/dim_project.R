@@ -17,6 +17,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
+# Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -45,7 +46,7 @@ con <- dbConnect(
 # Query API
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
-  start_time = paste0("2020-01-01T00:00:00Z"),
+  start_time = etl_window$start_time,
   end_time = etl_window$end_time
 )
 
@@ -431,14 +432,105 @@ tryCatch(
       ))
     }
 
-    dbExecute(
+    # Update existing rows in the target table that have changed
+    n_updated <- dbExecute(
       con,
       paste0(
-        "DELETE FROM ",
+        "
+    UPDATE tgt
+      SET
+        tgt.RefreshDate                   = src.RefreshDate,
+        tgt.project_id                    = src.project_id,
+        tgt.project_number                = src.project_number,
+        tgt.project_name                  = src.project_name,
+        tgt.client_project_number         = src.client_project_number,
+        tgt.client_project_status         = src.client_project_status,
+        tgt.project_created_date          = src.project_created_date,
+        tgt.source_created_ts             = src.source_created_ts,
+        tgt.source_unique_id              = src.source_unique_id,
+        tgt.edp_update_ts                 = src.edp_update_ts,
+        tgt.source_partition_id           = src.source_partition_id,
+        tgt.sub_industry_type             = src.sub_industry_type,
+        tgt.risk_status                   = src.risk_status,
+        tgt.schedule_health               = src.schedule_health,
+        tgt.budget_health                 = src.budget_health,
+        tgt.overall_project_health        = src.overall_project_health,
+        tgt.client_industry               = src.client_industry,
+        tgt.cbre_organization             = src.cbre_organization,
+        tgt.cbre_operating_model          = src.cbre_operating_model,
+        tgt.is_active                     = src.is_active,
+        tgt.risks_assumptions_constraints = src.risks_assumptions_constraints,
+        tgt.project_comment               = src.project_comment,
+        tgt.project_type                  = src.project_type,
+        tgt.scope_desc                    = src.scope_desc,
+        tgt.delivery_account              = src.delivery_account,
+        tgt.project_quality               = src.project_quality,
+        tgt.proj_mngmnt_deliverables      = src.proj_mngmnt_deliverables,
+        tgt.project_decision_framework    = src.project_decision_framework,
+        tgt.communications                = src.communications,
+        tgt.core_project_team             = src.core_project_team,
+        tgt.project_schedule              = src.project_schedule,
+        tgt.project_budget                = src.project_budget,
+        tgt.project_scope                 = src.project_scope,
+        tgt.project_objective             = src.project_objective,
+        tgt.csf_pjmfeepercentage          = src.csf_pjmfeepercentage,
+        tgt.csf_partitionid               = src.csf_partitionid,
+        tgt.charter_approved_offline_f    = src.charter_approved_offline_f,
+        tgt.csf_totalforecastfinalcost    = src.csf_totalforecastfinalcost,
+        tgt.csf_agreementnumber           = src.csf_agreementnumber,
+        tgt.byp_online_client_approval    = src.byp_online_client_approval,
+        tgt.csf_migratedprojectid         = src.csf_migratedprojectid,
+        tgt.csf_clientrecoverable         = src.csf_clientrecoverable,
+        tgt.csf_branchchildorg            = src.csf_branchchildorg,
+        tgt.csf_proposeduseagreement      = src.csf_proposeduseagreement,
+        tgt.csf_modifieddatetime          = src.csf_modifieddatetime,
+        tgt.csf_id                        = src.csf_id,
+        tgt.csf_prevreportedfyytdvowcomp  = src.csf_prevreportedfyytdvowcomp,
+        tgt.csf_workcomplete              = src.csf_workcomplete,
+        tgt.csf_fundingsource             = src.csf_fundingsource,
+        tgt.csf_estimatetype              = src.csf_estimatetype,
+        tgt.int_engage_letter_executed    = src.int_engage_letter_executed,
+        tgt.csf_last_updated              = src.csf_last_updated,
+        tgt.csf_ministryparentorg         = src.csf_ministryparentorg,
+        tgt.csf_transaction_flag          = src.csf_transaction_flag,
+        tgt.csf_fundingtype               = src.csf_fundingtype,
+        tgt.csf_chargeaction              = src.csf_chargeaction,
+        tgt.csf_pmosource                 = src.csf_pmosource,
+        tgt.csf_programtype               = src.csf_programtype,
+        tgt.csf_domainpartitionid         = src.csf_domainpartitionid,
+        tgt.csf_servicetype               = src.csf_servicetype,
+        tgt.csf_leaseid                   = src.csf_leaseid,
+        tgt.csf_projectsubtype            = src.csf_projectsubtype,
+        tgt.csf_complexity                = src.csf_complexity,
+        tgt.csf_identifiedproject         = src.csf_identifiedproject,
+        tgt.csf_aresnumber                = src.csf_aresnumber,
+        tgt.csf_ytdworkcomplete           = src.csf_ytdworkcomplete,
+        tgt.csf_wsiregion                 = src.csf_wsiregion,
+        tgt.csf_projecttype               = src.csf_projecttype,
+        tgt.standard_project_type         = src.standard_project_type,
+        tgt.csf_createddatetime           = src.csf_createddatetime,
+        tgt.qualify_for_fusion_f          = src.qualify_for_fusion_f,
+        tgt.fusion_dir_response_status    = src.fusion_dir_response_status,
+        tgt.fusion_project_type           = src.fusion_project_type,
+        tgt.budget_comments               = src.budget_comments,
+        tgt.risk_comments                 = src.risk_comments,
+        tgt.schedule_comments             = src.schedule_comments,
+        tgt.csf_projadminnotes            = src.csf_projadminnotes,
+        tgt.csf_rpdlaborrecoverypercent   = src.csf_rpdlaborrecoverypercent,
+        tgt.csf_scopehealthcomments       = src.csf_scopehealthcomments,
+        tgt.record_type                   = src.record_type,
+        tgt.csf_scopehealth               = src.csf_scopehealth,
+        tgt.csf_clientbillingstatus       = src.csf_clientbillingstatus
+      FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        ";"
+        " tgt
+      JOIN ",
+        TEMP_TABLE,
+        " src
+        ON tgt.project_skey = src.project_skey;
+      "
       )
     )
 
@@ -638,9 +730,10 @@ tryCatch(
     dbCommit(con)
 
     # Hoist counts to outer scope for logging
+    n_updated <<- n_updated
     n_inserted <<- n_inserted
 
-    cat("ETL complete — inserted:", n_inserted, "\n")
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
@@ -655,7 +748,7 @@ if (is.null(etl_error)) {
     table_name = TABLE_NAME,
     status = "SUCCESS",
     n_inserted = n_inserted,
-    n_updated = NA,
+    n_updated = n_updated,
     n_deleted = NA,
     message = "ETL completed successfully"
   )

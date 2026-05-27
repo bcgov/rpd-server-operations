@@ -46,7 +46,6 @@ con <- dbConnect(
 # Query API
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
-  # 14th was last date range, so should be at least a duplicate
   start_time = etl_window$start_time,
   end_time = etl_window$end_time
 )

@@ -76,8 +76,7 @@ clean_data <- raw_data |>
       c(
         edp_update_ts
       ),
-      as.POSIXct
-      #       ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
   mutate(
@@ -385,7 +384,8 @@ tryCatch(
         " tgt
         ON  tgt.project_skey          = src.project_skey
         AND tgt.project_activity_skey = src.project_activity_skey
-      WHERE tgt.project_skey IS NULL;
+      WHERE tgt.project_skey IS NULL
+        AND tgt.project_activity_skey IS NULL;
       "
       )
     )

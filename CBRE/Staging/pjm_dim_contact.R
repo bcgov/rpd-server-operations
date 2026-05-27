@@ -18,6 +18,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
+# Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -136,6 +137,10 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
+etl_start_time <- Sys.time()
+
+etl_error <- NULL
+
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
@@ -178,8 +183,32 @@ tryCatch(
       overwrite = FALSE
     )
 
-    # Update existing rows in the target table that have changed
+    # -- Guard: catch duplicate composite keys in source data --
+    dup_count <- dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT contact_skey
+           FROM ",
+        TEMP_TABLE,
+        "
+           GROUP BY contact_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
 
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate contact_skey key values ",
+        "detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    # Update existing rows in the target table that have changed
     n_updated <- dbExecute(
       con,
       paste0(
@@ -208,9 +237,7 @@ tryCatch(
       JOIN ",
         TEMP_TABLE,
         " src
-        ON  tgt.contact_skey = src.contact_skey
-        WHERE
-            ISNULL(tgt.contact_skey, '')     <> ISNULL(src.contact_skey, '');
+        ON  tgt.contact_skey = src.contact_skey;
       "
       )
     )
@@ -266,26 +293,6 @@ tryCatch(
         ON  tgt.contact_skey = src.contact_skey
       WHERE tgt.contact_skey IS NULL;
       "
-      )
-    )
-
-    # Delete old rows that don't exist in the SQL table
-    n_deleted <- dbExecute(
-      con,
-      paste0(
-        "
-      DELETE tgt
-        FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        " tgt
-      LEFT JOIN ",
-        TEMP_TABLE,
-        " src
-        ON  tgt.contact_skey = src.contact_skey
-      WHERE tgt.contact_skey IS NULL;
-        "
       )
     )
 

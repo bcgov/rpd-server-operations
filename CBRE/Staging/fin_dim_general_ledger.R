@@ -13,7 +13,7 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
@@ -26,12 +26,13 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_fact_project_comment"
-CBRE_TABLE_NAME <- "pjm_fact_project_comment_vw"
+TABLE_NAME <- "fin_dim_general_ledger"
+CBRE_TABLE_NAME <- "fin_dim_general_ledger_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+etl_window <- get_etl_window()
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "pjm_fact_project_comment"
+SCRIPT_NAME <- "fin_dim_general_ledger"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -42,39 +43,34 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+# Query API
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = "2025-05-01T00:00:00Z",
+  # start_time = etl_window$start_time,
+  end_time = etl_window$end_time,
+  max_pages = 40
+)
+
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
 clean_data <- raw_data |>
+  purrr::pluck("data") |>
+  # # comment out these after initial data analysis as risk of
+  # # losing columns in small data loads
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
   select_if(~ !all(. == '-1')) |>
   select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
-  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
-  mutate(
-    across(
-      c(
-        comment_date,
-        source_modified_ts,
-        source_created_ts,
-        edp_update_ts
-      ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
-    )
-  ) |>
-  select(
-    RefreshDate,
-    project_skey,
-    commenter_skey,
-    comment_skey,
-    comment_id,
-    comment_date,
-    comment,
-    source_unique_id,
-    source_system_code,
-    source_created_ts,
-    source_modified_ts,
-    edp_update_ts
-  )
-
-dbWriteTable(con, TARGET_TABLE, clean_data)
+  select_if(~ !all(. == "NA")) |>
+  select_if(~ !all(. == "-")) #|>
+mutate(RefreshDate = as.POSIXct(Sys.time()))

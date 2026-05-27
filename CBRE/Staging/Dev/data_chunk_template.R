@@ -17,7 +17,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
-CBRE_TABLE_NAME <- "pjm_dim_project_vw"
+CBRE_TABLE_NAME <- "dim_budget_vw"
 
 
 # Query API
@@ -70,12 +70,11 @@ chunk_8 <- call_cbre_api(
 )
 
 raw_data <- rbind(
-  # chunk_1$data,
-  # chunk_2$data,
-  # chunk_3$data,
-  # chunk_4$data,
-  # chunk_5$data
-  # ,
+  chunk_1$data,
+  chunk_2$data,
+  chunk_3$data,
+  chunk_4$data,
+  chunk_5$data,
   chunk_6$data,
   chunk_7$data,
   chunk_8$data

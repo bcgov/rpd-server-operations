@@ -1,16 +1,3 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_dim_change_order"
-CBRE_TABLE_NAME <- "pjm_dim_change_order_vw"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-
 # Load libraries
 library(assertthat, quietly = TRUE, warn.conflicts = FALSE)
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -29,6 +16,20 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 # Load helper functions
 source(here::here("./utilities/R/cbre_api_function.R"))
 source(here::here("./utilities/R/event_logger.R"))
+
+# Set necessary variables
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "pjm_dim_change_order"
+CBRE_TABLE_NAME <- "pjm_dim_change_order_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 
 # Connect to SQL database
 con <- dbConnect(

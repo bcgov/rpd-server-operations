@@ -17,6 +17,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
+# Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -69,13 +70,14 @@ clean_data <- raw_data |>
   # select_if(~ !all(. == '-1')) |>
   # select_if(~ !all(. == "N/A")) |>
   # select_if(~ !all(. == "-")) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
   mutate(
     across(
       c(
         edp_update_ts,
         source_modified_ts
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%d %H:%M:%S %z")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
   mutate(
@@ -109,7 +111,6 @@ clean_data <- raw_data |>
       as.character
     )
   ) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
   select(
     RefreshDate,
     project_skey,

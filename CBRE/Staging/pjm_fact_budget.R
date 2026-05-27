@@ -17,6 +17,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
+# Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -31,7 +32,7 @@ TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 etl_window <- get_etl_window()
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "pjm_fact_project"
+SCRIPT_NAME <- "pjm_fact_budget"
 
 
 # Connect to SQL database
@@ -49,6 +50,17 @@ raw_data <- call_cbre_api(
   start_time = etl_window$start_time,
   end_time = etl_window$end_time
 )
+
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
 clean_data <- raw_data |>
   purrr::pluck("data") |>
@@ -79,7 +91,7 @@ clean_data <- raw_data |>
       c(
         edp_update_ts
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
     )
   ) |>
   mutate(
@@ -418,7 +430,9 @@ tryCatch(
           ON  tgt.project_skey     = src.project_skey
           AND tgt.budget_skey      = src.budget_skey
           AND tgt.budget_item_skey = src.budget_item_skey
-        WHERE tgt.project_skey IS NULL;"
+        WHERE tgt.project_skey IS NULL
+          AND tgt.budget_skey IS NULL
+          AND tgt.budget_item_skey IS NULL;"
       )
     )
 

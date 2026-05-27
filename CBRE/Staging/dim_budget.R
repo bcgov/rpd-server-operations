@@ -17,6 +17,7 @@ source(here::here("./utilities/R/api_helpers.R"))
 source(here::here("./utilities/R/event_logger.R"))
 source(here::here("./utilities/R/sql_helper_functions.R"))
 
+# Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -59,14 +60,6 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
   )
   stop("No new data from API")
 }
-
-raw_data <- call_cbre_api(
-  CBRE_TABLE_NAME,
-  # start_time = etl_window$start_time,
-  start_time = "2026-04-27T00:00:00Z",
-  # end_time = etl_window$end_time
-  end_time = "2026-05-20T00:00:00Z"
-)
 
 clean_data <- raw_data |>
   purrr::pluck("data") |>
