@@ -17,9 +17,9 @@ options(scipen = 999)
 options(digits = 7)
 
 # Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
+source(here::here("utilities/R/cbre_api_function.R"))
+source(here::here("utilities/R/event_logger.R"))
+source(here::here("utilities/R/sql_helper_functions.R"))
 
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {

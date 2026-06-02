@@ -153,30 +153,69 @@ while (progress < 2) {
     # select_if(~ !all(is.na(.))) |>
     rename_with(~ gsub(" ", "", .)) |>
     select(
-      IssueKey = key,
-      Created,
-      Updated,
-      Resolved,
+      ArchibusPinNumber = ArchibusPINNumber,
+      AccuracyCompletenessConcerns = `Arethereknowndataaccuracy,completeness,orsystemsconcernscausingafinancialdiscrepancy?`,
       Assignee,
+      BranchBusinessArea = `BusinessArea/BranchSubmittingRequest`,
+      BranchBusinessAreaImpacted = `Businessarea/branchesimpactedbythisrequest`,
+      Created,
       GPOPackageApprover,
-      GPOSubtype,
-      Organization = `Ministry/BPSOrganization`,
-      City = CityDropdown,
-      RequestType,
-      Requestparticipants,
+      HelpTopic,
+      ComplexBeliefs = `Howcomplexdoyoubelievethisrequestis?`,
+      DeadlineFinancialDriver = `Isthereadeadlineorfinancialcycle/processdrivingthisrequest?`,
+      RequestRelatedProject = `Isthisrequestrelatedtoaspecificproject/agreement/PIN#`,
+      IssueKey = key,
+      IssueType,
+      KahuaNumber,
+      PerceivedImpact,
       Priority,
-      Duedate,
+      Progress,
+      Project,
+      ProjectDeliveryMethod,
+      ProjectPartition,
+      PurchaseOrder = `PurchaseOrder(PO)Number`,
+      Reporter,
+      Resolution,
+      Resolved,
+      Requestparticipants,
+      RequestSubmittedBy,
+      RequestType,
       Status,
-      Summary
-    ) #|>
-  safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+      Summary,
+      Timetofirstresponse,
+      Timetoresolution,
+      Updated,
+      WhatRequest = `Whatareyourequesting?`,
+      DecisionSubmissionSupport = `Whatdecision,submission,orfinancialactionsdoesthissupport?`,
+      ChangeRequired = `Whattypeofchangeisrequired?`,
+      FinancialSupportRequested = `WhattypeofFinancialSupportareyourequesting?`,
+      ProcessImprovement = `WhattypeofProcessImprovementorPerformanceEnhancementareyourequesting?`,
+      WhoImpactedOpportunity = `Whoisimpactedbythisissueorimprovementopportunity?`,
+      WhoImpactedRequest = `Whoisimpactedbythisissueorrequest?`
+    ) |>
+    safe_hoist(
+      AccuracyCompletenessConcerns,
+      AccuracyCompletenessConcerns = "value",
+      .remove = FALSE
+    ) |>
+    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+    safe_hoist(
+      BranchBusinessArea,
+      BranchBusinessArea = "value",
+      .remove = FALSE
+    ) |>
+    safe_hoist(
+      BranchBusinessAreaImpacted,
+      BranchBusinessAreaImpacted = "value",
+      .remove = FALSE
+    ) |>
+    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
     safe_hoist(
       GPOPackageApprover,
       GPOPackageApprover = "displayName",
       .remove = FALSE
     ) |>
     safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
     safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
     safe_hoist(City, City = "value", .remove = FALSE) |>
     safe_hoist(

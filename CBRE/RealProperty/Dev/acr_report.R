@@ -24,7 +24,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "windfarm.idir.bcgov\\CA_TST"
 }
 DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
+SCHEMA_NAME <- "RealProperty"
+TABLE_NAME <- "ActivityCodeReport"
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+SCRIPT_NAME <- "ActivityCodeReport"
 
 options(scipen = 999)
 
