@@ -13,11 +13,6 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-source(here::here("./utilities/R/api_helpers.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
-
 # Set necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
@@ -31,7 +26,6 @@ TABLE_NAME <- "pjm_dim_contact"
 CBRE_TABLE_NAME <- "pjm_dim_contact_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-etl_window <- get_etl_window()
 API_NAME <- "CBRE"
 SCRIPT_NAME <- "pjm_dim_contact"
 

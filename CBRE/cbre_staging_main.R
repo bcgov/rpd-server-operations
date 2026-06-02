@@ -3,10 +3,15 @@
 # Runs all CBRE staging scripts, continues on error
 source(here::here("renv/activate.R"))
 source(here::here("utilities/R/event_logger.R"))
+source(here::here("utilities/R/api_helpers.R"))
+source(here::here("utilities/R/sql_helper_functions.R"))
 
 ORCHESTRATOR_NAME <- "cbre_staging"
 
+etl_window <- get_etl_window()
+
 scripts <- c(
+  # Drop and refresh
   "CBRE/Staging/archibus_bl.R",
   "CBRE/Staging/archibus_property.R",
   "CBRE/Staging/archibus_rm.R",
@@ -14,26 +19,26 @@ scripts <- c(
   "CBRE/Staging/archibus_ls.R",
   "CBRE/Staging/archibus_dv.R",
   "CBRE/Staging/archibus_dp.R",
-  # Claude Review
-  "CBRE/Staging/dim_project_activity.R",
-  "CBRE/Staging/fact_project_activity.R",
+  # Uses etl_window
   "CBRE/Staging/dim_budget.R",
-  "CBRE/Staging/fact_budget.R",
-  "CBRE/Staging/dim_project.R",
-  "CBRE/Staging/fact_project.R",
-  "CBRE/Staging/dim_project_role.R",
-  "CBRE/Staging/fact_project_role.R",
   "CBRE/Staging/dim_contact.R",
+  "CBRE/Staging/dim_project_activity.R",
+  "CBRE/Staging/dim_project_role.R",
+  "CBRE/Staging/dim_project.R",
+  "CBRE/Staging/fact_budget.R",
+  "CBRE/Staging/fact_project_activity.R",
+  "CBRE/Staging/fact_project_role.R",
+  "CBRE/Staging/fact_project.R",
+  "CBRE/Staging/fm_fact_workorder.R",
+  "CBRE/Staging/pjm_dim_budget.R",
   "CBRE/Staging/pjm_dim_contact.R",
-  "CBRE/Staging/pjm_fact_project.R",
+  "CBRE/Staging/pjm_dim_project_activity.R",
+  "CBRE/Staging/pjm_dim_project_role.R",
   "CBRE/Staging/pjm_dim_project.R",
   "CBRE/Staging/pjm_fact_budget.R",
-  "CBRE/Staging/pjm_dim_budget.R",
   "CBRE/Staging/pjm_fact_project_role.R",
-  "CBRE/Staging/pjm_dim_project_role.R",
-  "CBRE/Staging/fm_fact_workorder.R",
   "CBRE/Staging/pjm_fact_project_activity.R",
-  "CBRE/Staging/pjm_dim_project_activity.R"
+  "CBRE/Staging/pjm_fact_project.R"
   # Claude Reviewed up to here
   #   fin_dim_general_ledger
   # fin_fact_general_ledger_actuals

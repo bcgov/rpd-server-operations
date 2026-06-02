@@ -448,3 +448,6 @@ if (is.null(etl_error)) {
   )
   stop(etl_error)
 }
+
+# https://geocoder.api.gov.bc.ca/sites/nearest.xhtml?point=-122.8491387,49.1914645
+# Reverse geocoder

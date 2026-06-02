@@ -3,6 +3,7 @@ BioCpkgList <- c(
   "BiocVersion"
 )
 
+pkgList <- c("blastula", "getPass")
 pkgList <- c(
   "arrow",
   "assertthat",
@@ -11,11 +12,13 @@ pkgList <- c(
   "AzureRMR",
   "base64enc",
   "BiocManager",
+  "blastula",
   "DBI",
   "devtools",
   "dplyr",
   "fastmap",
   "fs",
+  "getPass",
   "here",
   "httpuv",
   "httr2",
@@ -62,7 +65,8 @@ makeRepo(
 )
 
 makeRepo(
-  fullList,
+  # fullList,
+  pkgList,
   path = "C:/Projects/packagerepo",
   download = TRUE,
   type = "win.binary",

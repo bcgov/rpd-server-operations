@@ -14,9 +14,8 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 # K1012013
 
 # Load helper functions
-# source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
+source(here::here("utilities/R/event_logger.R"))
+source(here::here("utilities/R/sql_helper_functions.R"))
 
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
@@ -43,18 +42,6 @@ query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_dim_contact")
 PjmDimContactData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-PjmDimContactData <- PjmDimContactData |>
-  mutate(
-    across(
-      c(
-        contact_skey
-      ),
-      as.character
-    )
-  )
-
-query
-as.character()
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_dim_project_role")
 PjmDimProjectRoleData <- dbFetch(query, n = -1)
 dbClearResult(query)
@@ -70,24 +57,14 @@ dbClearResult(query)
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_dim_project")
 PjmDimProjectData <- dbFetch(query, n = -1)
 dbClearResult(query)
-# Clean up character numerical values to as.double
-PjmDimProjectData <- PjmDimProjectData |>
-  mutate(
-    across(
-      c(
-        project_skey
-      ),
-      as.character
-    )
-  )
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_fact_budget")
-PjmFactBudgetData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_dim_budget")
-PjmDimBudgetData <- dbFetch(query, n = -1)
-dbClearResult(query)
+# query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_fact_budget")
+# PjmFactBudgetData <- dbFetch(query, n = -1)
+# dbClearResult(query)
+#
+# query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_dim_budget")
+# PjmDimBudgetData <- dbFetch(query, n = -1)
+# dbClearResult(query)
 
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_dim_project_activity")
 PjmDimProjectActivityData <- dbFetch(query, n = -1)
@@ -96,6 +73,7 @@ dbClearResult(query)
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.pjm_fact_project_activity")
 PjmFactProjectActivityData <- dbFetch(query, n = -1)
 dbClearResult(query)
+
 
 # Prep data
 ProjectRoleData <- PjmFactProjectRoleData |>
@@ -108,163 +86,68 @@ ProjectRoleData <- PjmFactProjectRoleData |>
   select(project_skey, ProjectManager, ProjectManagerEmail = email_id)
 
 # Review ACR Report and recreate
-ProjectReview <- PjmDimProjectData |>
-  # filter(project_number == "K1000191") |>
-  filter(
-    project_number %in%
-      c(
-        "K1009600",
-        "K1010408",
-        "K1010993",
-        "K1011138",
-        "K1012076",
-        "K1012778",
-        "K1012821",
-        "K1012911",
-        "K1012912",
-        "K1012916",
-        "K1012920",
-        "K1012935",
-        "K1012958",
-        "K1012961",
-        "K1012962",
-        "K1012963",
-        "K1012969"
-      )
-  ) |>
-  # select(
-  #   project_number,
-  #   project_skey,
-  #   project_name,
-  #   scope_desc
-  # ) |>
-  left_join(PjmFactProjectData, by = join_by(project_skey)) |>
-  # select(
-  #   project_number,
-  #   project_skey,
-  #   project_name,
-  #   scope_desc,
-  #   project_phase
-  # ) |>
-  left_join(PjmFactBudgetData, by = join_by(project_skey)) |>
-  # select(
-  #   project_number,
-  #   project_skey,
-  #   project_name,
-  #   scope_desc,
-  #   project_phase,
-  #   budget_status,
-  #   budget_skey,
-  #   project_activity_skey,
-  #   budget_desc,
-  #   budget_item_skey,
-  #   budget_item_id,
-  #   approved_total_budget_value,
-  #   estimated_budget_total_value,
-  #   approved_budget_capital_total,
-  #   estimated_budget_capital,
-  #   budget_capital_value,
-  #   approved_budget_expense,
-  #   estimated_budget_expense,
-  #   budget_expense_amount
-  # ) |>
-  # # This step won't work for any pipeline or early stage projects which don't have approved budgets
-  # filter(budget_status == "Approved") |>
-  arrange(project_number, budget_desc) #|>
-# mutate(
-#   across(
-#     c(
-#       project_skey,
-#       project_activity_skey
-#     ),
-#     as.character
-#   )
-# ) |>
-left_join(
-  PjmFactProjectActivityData,
-  by = join_by(project_skey, project_activity_skey)
-) |>
+ProjectReview <- PjmFactProjectActivityData |>
   left_join(PjmDimProjectActivityData, by = join_by(project_activity_skey)) |>
-  # select(
-  #   project_number,
-  #   project_skey,
-  #   project_name,
-  #   scope_desc,
-  #   project_phase,
-  #   budget_status,
-  #   budget_skey,
-  #   project_activity_skey,
-  #   budget_desc,
-  #   budget_item_skey,
-  #   budget_item_id,
-  #   approved_total_budget_value,
-  #   estimated_budget_total_value,
-  #   approved_budget_capital_total,
-  #   estimated_budget_capital,
-  #   budget_capital_value,
-  #   approved_budget_expense,
-  #   estimated_budget_expense,
-  #   budget_expense_amount,
-  #   record_type,
-  #   paid,
-  #   retained,
-  #   invoiced,
-  #   code,
-  #   code_type,
-  #   code_parent,
-  #   activity_desc,
-  #   budget_adjustments_total_value,
-  #   budget_approved_changes_total_value,
-  #   budget_approved_adjustment_total_value,
-  #   budget_approved_total_value,
-  #   budget_estimated_total_value,
-  #   budget_contract_approved_total_value,
-  #   cost_approved_total_value,
-  #   cost_projected_changes_total_value,
-  #   cost_pending_changes_total_value,
-  #   cost_pending_commitments_total_value,
-  #   cost_approved_changes_total_value,
-  #   cost_original_total_value,
-  #   cost_estimated_total_value,
-  #   balance_to_complete,
-  #   awarded_amount,
-  #   payables_remaining_total_value
-  # ) |>
-  left_join(
-    ProjectRoleData,
-    by = join_by(project_skey)
-  ) #|>
-select(
-  ProjectNumber = project_number,
-  ProjectName = project_name,
-  # Project Status,
-  ProjectManager,
-  ProjectManagerEmail,
-  ActivityCode = code,
-  Description = activity_desc,
-  budget_desc,
-  # PreliminaryBudget, # this one is a bad example as all zeroes.
-  ApprovedBudget = budget_approved_total_value,
-  Adjustments = budget_approved_adjustment_total_value,
-  ApprovedBudgetChanges = budget_approved_changes_total_value,
-  CurrentBudget = cost_approved_total_value,
-  OriginalCommitted = cost_original_total_value,
-  ApprovedChanges = cost_approved_changes_total_value,
-  CurrentCommitted = awarded_amount, # Unsure if this makes sense as the correct column
-  # PendingCommitments,
-  # PendingChanges,
-  # ProjectedExposure,
-  # AnticipatedFinalCost,
-  # Variance,
-  # VariancePercentage,
-  Invoiced = invoiced,
-  Retained = retained,
-  Paid = paid,
-  Remaining = payables_remaining_total_value
-) |>
+  left_join(PjmFactProjectData, by = join_by(project_skey)) |>
+  left_join(PjmDimProjectData, by = join_by(project_skey)) |>
+  left_join(ProjectRoleData, by = join_by(project_skey)) |>
+  mutate(
+    CurrentBudget = round(
+      budget_approved_total_value +
+        budget_approved_adjustment_total_value +
+        budget_approved_changes_total_value,
+      digits = 2
+    ),
+    AnticipatedFinalCost = awarded_amount + cost_projected_changes_total_value,
+    Variance = round(AnticipatedFinalCost - CurrentBudget, digits = 2),
+    VariancePercent = round((Variance / CurrentBudget) * 100, digits = 2),
+    code_sibling = stringr::str_sub(code, start = 5, end = 6),
+    code_cousin = stringr::str_sub(code, start = 7, end = 9)
+  ) |>
+  select(
+    ProjectSkey = project_skey,
+    ProjectNumber = project_number,
+    ProjectName = project_name,
+    ProjectStatus = project_status,
+    ProjectManager,
+    ProjectManagerEmail,
+    ParentCode = code_parent,
+    code_sibling,
+    code_cousin,
+    ActivityCode = code,
+    CodeType = code_type,
+    Description = activity_desc,
+    PreliminaryBudget = budget_estimated_total_value,
+    ApprovedBudget = budget_approved_total_value,
+    Adjustments = budget_approved_adjustment_total_value,
+    ApprovedBudgetChanges = budget_approved_changes_total_value,
+    CurrentBudget,
+    OriginalCommitted = cost_original_total_value,
+    ApprovedChanges = cost_approved_changes_total_value,
+    CurrentCommitted = awarded_amount,
+    PendingCommitments = cost_pending_commitments_total_value,
+    PendingChanges = cost_pending_changes_total_value,
+    ProjectedExposure = cost_projected_changes_total_value,
+    AnticipatedFinalCost,
+    Variance,
+    VariancePercent,
+    Invoiced = invoiced,
+    Retained = retained,
+    Paid = paid,
+    Remaining = payables_remaining_total_value
+  )
+
+
+Test <- ProjectReview |>
+  filter(CodeType == "detail") |>
+  group_by(ProjectSkey, ParentCode, code_sibling) |>
+  mutate(count = n()) |>
+  filter(!(count >= 2 & code_cousin == "")) |>
+  ungroup() |>
   filter(
     !if_all(
       c(
+        PreliminaryBudget,
         CurrentBudget,
         CurrentCommitted,
         Invoiced,
@@ -279,3 +162,32 @@ select(
     ProjectNumber,
     ActivityCode
   )
+
+ACR_Actual <- openxlsx2::read_xlsx(here(
+  "input/ProjectForecast/Program ACR Report 2026-06-01.xlsx"
+))
+
+my_row_groups <- Test |>
+  select(ProjectNumber) |>
+  group_by(ProjectNumber) |>
+  summarise(
+    my_count = n()
+  ) |>
+  ungroup()
+
+report_row_groups <- ACR_Actual |>
+  select(ProjectNumber = `Project #`) |>
+  group_by(ProjectNumber) |>
+  summarise(
+    report_count = n()
+  ) |>
+  ungroup()
+
+compare <- report_row_groups |>
+  full_join(my_row_groups, by = join_by(ProjectNumber)) |>
+  mutate(
+    Flag = case_when(report_count == my_count ~ TRUE, .default = FALSE)
+  )
+
+Check <- ProjectReview |>
+  filter(ProjectNumber == "K1009489")
