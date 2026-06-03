@@ -1,3 +1,10 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
+
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -12,12 +19,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
-
-# Set necessary variables
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -42,14 +44,29 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
 
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 clean_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+  purrr::pluck("data") |>
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   mutate(RefreshDate = as.POSIXct(Sys.time())) |>
   mutate(
     across(
@@ -242,11 +259,15 @@ tryCatch(
   }
 )
 
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
 if (is.null(etl_error)) {
   log_daily_etl_run(
     api_name = API_NAME,
     script_name = SCRIPT_NAME,
     table_name = TABLE_NAME,
+    duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
     n_updated = NA,

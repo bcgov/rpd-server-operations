@@ -12,6 +12,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -30,6 +31,13 @@ con <- dbConnect(
   database = DB_NAME,
   Trusted_Connection = "Yes"
 )
+
+KahuaSource <- openxlsx2::read_xlsx(here(
+  "input/KahuaPayable/2026-05-21-CompareKahua.xlsx"
+))
+PCIReport <- openxlsx2::read_xlsx(here(
+  "input/KahuaPayable/2026-05-25-PCIReport.xlsx"
+))
 
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fact_invoice")
 FactInvoiceData <- dbFetch(query, n = -1)

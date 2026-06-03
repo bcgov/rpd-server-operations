@@ -1,5 +1,11 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
+
 # Load libraries
-library(assertthat, quietly = TRUE, warn.conflicts = FALSE)
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
 library(here, quietly = TRUE, warn.conflicts = FALSE)
@@ -13,11 +19,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-
-# Set necessary variables
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -41,14 +43,30 @@ con <- dbConnect(
 target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 temp_table <- paste0("#", TABLE_NAME, "Temp")
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
+
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
 cleaned_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+  purrr::pluck("data") |>
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   mutate(
     across(
       c(

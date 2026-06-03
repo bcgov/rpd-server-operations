@@ -1,148 +1,247 @@
 # Load Libraries
-library(AzureAuth)
-library(blastula)
 library(dplyr)
 library(glue)
-# library(gt)
+library(here)
 library(httr2)
 library(keyring)
+library(lubridate)
 library(readr)
+library(AzureAuth)
 
-# --- 1. Load & prep today's log ---
+# --- 1. Load & classify log rows ---
 
 log_file <- here::here("logs", paste0("daily_etl_log_", Sys.Date(), ".csv"))
+log_raw <- read_csv(log_file, show_col_types = FALSE) |>
+  mutate(run_timestamp = as.POSIXct(run_timestamp, tz = "UTC"))
 
-log_raw <- read_csv(log_file, show_col_types = FALSE)
+# Orchestrator summary rows: script_name == api_name
+orch_rows <- log_raw |>
+  filter(script_name == api_name) |>
+  arrange(run_timestamp)
 
-# Keep only the table-level ETL rows (those with real insert/update counts)
-etl_rows <- log_raw |>
-  filter(!is.na(table_name)) |>
+# Individual script rows: everything else
+script_rows <- log_raw |>
+  filter(script_name != api_name) |>
   mutate(
-    run_timestamp = as.POSIXct(run_timestamp, tz = "UTC"),
     n_inserted = replace_na(n_inserted, 0L),
     n_updated = replace_na(n_updated, 0L),
     n_deleted = replace_na(n_deleted, 0L)
-  )
-
-# Summary stats for the header cards
-n_total <- nrow(etl_rows)
-n_success <- sum(etl_rows$status == "SUCCESS")
-n_failed <- n_total - n_success
-total_ins <- sum(etl_rows$n_inserted)
-total_upd <- sum(etl_rows$n_updated)
-run_date <- format(Sys.Date(), "%B %d, %Y")
-host <- unique(etl_rows$host) |> paste(collapse = ", ")
-
-# --- 2. Build the HTML table ---
-status_icon <- function(s) ifelse(s == "SUCCESS", "✅", "❌")
-
-table_rows <- etl_rows |>
-  mutate(
-    status_icon = status_icon(status),
-    n_inserted = formatC(n_inserted, format = "d", big.mark = ","),
-    n_updated = formatC(n_updated, format = "d", big.mark = ",")
   ) |>
-  select(status_icon, api_name, table_name, n_inserted, n_updated, message)
+  arrange(run_timestamp)
 
-html_rows <- apply(table_rows, 1, \(r) {
+# --- 2. Summary stats ---
+
+run_date <- format(Sys.Date(), "%B %d, %Y")
+host <- unique(log_raw$host) |> paste(collapse = ", ")
+n_orch <- nrow(orch_rows)
+n_orch_ok <- sum(orch_rows$status == "SUCCESS")
+n_orch_fail <- sum(orch_rows$status %in% c("ERROR", "PARTIAL_FAILURE"))
+n_scripts <- nrow(script_rows)
+n_scripts_ok <- sum(script_rows$status == "SUCCESS")
+n_scripts_fail <- n_scripts - n_scripts_ok
+total_ins <- sum(script_rows$n_inserted, na.rm = TRUE)
+total_upd <- sum(script_rows$n_updated, na.rm = TRUE)
+any_failure <- (n_orch_fail + n_scripts_fail) > 0
+# header_colour <- if (!any_failure) "#27ae60" else "#e74c3c"
+header_colour <- "#234075"
+overall_text <- if (!any_failure) {
+  "All runs completed successfully."
+} else {
+  glue("{n_orch_fail + n_scripts_fail} failure(s) detected — review below.")
+}
+
+# --- 3. HTML helpers ---
+
+status_badge <- function(s) {
+  colour <- switch(
+    s,
+    SUCCESS = "#27ae60",
+    PARTIAL_FAILURE = "#e67e22",
+    ERROR = "#e74c3c",
+    "#95a5a6"
+  )
+  icon <- if (s == "SUCCESS") "✓" else "✗"
   glue(
-    "<tr>
-     <td style='padding:8px 12px; text-align:center;'>{r['status_icon']}</td>
-     <td style='padding:8px 12px; font-family:monospace; font-size:13px;'>{r['api_name']}</td>
-     <td style='padding:8px 12px; font-family:monospace; font-size:13px;'>{r['table_name']}</td>
-     <td style='padding:8px 12px; text-align:right;'>{r['n_inserted']}</td>
-     <td style='padding:8px 12px; text-align:right;'>{r['n_updated']}</td>
-   </tr>"
+    "<span style='background:{colour}; color:white; padding:2px 8px;
+        border-radius:3px; font-size:12px; font-weight:bold;'>{icon} {s}</span>"
+  )
+}
+
+fmt_num <- function(x) formatC(x, format = "d", big.mark = ",")
+
+fmt_dur <- function(secs) {
+  if (is.na(secs)) {
+    return("—")
+  }
+  if (secs < 60) {
+    return(glue("{round(secs, 1)}s"))
+  }
+  glue("{floor(secs/60)}m {round(secs %% 60)}s")
+}
+
+stat_card <- function(value, label, colour) {
+  glue(
+    '
+    <td style="background:{colour}; color:white; text-align:center;
+               padding:16px; border-radius:6px; width:18%;">
+      <div style="font-size:26px; font-weight:bold;">{value}</div>
+      <div style="font-size:11px; margin-top:4px; opacity:0.9;">{label}</div>
+    </td>
+    <td style="width:2%;"></td>
+  '
+  )
+}
+
+# --- 4. Orchestrator summary table ---
+
+orch_table_rows <- apply(orch_rows, 1, \(r) {
+  dur_raw <- suppressWarnings(as.numeric(r["duration"]))
+  glue(
+    '
+    <tr style="border-bottom:1px solid #ecf0f1;">
+      <td style="padding:10px 12px;">{status_badge(r["status"])}</td>
+      <td style="padding:10px 12px; font-family:monospace; font-size:13px;">
+        {r["api_name"]}</td>
+      <td style="padding:10px 12px; color:#555;">{r["message"]}</td>
+      <td style="padding:10px 12px; text-align:right; color:#777; font-size:13px;">
+        {fmt_dur(dur_raw)}</td>
+    </tr>
+  '
   )
 }) |>
   paste(collapse = "\n")
 
-etl_table_html <- glue(
+orch_table <- glue(
   '
-<table style="width:100%; border-collapse:collapse; font-size:14px; font-family:Arial,sans-serif;">
-  <thead>
-    <tr style="background-color:#2c3e50; color:#ffffff;">
-      <th style="padding:10px 12px;">Status</th>
-      <th style="padding:10px 12px; text-align:left;">API</th>
-      <th style="padding:10px 12px; text-align:left;">Table</th>
-      <th style="padding:10px 12px; text-align:right;">Inserted</th>
-      <th style="padding:10px 12px; text-align:right;">Updated</th>
-    </tr>
-  </thead>
-  <tbody>
-    {html_rows}
-  </tbody>
-</table>
+  <table style="width:100%; border-collapse:collapse; font-size:14px;
+                font-family:Arial,sans-serif; margin-bottom:24px;">
+    <thead>
+      <tr style="background:#2c3e50; color:white;">
+        <th style="padding:10px 12px; text-align:left;">Status</th>
+        <th style="padding:10px 12px; text-align:left;">Orchestrator</th>
+        <th style="padding:10px 12px; text-align:left;">Summary</th>
+        <th style="padding:10px 12px; text-align:right;">Duration</th>
+      </tr>
+    </thead>
+    <tbody>{orch_table_rows}</tbody>
+  </table>
 '
 )
 
-# --- 3. Compose the blastula email ---
+# --- 5. Individual script detail table ---
 
-overall_status_text <- if (n_failed == 0) {
-  "All runs completed successfully."
-} else {
-  glue("{n_failed} run(s) failed — review below.")
-}
-header_colour <- if (n_failed == 0) "#27ae60" else "#e74c3c"
-
-email <- compose_email(
-  body = blocks(
-    block_title("ETL Daily Digest"),
-    block_text(glue::glue(
-      "<p style='color:#666; margin:0;'>{run_date} &nbsp;|&nbsp; Host: <strong>{host}</strong></p>"
-    )),
-    block_spacer(),
-
-    # Summary cards as a simple inline table
-    block_text(glue(
-      '
-      <table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
-        <tr>
-          <td style="background:{header_colour}; color:white; text-align:center; padding:16px; border-radius:6px; width:25%;">
-            <div style="font-size:28px; font-weight:bold;">{n_total}</div>
-            <div style="font-size:12px; margin-top:4px;">Total Runs</div>
-          </td>
-          <td style="width:2%;"></td>
-          <td style="background:#27ae60; color:white; text-align:center; padding:16px; border-radius:6px; width:25%;">
-            <div style="font-size:28px; font-weight:bold;">{n_success}</div>
-            <div style="font-size:12px; margin-top:4px;">Successful</div>
-          </td>
-          <td style="width:2%;"></td>
-          <td style="background:#2980b9; color:white; text-align:center; padding:16px; border-radius:6px; width:25%;">
-            <div style="font-size:28px; font-weight:bold;">{formatC(total_ins, format="d", big.mark=",")}</div>
-            <div style="font-size:12px; margin-top:4px;">Rows Inserted</div>
-          </td>
-          <td style="width:2%;"></td>
-          <td style="background:#8e44ad; color:white; text-align:center; padding:16px; border-radius:6px; width:25%;">
-            <div style="font-size:28px; font-weight:bold;">{formatC(total_upd, format="d", big.mark=",")}</div>
-            <div style="font-size:12px; margin-top:4px;">Rows Updated</div>
-          </td>
-        </tr>
-      </table>
+script_table_rows <- apply(script_rows, 1, \(r) {
+  dur_raw <- suppressWarnings(as.numeric(r["duration"]))
+  row_bg <- if (r["status"] != "SUCCESS") "#fff5f5" else "white"
+  glue(
     '
-    )),
-
-    block_text(glue(
-      "<p style='color:{header_colour}; font-weight:bold;'>{overall_status_text}</p>"
-    )),
-    block_text(etl_table_html),
-    block_spacer(),
-    block_text(
-      "<p style='color:#aaa; font-size:12px;'>Generated automatically by the ETL event logger.</p>"
-    )
+    <tr style="border-bottom:1px solid #ecf0f1; background:{row_bg};">
+      <td style="padding:8px 12px;">{status_badge(r["status"])}</td>
+      <td style="padding:8px 12px; font-family:monospace; font-size:12px;">
+        {r["api_name"]}</td>
+      <td style="padding:8px 12px; font-family:monospace; font-size:12px;">
+        {r["table_name"]}</td>
+      <td style="padding:8px 12px; text-align:right;">{fmt_num(as.integer(r["n_inserted"]))}</td>
+      <td style="padding:8px 12px; text-align:right;">{fmt_num(as.integer(r["n_updated"]))}</td>
+      <td style="padding:8px 12px; text-align:right; color:#777; font-size:12px;">
+        {fmt_dur(dur_raw)}</td>
+    </tr>
+  '
   )
+}) |>
+  paste(collapse = "\n")
+
+script_table <- glue(
+  '
+  <table style="width:100%; border-collapse:collapse; font-size:14px;
+                font-family:Arial,sans-serif; margin-bottom:24px;">
+    <thead>
+      <tr style="background:#34495e; color:white;">
+        <th style="padding:10px 12px; text-align:left;">Status</th>
+        <th style="padding:10px 12px; text-align:left;">API</th>
+        <th style="padding:10px 12px; text-align:left;">Table</th>
+        <th style="padding:10px 12px; text-align:right;">Inserted</th>
+        <th style="padding:10px 12px; text-align:right;">Updated</th>
+        <th style="padding:10px 12px; text-align:right;">Duration</th>
+      </tr>
+    </thead>
+    <tbody>{script_table_rows}</tbody>
+  </table>
+'
 )
 
-# --- 4. Extract HTML and send via Graph API ---
+# --- 6. Assemble full HTML body ---
 
-# Setup Graph API
+email_html <- glue(
+  '
+<!DOCTYPE html>
+<html>
+<body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial,sans-serif;">
+<div style="max-width:800px; margin:24px auto; background:white;
+            border-radius:8px; overflow:hidden;
+            box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+  <!-- Header -->
+  <div style="background:{header_colour}; padding:24px 32px;">
+    <h1 style="margin:0; color:white; font-size:22px;">ETL Daily Digest</h1>
+    <p style="margin:6px 0 0; color:rgba(255,255,255,0.85); font-size:14px;">
+      {run_date} &nbsp;|&nbsp; Host: {host}
+    </p>
+  </div>
+
+  <!-- Stat cards -->
+  <div style="padding:24px 32px 8px;">
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        {stat_card(n_orch,            "Orchestrators",   header_colour)}
+        {stat_card(n_scripts,         "Scripts Run",     header_colour)}
+        {stat_card(fmt_num(total_ins),"Rows Inserted",   header_colour)}
+        {stat_card(fmt_num(total_upd),"Rows Updated",    header_colour)}
+        {stat_card(n_scripts_fail,    "Failures",        header_colour)}
+      </tr>
+    </table>
+  </div>
+
+  <!-- Status line -->
+  <div style="padding:8px 32px 16px;">
+    <p style="color:{header_colour}; font-weight:bold; margin:0;">{overall_text}</p>
+  </div>
+
+  <!-- Orchestrator table -->
+  <div style="padding:0 32px 8px;">
+    <h2 style="font-size:16px; color:#2c3e50; border-bottom:2px solid #ecf0f1;
+               padding-bottom:8px;">Orchestrator Summary</h2>
+    {orch_table}
+  </div>
+
+  <!-- Script detail table -->
+  <div style="padding:0 32px 24px;">
+    <h2 style="font-size:16px; color:#2c3e50; border-bottom:2px solid #ecf0f1;
+               padding-bottom:8px;">Script Detail</h2>
+    {script_table}
+  </div>
+
+  <!-- Footer -->
+  <div style="background:#f4f6f8; padding:12px 32px; text-align:center;">
+    <p style="color:#aaa; font-size:11px; margin:0;">
+      Generated automatically by the ETL event logger &nbsp;|&nbsp; {Sys.time()}
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
+'
+)
+
+# --- 7. Send via Graph API ---
+
 appId <- "267fc93d-3fa0-4942-88f9-02f4f7fee693"
 tenantId <- "6fdb5200-3d0d-4a8a-b036-d3685e359adc"
+mailbox <- "RPD.SpBooking@gov.bc.ca"
+recipient <- "david.rattray@gov.bc.ca"
 
-credential <- keyring::key_get(
-  service = "GraphAPI",
-  username = appId
-)
+credential <- keyring::key_get(service = "GraphAPI", username = appId)
 
 token <- get_azure_token(
   resource = "https://graph.microsoft.com",
@@ -152,52 +251,30 @@ token <- get_azure_token(
   auth_type = "client_credentials"
 )
 
-# Extract the access token string from the AzureAuth token object
 access_token <- token$credentials$access_token
 
-# The mailbox you want to read (your service account's UPN or object ID)
-mailbox <- "RPD.SpBooking@gov.bc.ca"
+subject <- glue(
+  "ETL Daily Digest — {run_date} [{if(!any_failure) 'OK' else 'FAILURES'}]"
+)
 
-email_html <- as.character(email$html_str)
-
-recipient <- "david.rattray@gov.bc.ca"
-
-request(
-  "https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail" |> glue()
-) |>
+request(glue("https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail")) |>
   req_headers(
     Authorization = paste("Bearer", access_token),
     `Content-Type` = "application/json"
   ) |>
   req_body_json(list(
     message = list(
-      subject = glue(
-        "ETL Daily Digest — {run_date} [{if(n_failed==0) 'OK' else 'FAILURES'}]"
-      ),
-      body = list(
-        contentType = "HTML",
-        content = email_html
-      ),
+      subject = subject,
+      body = list(contentType = "HTML", content = email_html),
       toRecipients = list(
         list(emailAddress = list(address = recipient))
       )
     ),
     saveToSentItems = FALSE
   )) |>
-  req_dry_run()
-req_perform()
+  req_perform()
 
-htmltools::save_html(
-  blastula::get_html_str(email),
-  file = here("output/digest_preview.html")
-)
-browseURL(here("output/digest_preview.html"))
-
-str(email, max.level = 1) # see the slot names
-class(email$html_str) # should be "character"
-nchar(email$html_str) # should be a large number
-
-# A safer extraction that works across blastula versions
-email_html <- blastula::get_html_str(email) # returns the string without writing to disk
-
-email_html
+# --- 8. Local preview (dev only) ---
+preview_path <- here::here("output", "digest_preview.html")
+writeLines(email_html, preview_path)
+browseURL(preview_path)

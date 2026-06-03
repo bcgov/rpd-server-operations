@@ -1,3 +1,10 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
+
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -12,12 +19,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-# source(here::here("./utilities/R/api_helpers.R"))
-# source(here::here("./utilities/R/event_logger.R"))
-# source(here::here("./utilities/R/sql_helper_functions.R"))
-
-# Set necessary variables
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -30,7 +32,6 @@ TABLE_NAME <- "dim_budget"
 CBRE_TABLE_NAME <- "dim_budget_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-# etl_window <- get_etl_window()
 API_NAME <- "CBRE"
 SCRIPT_NAME <- "dim_budget"
 
@@ -312,11 +313,15 @@ tryCatch(
   }
 )
 
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
 if (is.null(etl_error)) {
   log_daily_etl_run(
     api_name = API_NAME,
     script_name = SCRIPT_NAME,
     table_name = TABLE_NAME,
+    duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
     n_updated = n_updated,

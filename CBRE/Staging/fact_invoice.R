@@ -1,3 +1,10 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
+
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -12,12 +19,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
-
-# Set necessary variables
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -42,25 +44,11 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-edp_tables <- list(
-  # "dim_project_activity_vw",
-  # "dim_project_role_vw",
-  # "fact_budget_vw",
-  "fact_invoice_vw"
-  # "fact_project_activity_vw"
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
 )
-# ---- submit all exports ----
-# jobs <- lapply(edp_tables, function(tbl) {
-#   submit_edp_export(
-#     edp_table = tbl
-#   )
-# })
-
-results <- lapply(jobs, function(job) {
-  retrieve_edp_export(job$file_id)
-})
-
-raw_data <- results
 
 clean_data <- raw_data |>
   purrr::pluck(1) |>

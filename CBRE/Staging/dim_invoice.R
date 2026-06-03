@@ -1,3 +1,10 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
+
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
@@ -12,12 +19,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
-
-# Set necessary variables
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -42,7 +44,11 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
 
 clean_data <- raw_data |>
   select_if(~ !all(is.na(.))) |>

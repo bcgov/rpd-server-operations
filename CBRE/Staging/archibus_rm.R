@@ -1,17 +1,9 @@
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "RoomTotal"
-CBRE_TABLE_NAME <- "archibus_rm"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-API_NAME <- "CBRE"
-SCRIPT_NAME <- "RoomTotal"
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -27,9 +19,21 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-# Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
+# Setup necessary variables
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "CbreStaging"
+TABLE_NAME <- "RoomTotal"
+CBRE_TABLE_NAME <- "archibus_rm"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "RoomTotal"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -40,18 +44,33 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-raw_data <- extract_cbre_data(CBRE_TABLE_NAME)
+raw_data <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = etl_window$start_time,
+  end_time = etl_window$end_time
+)
+
+if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
+  cat(
+    "No data returned from API for window",
+    etl_window$start_time,
+    "to",
+    etl_window$end_time,
+    "— nothing to load. Exiting gracefully.\n"
+  )
+  stop("No new data from API")
+}
 
 clean_data <- raw_data |>
-  select_if(~ !all(is.na(.))) |>
-  select_if(~ !all(. == 0)) |>
-  select_if(~ !all(. == '-1')) |>
-  select_if(~ !all(. == "N/A")) |>
-  select_if(~ !all(. == "-")) |>
+  purrr::pluck("data") |>
+  # select_if(~ !all(is.na(.))) |>
+  # select_if(~ !all(. == 0)) |>
+  # select_if(~ !all(. == '-1')) |>
+  # select_if(~ !all(. == "N/A")) |>
+  # select_if(~ !all(. == "-")) |>
   filter(rm_status_pobc == "Active") |>
   select(
     edp_update_ts,
-    # rm_date_costs_end may be a sign of things to filter out
     rm_date_costs_end,
     rm_bl_id,
     rm_fl_id,
@@ -85,8 +104,6 @@ clean_data <- raw_data |>
       as.double
     )
   ) |>
-  # mutate(rm_date_costs_end = case_when(rm_date_costs_end == "4712-12-31T00:00:00Z" ~ NA,
-  #                                      .default = rm_date_costs_end)) |>
   mutate(
     across(
       c(
@@ -99,6 +116,7 @@ clean_data <- raw_data |>
   mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything())
 
 # Database Transaction ####
+
 # dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
 if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
@@ -131,8 +149,6 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
   )
   dbExecute(con, sql)
 }
-
-etl_start_time <- Sys.time()
 
 etl_error <- NULL
 
@@ -237,23 +253,26 @@ tryCatch(
 
     # Complete the transaction
     dbCommit(con)
-    #     n_deleted <<- n_deleted
+
     n_inserted <<- n_inserted
-    #     n_updated <<- n_updated
-    #     # Rollback transaction on failure
+
+    # Rollback transaction on failure
   },
   error = function(e) {
     dbRollback(con)
     etl_error <<- e
-    # stop(e)
   }
 )
+
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
 
 if (is.null(etl_error)) {
   log_daily_etl_run(
     api_name = API_NAME,
     script_name = SCRIPT_NAME,
     table_name = TABLE_NAME,
+    duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
     n_updated = NA,

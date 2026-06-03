@@ -5,12 +5,10 @@ source(here::here("renv/activate.R"))
 source(here::here("utilities/R/utilities.R"))
 
 orchestrator_start <- Sys.time()
-ORCHESTRATOR_NAME <- "cbre_business"
+ORCHESTRATOR_NAME <- "jira_boards"
 
 scripts <- c(
-  "CBRE/RealProperty/FacilityDetail.R",
-  "CBRE/RealProperty/SpaceAllocation.R",
-  "CBRE/RealProperty/ActivityCodeReport.R"
+  "JIRA/Boards/JIRA-TEST-PSO-Issues.R"
 )
 
 # -- Per-script result tracking --
