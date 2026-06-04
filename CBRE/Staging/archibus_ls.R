@@ -119,7 +119,7 @@ clean_data <- raw_data |>
         ls_date_move,
         ls_date_terminated
       ),
-      as.POSIXct
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
   mutate(

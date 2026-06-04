@@ -64,7 +64,7 @@ clean_data <- raw_data |>
         source_created_ts,
         edp_update_ts
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
   mutate(
@@ -76,7 +76,7 @@ clean_data <- raw_data |>
         period_from,
         period_to
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
   mutate(

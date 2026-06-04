@@ -92,7 +92,13 @@ clean_data <- raw_data |>
       as.double
     )
   ) |>
-  mutate(edp_update_ts = as.POSIXct(edp_update_ts)) |>
+  mutate(
+    edp_update_ts = as.POSIXct(
+      edp_update_ts,
+      format = "%Y-%m-%dT%H:%M:%OSZ",
+      tz = "UTC"
+    )
+  ) |>
   mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything())
 
 # Database Transaction ####

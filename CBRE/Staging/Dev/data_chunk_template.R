@@ -13,12 +13,7 @@ library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
-source(here::here("./utilities/R/api_helpers.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
-
-CBRE_TABLE_NAME <- "dim_budget_vw"
-
+source(here::here("utilities/R/utilities.R"))
 
 # Query API
 chunk_1 <- call_cbre_api(
@@ -66,7 +61,7 @@ chunk_7 <- call_cbre_api(
 chunk_8 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2026-01-01T00:00:00Z",
-  end_time = "2026-06-01T00:00:00Z"
+  end_time = "2026-06-04T00:00:00Z"
 )
 
 raw_data <- rbind(

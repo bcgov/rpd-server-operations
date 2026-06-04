@@ -275,6 +275,6 @@ request(glue("https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail")) |>
   req_perform()
 
 # --- 8. Local preview (dev only) ---
-preview_path <- here::here("output", "digest_preview.html")
-writeLines(email_html, preview_path)
-browseURL(preview_path)
+# preview_path <- here::here("output", "digest_preview.html")
+# writeLines(email_html, preview_path)
+# browseURL(preview_path)

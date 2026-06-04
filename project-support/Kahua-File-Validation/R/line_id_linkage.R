@@ -32,99 +32,62 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
+# PCIReport <- openxlsx2::read_xlsx(here(
+#   "input/KahuaPayable/2026-05-25-PCIReport.xlsx"
+# ))
+
 KahuaSource <- openxlsx2::read_xlsx(here(
   "input/KahuaPayable/2026-05-21-CompareKahua.xlsx"
 ))
-PCIReport <- openxlsx2::read_xlsx(here(
-  "input/KahuaPayable/2026-05-25-PCIReport.xlsx"
-))
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fact_invoice")
-FactInvoiceData <- dbFetch(query, n = -1)
+query <- dbSendQuery(
+  con,
+  "SELECT project_skey, project_number, project_name FROM CbreStaging.pjm_dim_project"
+)
+PjmDimProjectData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-FactInvoiceData <- FactInvoiceData |>
-  mutate(
-    across(
-      c(
-        project_skey
-      ),
-      as.character
-    )
+query <- dbSendQuery(
+  con,
+  "SELECT
+    invoice_skey,
+    invoice_id,
+    invoice_approval_status,
+    payment_date,
+    period_from,
+    period_to,
+    check_number,
+    vendor_invoice_number
+  FROM CbreStaging.pjm_dim_invoice"
+)
+PjmDimInvoiceData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT * FROM CbreStaging.pjm_fact_invoice"
+)
+PjmFactInvoiceData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+LinkReport <- KahuaSource |>
+  rename_with(~ gsub("\\s*/*\\n*", "", .)) |>
+  left_join(
+    PjmDimProjectData,
+    by = join_by(KahuaProjectNumber == project_number)
+  ) |>
+  left_join(
+    PjmDimInvoiceData,
+    by = join_by(InvoiceNumber == vendor_invoice_number, LineID == invoice_id)
   )
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_invoice")
-DimInvoiceData <- dbFetch(query, n = -1)
-dbClearResult(query)
+test <- LinkReport |>
+  filter(!is.na(invoice_skey))
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.dim_project")
-DimProjectData <- dbFetch(query, n = -1)
-dbClearResult(query)
+subset <- LinkReport |>
+  filter(InvoiceNumber == "804219") |>
+  relocate(InvoiceNumber, .before = LineID)
 
-Report <- FactInvoiceData |>
-  select(
-    invoice_item_id,
-    current_payment_due,
-    project_skey,
-    project_activity_skey,
-    invoice_skey,
-    invoice_item_skey,
-    change_order_skey,
-    change_order_item_skey,
-    change_order_item_id,
-    contract_skey,
-    contract_line_skey,
-    to_contact_skey,
-    from_contact_skey,
-    to_company_skey,
-    from_company_skey
-  ) |>
-  left_join(DimInvoiceData, by = join_by(invoice_skey)) |>
-  select(
-    invoice_item_id,
-    invoice_id,
-    payment_date,
-    current_payment_due,
-    vendor_invoice_number,
-    invoice_approval_status,
-    project_skey,
-    project_activity_skey,
-    invoice_skey,
-    invoice_item_skey,
-    change_order_skey,
-    change_order_item_skey,
-    change_order_item_id,
-    contract_skey,
-    contract_line_skey,
-    to_contact_skey,
-    from_contact_skey,
-    to_company_skey,
-    from_company_skey
-  ) |>
-  left_join(DimProjectData, by = join_by(project_skey)) |>
-  select(
-    invoice_item_id,
-    invoice_id,
-    project_number,
-    payment_date,
-    current_payment_due,
-    vendor_invoice_number,
-    invoice_approval_status,
-    csf_fundingsource,
-    csf_fundingtype,
-    csf_servicetype,
-    standard_project_type,
-    project_skey,
-    project_activity_skey,
-    invoice_skey,
-    invoice_item_skey,
-    change_order_skey,
-    change_order_item_skey,
-    change_order_item_id,
-    contract_skey,
-    contract_line_skey,
-    to_contact_skey,
-    from_contact_skey,
-    to_company_skey,
-    from_company_skey
-  )
+invoice_set <- PjmDimInvoiceData |>
+  filter(vendor_invoice_number == "804219") |>
+  relocate(vendor_invoice_number, .before = invoice_id)

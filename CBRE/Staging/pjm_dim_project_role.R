@@ -59,6 +59,22 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
     etl_window$end_time,
     "— nothing to load. Exiting gracefully.\n"
   )
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+    status = "NO_DATA",
+    n_inserted = 0L,
+    n_updated = 0L,
+    n_deleted = NA,
+    message = paste0(
+      "No data returned from API for window ",
+      etl_window$start_time,
+      " to ",
+      etl_window$end_time
+    )
+  )
   stop("No new data from API")
 }
 
@@ -117,8 +133,6 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
-
-etl_start_time <- Sys.time()
 
 etl_error <- NULL
 

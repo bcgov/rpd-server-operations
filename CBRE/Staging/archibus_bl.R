@@ -113,7 +113,7 @@ clean_data <- raw_data |>
         bl_date_end_pobc,
         bl_date_market_val
       ),
-      as.POSIXct
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
   mutate(RefreshDate = as.POSIXct(Sys.time())) |>

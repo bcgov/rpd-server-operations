@@ -37,8 +37,10 @@ scripts <- c(
   "CBRE/Staging/pjm_fact_budget.R",
   "CBRE/Staging/pjm_fact_project_role.R",
   "CBRE/Staging/pjm_fact_project_activity.R",
-  "CBRE/Staging/pjm_fact_project.R"
+  "CBRE/Staging/pjm_fact_project.R",
   # Claude Reviewed up to here
+  "CBRE/Staging/pjm_dim_invoice.R",
+  "CBRE/Staging/pjm_fact_invoice.R"
   #   fin_dim_general_ledger
   # fin_fact_general_ledger_actuals
   #   fin_dim_invoice_line
