@@ -7,7 +7,7 @@ library(tools)
 library(openxlsx2)
 library(lubridate)
 
-source("C:/Projects/rpd-utilities/R/cbre_api_function.R")
+source(here("utilities/R/utilities.R"))
 
 # Validate that the sorting works consistently as we bring in new files
 kahuaFiles <- list.files(

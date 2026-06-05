@@ -8,7 +8,13 @@ orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "jira_boards"
 
 scripts <- c(
-  "JIRA/Boards/JIRA-TEST-PSO-Issues.R"
+  "JIRA/Boards/JIRA-TEST-CSR-Issues.R",
+  "JIRA/Boards/JIRA-TEST-GPOPR-Issues.R",
+  "JIRA/Boards/JIRA-TEST-PAR-Issues.R",
+  "JIRA/Boards/JIRA-TEST-PSO-Issues.R",
+  "JIRA/Boards/JIRA-TEST-RBAS-Issues.R",
+  "JIRA/Boards/JIRA-TEST-SBP-Issues.R",
+  "JIRA/Boards/JIRA-TEST-SBPSB-Issues.R"
 )
 
 # -- Per-script result tracking --

@@ -25,11 +25,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "Jira"
-DASHBOARD_ID <- "GPOPR"
+DASHBOARD_ID <- "RBAS"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
 TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
 API_NAME <- "Jira"
-SCRIPT_NAME <- "Jira_GPOPR"
+SCRIPT_NAME <- "Jira_RBAS"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -55,7 +55,7 @@ token_string <- paste("Basic", token)
 query_url = "https://citz-rpd.atlassian.net/rest/api/3/search/jql"
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
 # https://developer.atlassian.com/changelog/#CHANGE-2046
-expand_opts = c("names", "fields")
+expand_opts = c("changelog", "names", "fields")
 max_results = 100
 nextPageToken = NULL
 progress = 0
@@ -64,7 +64,7 @@ round = 1
 # Issues Loop ####
 while (progress < 2) {
   req <- request(query_url) |>
-    req_headers(Authorization = token_string) |>
+    req_headers_redacted(Authorization = token_string) |> # redacted by httr2 in printed output
     # configure project, max_results, and start_at
     req_url_query(
       jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
@@ -75,7 +75,6 @@ while (progress < 2) {
       nextPageToken = nextPageToken,
       .multi = "comma" # control how vectors are appended, for expand_opts
     ) |>
-    # Server logging and proxy steps
     apply_proxy_if_needed() |>
     req_error(
       is_error = function(resp) {
@@ -110,13 +109,13 @@ while (progress < 2) {
       } else {
         e$message
       }
-      # Log error to daily run file
-      log_daily_etl_run(
-        api_name = API_NAME,
-        script_name = SCRIPT_NAME,
-        table_name = DASHBOARD_ID,
-        status = "FAILURE",
-        message = substr(desc, 1, 500)
+
+      # Log the error to daily CSV
+      event_logger(
+        api = api_id,
+        subset = project_id, # PAR / SBP / RBAS
+        event_type = "error",
+        description = desc
       )
       stop(e) # rethrow so task scheduler flags a failure (current monitoring is by Nagios)
     }
@@ -134,6 +133,7 @@ while (progress < 2) {
     progress <- 2
   }
 
+  # pull the names attribute and prep to rename the issue columns.
   names <- resp |>
     purrr::pluck("names") |>
     tibble::enframe() |>
@@ -149,85 +149,68 @@ while (progress < 2) {
     select(-c(row_name, row_count)) |>
     tibble::deframe()
 
+  # pull rows of issues, rename, unnest columns and format.
   issues <- resp |>
     purrr::pluck("issues") |>
     tibble::enframe() |>
     tidyr::unnest_wider(value) |>
     tidyr::unnest_wider(fields) |>
     plyr::rename(names) |>
-    # select_if(~ !all(is.na(.))) |>
     rename_with(~ gsub(" ", "", .)) |>
     select(
       IssueKey = key,
       Created,
+      EndDate,
+      RequestedDueDate,
+      Duedate,
       Updated,
       Resolved,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
+      Resolution,
       Organization = `Ministry/BPSOrganization`,
-      City = CityDropdown,
+      RPDBranch,
+      MYSCReq = `MYSCReq#`,
       RequestType,
-      Requestparticipants,
-      Priority,
-      Duedate,
       Status,
+      StatusCategory,
+      StatusCategoryChanged,
+      Assignee,
+      EmployeeID,
+      Reporter,
       Summary
     ) |>
-    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-    safe_hoist(
-      GPOPackageApprover,
-      GPOPackageApprover = "displayName",
-      .remove = FALSE
-    ) |>
-    safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(City, City = "value", .remove = FALSE) |>
+    safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
+    safe_hoist(RPDBranch, RPDBranch = "value", .remove = FALSE) |>
     safe_hoist(
       RequestType,
       RequestType = list("requestType", "name"),
       .remove = FALSE
     ) |>
-    tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-    tidyr::unnest_wider(starts_with("Requestparticipants"), names_sep = "-") |>
-    rowwise() |>
+    safe_hoist(Status, Status = "name", .remove = FALSE) |>
+    safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
+    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+    safe_hoist(RequestedDueDate, RequestedDueDate = "value", .remove = FALSE) |>
     mutate(
-      RequestParticipants = stringr::str_c(
-        c_across(
-          matches(
-            "Requestparticipants-[0-9]+-displayName"
-          )
+      across(
+        c(
+          Created,
+          Resolved,
+          StatusCategoryChanged,
+          Updated
         ),
-        collapse = ";"
+        ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
       )
-    ) |>
-    ungroup() |>
-    select(
-      IssueKey,
-      Created,
-      Updated,
-      Resolved,
-      Duedate,
-      Priority,
-      Status,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
-      Organization,
-      City,
-      RequestType,
-      RequestParticipants,
-      Summary
     ) |>
     mutate(
       across(
-        c(Created, Updated, Resolved, Duedate),
-        ~ as.Date(.x, format = "%Y-%m-%d")
+        c(
+          Duedate,
+          EndDate
+        ),
+        as.Date
       )
-    ) |>
-    # in dev all NA values so listed as logical, doubt that will hold long term
-    mutate(GPOSubtype = as.character(GPOSubtype))
+    )
 
   if (round == 1) {
     Issues <- issues
@@ -238,7 +221,12 @@ while (progress < 2) {
   round <- 2
 }
 
-Issues <- Issues |> mutate(RefreshDate = Sys.time(), .before = everything())
+Issues <- Issues %>%
+  # Add a filter step to remove all the test tickets prior to launch on Aug 18th 2025
+  filter(
+    !IssueKey %in% c("RBAS-1", "RBAS-2", "RBAS-3", "RBAS-4", "RBAS-5", "RBAS-6")
+  ) |>
+  mutate(RefreshDate = Sys.time(), .before = everything())
 
 # Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)
@@ -249,28 +237,31 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     ".",
     DASHBOARD_ID,
     " (
-        RefreshDate          DATETIME2(3)     NOT NULL,
-        IssueKey             NVARCHAR(20)     NOT NULL,
-        Created              DATETIME2(3)     NULL,
-        Updated              DATETIME2(3)     NULL,
-        Resolved             DATETIME2(3)     NULL,
-        Duedate              DATETIME2(3)     NULL,
-        Priority             NVARCHAR(20)     NULL,
-        Status               NVARCHAR(50)     NULL,
-        Assignee             NVARCHAR(100)    NULL,
-        GPOPackageApprover   NVARCHAR(100)    NULL,
-        GPOSubtype           NVARCHAR(500)    NULL,
-        Organization         NVARCHAR(100)    NULL,
-        City                 NVARCHAR(200)    NULL,
-        RequestType          NVARCHAR(100)    NULL,
-        RequestParticipants  NVARCHAR(100)    NULL,
-        Summary              NVARCHAR(1000)   NULL
-      );
-      "
+      RefreshDate            DATETIME2(3)    NOT NULL,
+      IssueKey               NVARCHAR(250)   NOT NULL,
+      Created                DATETIME2(3)    NOT NULL,
+      EndDate                DATE            NULL,
+      RequestedDueDate       NVARCHAR(100)   NULL,
+      Duedate                DATE            NULL,
+      Updated                DATETIME2(3)    NULL,
+      Resolved               DATETIME2(3)    NULL,
+      Resolution             NVARCHAR(100)   NULL,
+      Organization           NVARCHAR(25)    NULL,
+      RPDBranch              NVARCHAR(100)   NULL,
+      MYSCReq                NVARCHAR(500)   NULL,
+      RequestType            NVARCHAR(100)   NULL,
+      Status                 NVARCHAR(100)   NULL,
+      StatusCategory         NVARCHAR(100)   NULL,
+      StatusCategoryChanged  DATETIME2(3)    NULL,
+      Assignee               NVARCHAR(100)   NULL,
+      EmployeeID             NVARCHAR(100)   NULL,
+      Reporter               NVARCHAR(100)   NULL,
+      Summary                NVARCHAR(1000)  NULL
+    );"
   )
+
   dbExecute(con, sql)
 }
-
 
 etl_error <- NULL
 
@@ -291,22 +282,26 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-          RefreshDate          DATETIME2(3)     NOT NULL,
-          IssueKey             NVARCHAR(20)     NOT NULL,
-          Created              DATETIME2(3)     NULL,
-          Updated              DATETIME2(3)     NULL,
-          Resolved             DATETIME2(3)     NULL,
-          Duedate              DATETIME2(3)     NULL,
-          Priority             NVARCHAR(20)     NULL,
-          Status               NVARCHAR(50)     NULL,
-          Assignee             NVARCHAR(100)    NULL,
-          GPOPackageApprover   NVARCHAR(100)    NULL,
-          GPOSubtype           NVARCHAR(500)    NULL,
-          Organization         NVARCHAR(100)    NULL,
-          City                 NVARCHAR(200)    NULL,
-          RequestType          NVARCHAR(100)    NULL,
-          RequestParticipants  NVARCHAR(100)    NULL,
-          Summary              NVARCHAR(1000)   NULL
+          RefreshDate            DATETIME2(3)    NOT NULL,
+          IssueKey               NVARCHAR(250)   NOT NULL,
+          Created                DATETIME2(3)    NOT NULL,
+          EndDate                DATE            NULL,
+          RequestedDueDate       NVARCHAR(100)   NULL,
+          Duedate                DATE            NULL,
+          Updated                DATETIME2(3)    NULL,
+          Resolved               DATETIME2(3)    NULL,
+          Resolution             NVARCHAR(100)   NULL,
+          Organization           NVARCHAR(25)    NULL,
+          RPDBranch              NVARCHAR(100)   NULL,
+          MYSCReq                NVARCHAR(500)   NULL,
+          RequestType            NVARCHAR(100)   NULL,
+          Status                 NVARCHAR(100)   NULL,
+          StatusCategory         NVARCHAR(100)   NULL,
+          StatusCategoryChanged  DATETIME2(3)    NULL,
+          Assignee               NVARCHAR(100)   NULL,
+          EmployeeID             NVARCHAR(100)   NULL,
+          Reporter               NVARCHAR(100)   NULL,
+          Summary                NVARCHAR(1000)  NULL
           );
           "
       )
@@ -350,31 +345,35 @@ tryCatch(
       con,
       paste0(
         "UPDATE tgt
-        SET
-        tgt.RefreshDate         = src.RefreshDate,
-        tgt.Created             = src.Created,
-        tgt.Updated             = src.Updated,
-        tgt.Resolved            = src.Resolved,
-        tgt.Duedate             = src.Duedate,
-        tgt.Priority            = src.Priority,
-        tgt.Status              = src.Status,
-        tgt.Assignee            = src.Assignee,
-        tgt.GPOPackageApprover  = src.GPOPackageApprover,
-        tgt.GPOSubtype          = src.GPOSubtype,
-        tgt.Organization        = src.Organization,
-        tgt.City                = src.City,
-        tgt.RequestType         = src.RequestType,
-        tgt.RequestParticipants = src.RequestParticipants,
-        tgt.Summary             = src.Summary
+         SET
+         tgt.RefreshDate              = src.RefreshDate,
+         tgt.Created                  = src.Created,
+         tgt.EndDate                  = src.EndDate,
+         tgt.RequestedDueDate         = src.RequestedDueDate,
+         tgt.Duedate                  = src.Duedate,
+         tgt.Updated                  = src.Updated,
+         tgt.Resolved                 = src.Resolved,
+         tgt.Resolution               = src.Resolution,
+         tgt.Organization             = src.Organization,
+         tgt.RPDBranch                = src.RPDBranch,
+         tgt.MYSCReq                  = src.MYSCReq,
+         tgt.RequestType              = src.RequestType,
+         tgt.Status                   = src.Status,
+         tgt.StatusCategory           = src.StatusCategory,
+         tgt.StatusCategoryChanged    = src.StatusCategoryChanged,
+         tgt.Assignee                 = src.Assignee,
+         tgt.EmployeeID               = src.EmployeeID,
+         tgt.Reporter                 = src.Reporter,
+         tgt.Summary                  = src.Summary
         FROM ",
         SCHEMA_NAME,
         ".",
         DASHBOARD_ID,
         " tgt
-          INNER JOIN ",
+        INNER JOIN ",
         TEMP_TABLE,
         " src
-          ON tgt.IssueKey = src.IssueKey;"
+        ON tgt.IssueKey = src.IssueKey;"
       )
     )
 
@@ -390,38 +389,46 @@ tryCatch(
           RefreshDate,
           IssueKey,
           Created,
+          EndDate,
+          RequestedDueDate,
+          Duedate,
           Updated,
           Resolved,
-          Duedate,
-          Priority,
-          Status,
-          Assignee,
-          GPOPackageApprover,
-          GPOSubtype,
+          Resolution,
           Organization,
-          City,
+          RPDBranch,
+          MYSCReq,
           RequestType,
-          RequestParticipants,
+          Status,
+          StatusCategory,
+          StatusCategoryChanged,
+          Assignee,
+          EmployeeID,
+          Reporter,
           Summary
           )
         SELECT
           src.RefreshDate,
           src.IssueKey,
           src.Created,
+          src.EndDate,
+          src.RequestedDueDate,
+          src.Duedate,
           src.Updated,
           src.Resolved,
-          src.Duedate,
-          src.Priority,
-          src.Status,
-          src.Assignee,
-          src.GPOPackageApprover,
-          src.GPOSubtype,
+          src.Resolution,
           src.Organization,
-          src.City,
+          src.RPDBranch,
+          src.MYSCReq,
           src.RequestType,
-          src.RequestParticipants,
+          src.Status,
+          src.StatusCategory,
+          src.StatusCategoryChanged,
+          src.Assignee,
+          src.EmployeeID,
+          src.Reporter,
           src.Summary
-        FROM ",
+          FROM ",
         TEMP_TABLE,
         " src
         LEFT JOIN ",

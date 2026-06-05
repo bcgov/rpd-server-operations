@@ -25,11 +25,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "Jira"
-DASHBOARD_ID <- "GPOPR"
+DASHBOARD_ID <- "CSR"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
 TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
 API_NAME <- "Jira"
-SCRIPT_NAME <- "Jira_GPOPR"
+SCRIPT_NAME <- "Jira_CSR"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -159,75 +159,34 @@ while (progress < 2) {
     rename_with(~ gsub(" ", "", .)) |>
     select(
       IssueKey = key,
+      Status,
       Created,
       Updated,
       Resolved,
+      ProjectEffectiveDate,
       Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
+      CSM,
+      CSRIssueSubtype,
       Organization = `Ministry/BPSOrganization`,
-      City = CityDropdown,
-      RequestType,
-      Requestparticipants,
+      PIN = `PIN(ARENumber)`,
       Priority,
-      Duedate,
-      Status,
-      Summary
-    ) |>
-    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-    safe_hoist(
-      GPOPackageApprover,
-      GPOPackageApprover = "displayName",
-      .remove = FALSE
+      ResponsibleGroup,
+      Workstream
     ) |>
     safe_hoist(Status, Status = "name", .remove = FALSE) |>
     safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+    safe_hoist(CSM, CSM = "displayName", .remove = FALSE) |>
+    safe_hoist(CSRIssueSubtype, CSRIssueSubtype = "value", .remove = FALSE) |>
+    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
     safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(City, City = "value", .remove = FALSE) |>
-    safe_hoist(
-      RequestType,
-      RequestType = list("requestType", "name"),
-      .remove = FALSE
-    ) |>
-    tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-    tidyr::unnest_wider(starts_with("Requestparticipants"), names_sep = "-") |>
-    rowwise() |>
-    mutate(
-      RequestParticipants = stringr::str_c(
-        c_across(
-          matches(
-            "Requestparticipants-[0-9]+-displayName"
-          )
-        ),
-        collapse = ";"
-      )
-    ) |>
-    ungroup() |>
-    select(
-      IssueKey,
-      Created,
-      Updated,
-      Resolved,
-      Duedate,
-      Priority,
-      Status,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
-      Organization,
-      City,
-      RequestType,
-      RequestParticipants,
-      Summary
-    ) |>
+    safe_hoist(ResponsibleGroup, ResponsibleGroup = "value", .remove = FALSE) |>
+    safe_hoist(Workstream, Workstream = "value", .remove = FALSE) |>
     mutate(
       across(
-        c(Created, Updated, Resolved, Duedate),
+        c(Created, Updated, Resolved, ProjectEffectiveDate),
         ~ as.Date(.x, format = "%Y-%m-%d")
       )
-    ) |>
-    # in dev all NA values so listed as logical, doubt that will hold long term
-    mutate(GPOSubtype = as.character(GPOSubtype))
+    )
 
   if (round == 1) {
     Issues <- issues
@@ -238,7 +197,12 @@ while (progress < 2) {
   round <- 2
 }
 
-Issues <- Issues |> mutate(RefreshDate = Sys.time(), .before = everything())
+Issues <- Issues |>
+  mutate(
+    Assignee = tidyr::replace_na(Assignee, "Unassigned"),
+    CSM = tidyr::replace_na(CSM, "Unassigned")
+  ) |>
+  mutate(RefreshDate = Sys.time(), .before = everything())
 
 # Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)
@@ -249,28 +213,27 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     ".",
     DASHBOARD_ID,
     " (
-        RefreshDate          DATETIME2(3)     NOT NULL,
-        IssueKey             NVARCHAR(20)     NOT NULL,
-        Created              DATETIME2(3)     NULL,
-        Updated              DATETIME2(3)     NULL,
-        Resolved             DATETIME2(3)     NULL,
-        Duedate              DATETIME2(3)     NULL,
-        Priority             NVARCHAR(20)     NULL,
-        Status               NVARCHAR(50)     NULL,
-        Assignee             NVARCHAR(100)    NULL,
-        GPOPackageApprover   NVARCHAR(100)    NULL,
-        GPOSubtype           NVARCHAR(500)    NULL,
-        Organization         NVARCHAR(100)    NULL,
-        City                 NVARCHAR(200)    NULL,
-        RequestType          NVARCHAR(100)    NULL,
-        RequestParticipants  NVARCHAR(100)    NULL,
-        Summary              NVARCHAR(1000)   NULL
-      );
-      "
+      RefreshDate          DATETIME2(3)  NOT NULL,
+      IssueKey             NVARCHAR(100) NOT NULL,
+      Status               NVARCHAR(100) NULL,
+      Created              DATE          NULL,
+      Updated              DATE          NULL,
+      Resolved             DATE          NULL,
+      ProjectEffectiveDate DATE          NULL,
+      Assignee             NVARCHAR(100) NULL,
+      CSM                  NVARCHAR(100) NULL,
+      CSRIssueSubtype      NVARCHAR(100) NULL,
+      Organization         NVARCHAR(100) NULL,
+      PIN                  NVARCHAR(100) NULL,
+      Priority             NVARCHAR(100) NULL,
+      ResponsibleGroup     NVARCHAR(100) NULL,
+      Workstream           NVARCHAR(100) NULL
+    );
+  "
   )
+
   dbExecute(con, sql)
 }
-
 
 etl_error <- NULL
 
@@ -291,24 +254,23 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-          RefreshDate          DATETIME2(3)     NOT NULL,
-          IssueKey             NVARCHAR(20)     NOT NULL,
-          Created              DATETIME2(3)     NULL,
-          Updated              DATETIME2(3)     NULL,
-          Resolved             DATETIME2(3)     NULL,
-          Duedate              DATETIME2(3)     NULL,
-          Priority             NVARCHAR(20)     NULL,
-          Status               NVARCHAR(50)     NULL,
-          Assignee             NVARCHAR(100)    NULL,
-          GPOPackageApprover   NVARCHAR(100)    NULL,
-          GPOSubtype           NVARCHAR(500)    NULL,
-          Organization         NVARCHAR(100)    NULL,
-          City                 NVARCHAR(200)    NULL,
-          RequestType          NVARCHAR(100)    NULL,
-          RequestParticipants  NVARCHAR(100)    NULL,
-          Summary              NVARCHAR(1000)   NULL
-          );
-          "
+          RefreshDate          DATETIME2(3)  NOT NULL,
+          IssueKey             NVARCHAR(100) NOT NULL,
+          Status               NVARCHAR(100) NULL,
+          Created              DATE          NULL,
+          Updated              DATE          NULL,
+          Resolved             DATE          NULL,
+          ProjectEffectiveDate DATE          NULL,
+          Assignee             NVARCHAR(100) NULL,
+          CSM                  NVARCHAR(100) NULL,
+          CSRIssueSubtype      NVARCHAR(100) NULL,
+          Organization         NVARCHAR(100) NULL,
+          PIN                  NVARCHAR(100) NULL,
+          Priority             NVARCHAR(100) NULL,
+          ResponsibleGroup     NVARCHAR(100) NULL,
+          Workstream           NVARCHAR(100) NULL
+    );
+  "
       )
     )
 
@@ -349,32 +311,32 @@ tryCatch(
     n_updated <- dbExecute(
       con,
       paste0(
-        "UPDATE tgt
-        SET
-        tgt.RefreshDate         = src.RefreshDate,
-        tgt.Created             = src.Created,
-        tgt.Updated             = src.Updated,
-        tgt.Resolved            = src.Resolved,
-        tgt.Duedate             = src.Duedate,
-        tgt.Priority            = src.Priority,
-        tgt.Status              = src.Status,
-        tgt.Assignee            = src.Assignee,
-        tgt.GPOPackageApprover  = src.GPOPackageApprover,
-        tgt.GPOSubtype          = src.GPOSubtype,
-        tgt.Organization        = src.Organization,
-        tgt.City                = src.City,
-        tgt.RequestType         = src.RequestType,
-        tgt.RequestParticipants = src.RequestParticipants,
-        tgt.Summary             = src.Summary
-        FROM ",
+        "
+      UPDATE tgt
+      SET
+        tgt.[RefreshDate]          = src.[RefreshDate],
+        tgt.[Status]               = src.[Status],
+        tgt.[Created]              = src.[Created],
+        tgt.[Updated]              = src.[Updated],
+        tgt.[Resolved]             = src.[Resolved],
+        tgt.[ProjectEffectiveDate] = src.[ProjectEffectiveDate],
+        tgt.[Assignee]             = src.[Assignee],
+        tgt.[CSM]                  = src.[CSM],
+        tgt.[CSRIssueSubtype]      = src.[CSRIssueSubtype],
+        tgt.[Organization]         = src.[Organization],
+        tgt.[PIN]                  = src.[PIN],
+        tgt.[Priority]             = src.[Priority],
+        tgt.[ResponsibleGroup]     = src.[ResponsibleGroup],
+        tgt.[Workstream]           = src.[Workstream]
+      FROM ",
         SCHEMA_NAME,
         ".",
         DASHBOARD_ID,
         " tgt
-          INNER JOIN ",
+       INNER JOIN ",
         TEMP_TABLE,
         " src
-          ON tgt.IssueKey = src.IssueKey;"
+       ON tgt.IssueKey = src.IssueKey;"
       )
     )
 
@@ -387,40 +349,38 @@ tryCatch(
         ".",
         DASHBOARD_ID,
         " (
-          RefreshDate,
-          IssueKey,
-          Created,
-          Updated,
-          Resolved,
-          Duedate,
-          Priority,
-          Status,
-          Assignee,
-          GPOPackageApprover,
-          GPOSubtype,
-          Organization,
-          City,
-          RequestType,
-          RequestParticipants,
-          Summary
-          )
+          [RefreshDate],
+          [IssueKey],
+          [Status],
+          [Created],
+          [Updated],
+          [Resolved],
+          [ProjectEffectiveDate],
+          [Assignee],
+          [CSM],
+          [CSRIssueSubtype],
+          [Organization],
+          [PIN],
+          [Priority],
+          [ResponsibleGroup],
+          [Workstream]
+        )
         SELECT
-          src.RefreshDate,
-          src.IssueKey,
-          src.Created,
-          src.Updated,
-          src.Resolved,
-          src.Duedate,
-          src.Priority,
-          src.Status,
-          src.Assignee,
-          src.GPOPackageApprover,
-          src.GPOSubtype,
-          src.Organization,
-          src.City,
-          src.RequestType,
-          src.RequestParticipants,
-          src.Summary
+          src.[RefreshDate],
+          src.[IssueKey],
+          src.[Status],
+          src.[Created],
+          src.[Updated],
+          src.[Resolved],
+          src.[ProjectEffectiveDate],
+          src.[Assignee],
+          src.[CSM],
+          src.[CSRIssueSubtype],
+          src.[Organization],
+          src.[PIN],
+          src.[Priority],
+          src.[ResponsibleGroup],
+          src.[Workstream]
         FROM ",
         TEMP_TABLE,
         " src

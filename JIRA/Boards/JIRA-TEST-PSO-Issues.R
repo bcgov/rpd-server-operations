@@ -110,6 +110,7 @@ while (progress < 2) {
       } else {
         e$message
       }
+      # Log error to daily run file
       log_daily_etl_run(
         api_name = API_NAME,
         script_name = SCRIPT_NAME,
@@ -387,6 +388,7 @@ while (progress < 2) {
 
 Issues <- Issues |> mutate(RefreshDate = Sys.time(), .before = everything())
 
+# Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)
 if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
@@ -439,10 +441,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
   dbExecute(con, sql)
 }
 
-etl_start_time <- Sys.time()
-
 etl_error <- NULL
-
 
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
@@ -537,7 +536,7 @@ tryCatch(
       ))
     }
 
-    # Update the GPOPR table with new data for existing rows
+    # Update the table with new data for existing rows
     n_updated <- dbExecute(
       con,
       paste0(
@@ -592,7 +591,7 @@ tryCatch(
       )
     )
 
-    # Insert new rows into the GPOPR table
+    # Insert new rows into the table
     n_inserted <- dbExecute(
       con,
       paste0(
@@ -638,7 +637,8 @@ tryCatch(
           FinancialSupportRequested,
           ProcessImprovement,
           WhoImpactedOpportunity,
-          WhoImpactedRequest)
+          WhoImpactedRequest
+          )
         SELECT
           src.RefreshDate,
           src.ArchibusPinNumber,

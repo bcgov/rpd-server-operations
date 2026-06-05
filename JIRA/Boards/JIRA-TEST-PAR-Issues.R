@@ -25,11 +25,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "Jira"
-DASHBOARD_ID <- "GPOPR"
+DASHBOARD_ID <- "PAR"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
 TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
 API_NAME <- "Jira"
-SCRIPT_NAME <- "Jira_GPOPR"
+SCRIPT_NAME <- "Jira_PAR"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -64,7 +64,7 @@ round = 1
 # Issues Loop ####
 while (progress < 2) {
   req <- request(query_url) |>
-    req_headers(Authorization = token_string) |>
+    req_headers_redacted(Authorization = token_string) |> # redacted by httr2 in printed output
     # configure project, max_results, and start_at
     req_url_query(
       jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
@@ -75,7 +75,6 @@ while (progress < 2) {
       nextPageToken = nextPageToken,
       .multi = "comma" # control how vectors are appended, for expand_opts
     ) |>
-    # Server logging and proxy steps
     apply_proxy_if_needed() |>
     req_error(
       is_error = function(resp) {
@@ -159,75 +158,69 @@ while (progress < 2) {
     rename_with(~ gsub(" ", "", .)) |>
     select(
       IssueKey = key,
+      ProjectEffectiveDate,
       Created,
-      Updated,
       Resolved,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
+      Updated,
       Organization = `Ministry/BPSOrganization`,
-      City = CityDropdown,
       RequestType,
-      Requestparticipants,
-      Priority,
-      Duedate,
       Status,
+      StatusCategory,
+      StatusCategoryChanged,
+      Assignee,
+      Reporter,
+      Resolution,
       Summary
     ) |>
     safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-    safe_hoist(
-      GPOPackageApprover,
-      GPOPackageApprover = "displayName",
-      .remove = FALSE
-    ) |>
+    safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
     safe_hoist(Status, Status = "name", .remove = FALSE) |>
+    safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
     safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(City, City = "value", .remove = FALSE) |>
+    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
     safe_hoist(
       RequestType,
       RequestType = list("requestType", "name"),
       .remove = FALSE
     ) |>
-    tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-    tidyr::unnest_wider(starts_with("Requestparticipants"), names_sep = "-") |>
-    rowwise() |>
     mutate(
-      RequestParticipants = stringr::str_c(
-        c_across(
-          matches(
-            "Requestparticipants-[0-9]+-displayName"
-          )
-        ),
-        collapse = ";"
-      )
-    ) |>
-    ungroup() |>
-    select(
-      IssueKey,
-      Created,
-      Updated,
-      Resolved,
-      Duedate,
-      Priority,
-      Status,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
-      Organization,
-      City,
-      RequestType,
-      RequestParticipants,
-      Summary
+      ProjectEffectiveDate = as.Date(ProjectEffectiveDate, format = "%Y-%m-%d")
     ) |>
     mutate(
-      across(
-        c(Created, Updated, Resolved, Duedate),
-        ~ as.Date(.x, format = "%Y-%m-%d")
+      Created = as.POSIXct(
+        Created,
+        tz = "UTC",
+        format = "%Y-%m-%dT%H:%M:%OS%z"
       )
     ) |>
-    # in dev all NA values so listed as logical, doubt that will hold long term
-    mutate(GPOSubtype = as.character(GPOSubtype))
+    mutate(
+      Resolved = as.POSIXct(
+        Resolved,
+        tz = "UTC",
+        format = "%Y-%m-%dT%H:%M:%OS%z"
+      )
+    ) |>
+    mutate(
+      Updated = as.POSIXct(
+        Updated,
+        tz = "UTC",
+        format = "%Y-%m-%dT%H:%M:%OS%z"
+      )
+    ) |>
+    mutate(
+      StatusCategoryChanged = as.POSIXct(
+        StatusCategoryChanged,
+        tz = "UTC",
+        format = "%Y-%m-%dT%H:%M:%OS%z"
+      )
+    ) |>
+    mutate(
+      TimeToCompletion = case_when(
+        is.na(Resolved) ~ NA,
+        !is.na(Resolved) ~
+          ((as.duration(interval(Created, Resolved))@.Data) / 60) / 60
+      )
+    )
 
   if (round == 1) {
     Issues <- issues
@@ -249,28 +242,28 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     ".",
     DASHBOARD_ID,
     " (
-        RefreshDate          DATETIME2(3)     NOT NULL,
-        IssueKey             NVARCHAR(20)     NOT NULL,
-        Created              DATETIME2(3)     NULL,
-        Updated              DATETIME2(3)     NULL,
-        Resolved             DATETIME2(3)     NULL,
-        Duedate              DATETIME2(3)     NULL,
-        Priority             NVARCHAR(20)     NULL,
-        Status               NVARCHAR(50)     NULL,
-        Assignee             NVARCHAR(100)    NULL,
-        GPOPackageApprover   NVARCHAR(100)    NULL,
-        GPOSubtype           NVARCHAR(500)    NULL,
-        Organization         NVARCHAR(100)    NULL,
-        City                 NVARCHAR(200)    NULL,
-        RequestType          NVARCHAR(100)    NULL,
-        RequestParticipants  NVARCHAR(100)    NULL,
-        Summary              NVARCHAR(1000)   NULL
-      );
-      "
+        RefreshDate            DATETIME2(3)     NOT NULL,
+        IssueKey               NVARCHAR(20)     NOT NULL,
+        ProjectEffectiveDate   DATETIME2(3)     NULL,
+        Created                DATETIME2(3)     NULL,
+        Resolved               DATETIME2(3)     NULL,
+        Updated                DATETIME2(3)     NULL,
+        Organization           NVARCHAR(100)    NULL,
+        RequestType            NVARCHAR(100)    NULL,
+        Status                 NVARCHAR(100)    NULL,
+        StatusCategory         NVARCHAR(100)    NULL,
+        StatusCategoryChanged  DATETIME2(3)     NULL,
+        Assignee               NVARCHAR(100)    NULL,
+        Reporter               NVARCHAR(100)    NULL,
+        Resolution             NVARCHAR(100)    NULL,
+        Summary                NVARCHAR(1000)   NULL,
+        TimeToCompletion       DECIMAL(18,7)    NULL
+    );
+  "
   )
+
   dbExecute(con, sql)
 }
-
 
 etl_error <- NULL
 
@@ -291,24 +284,24 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-          RefreshDate          DATETIME2(3)     NOT NULL,
-          IssueKey             NVARCHAR(20)     NOT NULL,
-          Created              DATETIME2(3)     NULL,
-          Updated              DATETIME2(3)     NULL,
-          Resolved             DATETIME2(3)     NULL,
-          Duedate              DATETIME2(3)     NULL,
-          Priority             NVARCHAR(20)     NULL,
-          Status               NVARCHAR(50)     NULL,
-          Assignee             NVARCHAR(100)    NULL,
-          GPOPackageApprover   NVARCHAR(100)    NULL,
-          GPOSubtype           NVARCHAR(500)    NULL,
-          Organization         NVARCHAR(100)    NULL,
-          City                 NVARCHAR(200)    NULL,
-          RequestType          NVARCHAR(100)    NULL,
-          RequestParticipants  NVARCHAR(100)    NULL,
-          Summary              NVARCHAR(1000)   NULL
-          );
-          "
+        RefreshDate            DATETIME2(3)     NOT NULL,
+        IssueKey               NVARCHAR(20)     NOT NULL,
+        ProjectEffectiveDate   DATETIME2(3)     NULL,
+        Created                DATETIME2(3)     NULL,
+        Resolved               DATETIME2(3)     NULL,
+        Updated                DATETIME2(3)     NULL,
+        Organization           NVARCHAR(100)    NULL,
+        RequestType            NVARCHAR(100)    NULL,
+        Status                 NVARCHAR(100)    NULL,
+        StatusCategory         NVARCHAR(100)    NULL,
+        StatusCategoryChanged  DATETIME2(3)     NULL,
+        Assignee               NVARCHAR(100)    NULL,
+        Reporter               NVARCHAR(100)    NULL,
+        Resolution             NVARCHAR(100)    NULL,
+        Summary                NVARCHAR(1000)   NULL,
+        TimeToCompletion       DECIMAL(18,7)    NULL
+    );
+  "
       )
     )
 
@@ -349,32 +342,33 @@ tryCatch(
     n_updated <- dbExecute(
       con,
       paste0(
-        "UPDATE tgt
-        SET
-        tgt.RefreshDate         = src.RefreshDate,
-        tgt.Created             = src.Created,
-        tgt.Updated             = src.Updated,
-        tgt.Resolved            = src.Resolved,
-        tgt.Duedate             = src.Duedate,
-        tgt.Priority            = src.Priority,
-        tgt.Status              = src.Status,
-        tgt.Assignee            = src.Assignee,
-        tgt.GPOPackageApprover  = src.GPOPackageApprover,
-        tgt.GPOSubtype          = src.GPOSubtype,
-        tgt.Organization        = src.Organization,
-        tgt.City                = src.City,
-        tgt.RequestType         = src.RequestType,
-        tgt.RequestParticipants = src.RequestParticipants,
-        tgt.Summary             = src.Summary
-        FROM ",
+        "
+      UPDATE tgt
+      SET
+        tgt.RefreshDate           = src.RefreshDate,
+        tgt.ProjectEffectiveDate  = src.ProjectEffectiveDate,
+        tgt.Created               = src.Created,
+        tgt.Resolved              = src.Resolved,
+        tgt.Updated               = src.Updated,
+        tgt.Organization          = src.Organization,
+        tgt.RequestType           = src.RequestType,
+        tgt.Status                = src.Status,
+        tgt.StatusCategory        = src.StatusCategory,
+        tgt.StatusCategoryChanged = src.StatusCategoryChanged,
+        tgt.Assignee              = src.Assignee,
+        tgt.Reporter              = src.Reporter,
+        tgt.Resolution            = src.Resolution,
+        tgt.Summary               = src.Summary,
+        tgt.TimeToCompletion      = src.TimeToCompletion
+      FROM ",
         SCHEMA_NAME,
         ".",
         DASHBOARD_ID,
         " tgt
-          INNER JOIN ",
+        INNER JOIN ",
         TEMP_TABLE,
         " src
-          ON tgt.IssueKey = src.IssueKey;"
+        ON tgt.IssueKey = src.IssueKey;"
       )
     )
 
@@ -387,41 +381,41 @@ tryCatch(
         ".",
         DASHBOARD_ID,
         " (
-          RefreshDate,
-          IssueKey,
-          Created,
-          Updated,
-          Resolved,
-          Duedate,
-          Priority,
-          Status,
-          Assignee,
-          GPOPackageApprover,
-          GPOSubtype,
-          Organization,
-          City,
-          RequestType,
-          RequestParticipants,
-          Summary
-          )
-        SELECT
-          src.RefreshDate,
-          src.IssueKey,
-          src.Created,
-          src.Updated,
-          src.Resolved,
-          src.Duedate,
-          src.Priority,
-          src.Status,
-          src.Assignee,
-          src.GPOPackageApprover,
-          src.GPOSubtype,
-          src.Organization,
-          src.City,
-          src.RequestType,
-          src.RequestParticipants,
-          src.Summary
-        FROM ",
+        RefreshDate,
+        IssueKey,
+        ProjectEffectiveDate,
+        Created,
+        Resolved,
+        Updated,
+        Organization,
+        RequestType,
+        Status,
+        StatusCategory,
+        StatusCategoryChanged,
+        Assignee,
+        Reporter,
+        Resolution,
+        Summary,
+        TimeToCompletion
+      )
+      SELECT
+        src.RefreshDate,
+        src.IssueKey,
+        src.ProjectEffectiveDate,
+        src.Created,
+        src.Resolved,
+        src.Updated,
+        src.Organization,
+        src.RequestType,
+        src.Status,
+        src.StatusCategory,
+        src.StatusCategoryChanged,
+        src.Assignee,
+        src.Reporter,
+        src.Resolution,
+        src.Summary,
+        src.TimeToCompletion
+    FROM ",
         TEMP_TABLE,
         " src
         LEFT JOIN ",
