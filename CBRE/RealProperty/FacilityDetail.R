@@ -56,15 +56,15 @@ dynamo <- dbConnect(
 )
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Building")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_bl")
 BuildingData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.RoomTotal")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_rm")
 RoomTotalData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Property")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_property")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 

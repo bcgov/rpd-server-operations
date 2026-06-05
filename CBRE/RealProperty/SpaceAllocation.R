@@ -47,31 +47,31 @@ con <- dbConnect(
 )
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.RoomAllocation")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_rmpct")
 RoomAllocatedData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.RoomTotal")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.RoomTotalarchibus_rm")
 RoomTotalData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Building")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_bl")
 BuildingData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Property")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_property")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Leasing")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_ls")
 LeasingData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Division")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_dv")
 DivisionData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.Department")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_dp")
 DepartmentData <- dbFetch(query, n = -1)
 dbClearResult(query)
 

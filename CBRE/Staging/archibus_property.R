@@ -29,12 +29,12 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "Property"
+TABLE_NAME <- "archibus_property"
 CBRE_TABLE_NAME <- "archibus_property"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "Property"
+SCRIPT_NAME <- "archibus_property"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -306,7 +306,7 @@ tryCatch(
     dbCommit(con)
 
     n_inserted <<- n_inserted
-
+    cat("ETL complete — inserted:", n_inserted, "\n")
     # Rollback transaction on failure
   },
   error = function(e) {

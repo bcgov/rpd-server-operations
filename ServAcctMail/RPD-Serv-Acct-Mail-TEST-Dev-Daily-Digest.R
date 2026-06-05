@@ -1,3 +1,6 @@
+source(here::here("renv/activate.R"))
+source(here::here("utilities/R/utilities.R"))
+
 # Load Libraries
 library(dplyr)
 library(glue)
