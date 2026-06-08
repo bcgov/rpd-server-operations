@@ -1,18 +1,10 @@
-source(here::here("renv/activate.R"))
+# For server logging
+# Begin timer
+task_start <- Sys.time()
 
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "GlobalAddressLookup"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "GlobalAddressLookup"
-API_NAME <- "None"
+# Load helper functions
+source(here::here("renv/activate.R"))
+source(here::here("utilities/R/utilities.R"))
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -29,19 +21,30 @@ library(openxlsx2, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-ldaps <- read.csv(here::here("input/Powershell/gal_users.csv"))
+# Setup necessary variables
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "RealProperty"
+TABLE_NAME <- "GlobalAddressLookup"
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+SCRIPT_NAME <- "GlobalAddressLookup"
+API_NAME <- "LDAPS"
 
-# Load helper functions
-source(here::here("./utilities/R/cbre_api_function.R"))
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
+# Load today's data
+ldaps <- read.csv(here::here("input/Powershell/gal_users.csv"))
 
 # Connect to SQL database
 con <- dbConnect(
   odbc(),
   driver = "ODBC Driver 17 for SQL Server",
-  server = "windfarm.idir.bcgov\\CA_TST",
-  database = "BuildingIntelligence",
+  server = SQL_SERVER,
+  database = DB_NAME,
   Trusted_Connection = "Yes"
 )
 
@@ -246,9 +249,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
-etl_start_time <- Sys.time()
-
 etl_error <- NULL
+
 # Control database transaction to ensure all steps done together or not at all
 dbBegin(con)
 
@@ -381,11 +383,15 @@ tryCatch(
   }
 )
 
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
 if (is.null(etl_error)) {
   log_daily_etl_run(
     api_name = API_NAME,
     script_name = SCRIPT_NAME,
     table_name = TABLE_NAME,
+    duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
     n_updated = NA,

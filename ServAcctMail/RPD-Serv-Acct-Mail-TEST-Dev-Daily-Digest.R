@@ -26,9 +26,9 @@ orch_rows <- log_raw |>
 script_rows <- log_raw |>
   filter(script_name != api_name) |>
   mutate(
-    n_inserted = replace_na(n_inserted, 0L),
-    n_updated = replace_na(n_updated, 0L),
-    n_deleted = replace_na(n_deleted, 0L)
+    n_inserted = tidyr::replace_na(n_inserted, 0L),
+    n_updated = tidyr::replace_na(n_updated, 0L),
+    n_deleted = tidyr::replace_na(n_deleted, 0L)
   ) |>
   arrange(run_timestamp)
 
@@ -246,12 +246,16 @@ recipient <- "david.rattray@gov.bc.ca"
 
 credential <- keyring::key_get(service = "GraphAPI", username = appId)
 
+# Set proxy environment variable
+Sys.setenv(HTTPS_PROXY = "142.34.229.249:8080")
+
 token <- get_azure_token(
   resource = "https://graph.microsoft.com",
   tenant = tenantId,
   app = appId,
   password = credential,
-  auth_type = "client_credentials"
+  auth_type = "client_credentials",
+  use_cache = FALSE
 )
 
 access_token <- token$credentials$access_token
@@ -281,3 +285,6 @@ request(glue("https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail")) |>
 # preview_path <- here::here("output", "digest_preview.html")
 # writeLines(email_html, preview_path)
 # browseURL(preview_path)
+
+# Unset proxy environment variable
+Sys.unsetenv("HTTPS_PROXY")
