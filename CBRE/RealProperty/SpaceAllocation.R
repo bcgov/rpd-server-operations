@@ -51,7 +51,7 @@ query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_rmpct")
 RoomAllocatedData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.RoomTotalarchibus_rm")
+query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_rm")
 RoomTotalData <- dbFetch(query, n = -1)
 dbClearResult(query)
 

@@ -36,12 +36,6 @@ for (script in scripts) {
           units = "secs"
         ))
       )
-      message <- paste0("script ", script_path, " completed.")
-      log_daily_etl_run(
-        api_name = ORCHESTRATOR_NAME,
-        script_name = ORCHESTRATOR_NAME,
-        status = message,
-        message = message
       )
     },
     error = function(e) {
