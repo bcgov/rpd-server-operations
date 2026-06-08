@@ -7,14 +7,6 @@ source(here::here("utilities/R/utilities.R"))
 orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "jira_boards"
 
-message <- "script_started"
-log_daily_etl_run(
-  api_name = ORCHESTRATOR_NAME,
-  script_name = ORCHESTRATOR_NAME,
-  status = message,
-  message = message
-)
-
 scripts <- c(
   "JIRA/Boards/JIRA-TEST-CSR-Issues.R",
   "JIRA/Boards/JIRA-TEST-GPOPR-Issues.R",
@@ -28,15 +20,6 @@ scripts <- c(
 # -- Per-script result tracking --
 results <- vector("list", length(scripts))
 names(results) <- scripts
-
-
-message <- "script loop started"
-log_daily_etl_run(
-  api_name = ORCHESTRATOR_NAME,
-  script_name = ORCHESTRATOR_NAME,
-  status = message,
-  message = message
-)
 
 for (script in scripts) {
   script_start <- Sys.time()
@@ -75,13 +58,6 @@ for (script in scripts) {
   )
 }
 
-message <- paste0("script ", "loop", " completed.")
-log_daily_etl_run(
-  api_name = ORCHESTRATOR_NAME,
-  script_name = ORCHESTRATOR_NAME,
-  status = message,
-  message = message
-)
 # -- Rollup --
 orchestrator_duration <- as.numeric(
   difftime(Sys.time(), orchestrator_start, units = "secs")
