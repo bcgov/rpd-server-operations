@@ -8,7 +8,7 @@ log_daily_etl_run(
   api_name = ORCHESTRATOR_NAME,
   script_name = ORCHESTRATOR_NAME,
   status = message,
-  message = substr(rollup_message, 1, 500)
+  message = message
 )
 
 # Load necessary packages

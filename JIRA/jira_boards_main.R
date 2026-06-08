@@ -12,7 +12,7 @@ log_daily_etl_run(
   api_name = ORCHESTRATOR_NAME,
   script_name = ORCHESTRATOR_NAME,
   status = message,
-  message = substr(rollup_message, 1, 500)
+  message = message
 )
 
 scripts <- c(
@@ -29,6 +29,15 @@ scripts <- c(
 results <- vector("list", length(scripts))
 names(results) <- scripts
 
+
+message <- "script loop started"
+log_daily_etl_run(
+  api_name = ORCHESTRATOR_NAME,
+  script_name = ORCHESTRATOR_NAME,
+  status = message,
+  message = message
+)
+
 for (script in scripts) {
   script_start <- Sys.time()
   script_path <- here::here(script)
@@ -43,6 +52,13 @@ for (script in scripts) {
           script_start,
           units = "secs"
         ))
+      )
+      message <- paste0("script ", script_path, " completed.")
+      log_daily_etl_run(
+        api_name = ORCHESTRATOR_NAME,
+        script_name = ORCHESTRATOR_NAME,
+        status = message,
+        message = message
       )
     },
     error = function(e) {
@@ -59,6 +75,13 @@ for (script in scripts) {
   )
 }
 
+message <- paste0("script ", "loop", " completed.")
+log_daily_etl_run(
+  api_name = ORCHESTRATOR_NAME,
+  script_name = ORCHESTRATOR_NAME,
+  status = message,
+  message = message
+)
 # -- Rollup --
 orchestrator_duration <- as.numeric(
   difftime(Sys.time(), orchestrator_start, units = "secs")
