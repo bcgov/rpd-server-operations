@@ -7,6 +7,14 @@ source(here::here("utilities/R/utilities.R"))
 orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "jira_boards"
 
+message <- "script_started"
+log_daily_etl_run(
+  api_name = ORCHESTRATOR_NAME,
+  script_name = ORCHESTRATOR_NAME,
+  status = message,
+  message = substr(rollup_message, 1, 500)
+)
+
 scripts <- c(
   "JIRA/Boards/JIRA-TEST-CSR-Issues.R",
   "JIRA/Boards/JIRA-TEST-GPOPR-Issues.R",

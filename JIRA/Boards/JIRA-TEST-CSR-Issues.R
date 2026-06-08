@@ -3,6 +3,14 @@
 task_start <- Sys.time()
 source(here::here("utilities/R/utilities.R"))
 
+message <- "CSR_script_started"
+log_daily_etl_run(
+  api_name = ORCHESTRATOR_NAME,
+  script_name = ORCHESTRATOR_NAME,
+  status = message,
+  message = substr(rollup_message, 1, 500)
+)
+
 # Load necessary packages
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
 library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
