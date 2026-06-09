@@ -15,6 +15,7 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 # Load helper functions
 source(here::here("utilities/R/utilities.R"))
 
+CBRE_TABLE_NAME <- "fm_fact_workorder_vw"
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
@@ -43,22 +44,28 @@ chunk_4 <- call_cbre_api(
 chunk_5 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2024-06-01T00:00:00Z",
-  end_time = "2025-01-01T00:00:00Z"
+  end_time = "2024-09-01T00:00:00Z"
 )
 
 chunk_6 <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = "2024-09-01T00:00:00Z",
+  end_time = "2025-01-01T00:00:00Z"
+)
+
+chunk_7 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2025-01-01T00:00:00Z",
   end_time = "2025-06-01T00:00:00Z"
 )
 
-chunk_7 <- call_cbre_api(
+chunk_8 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2025-06-01T00:00:00Z",
   end_time = "2026-01-01T00:00:00Z"
 )
 
-chunk_8 <- call_cbre_api(
+chunk_9 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2026-01-01T00:00:00Z",
   end_time = "2026-06-04T00:00:00Z"
@@ -72,5 +79,6 @@ raw_data <- rbind(
   chunk_5$data,
   chunk_6$data,
   chunk_7$data,
-  chunk_8$data
+  chunk_8$data,
+  chunk_9$data
 )

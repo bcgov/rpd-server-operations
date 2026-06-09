@@ -482,3 +482,5 @@ if (is.null(etl_error)) {
   )
   stop(etl_error)
 }
+
+write.csv(Issues, "E:/Projects/PBI-Gateway/RBAS_Issues.csv", row.names = FALSE)

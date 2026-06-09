@@ -475,3 +475,5 @@ if (is.null(etl_error)) {
   )
   stop(etl_error)
 }
+
+write.csv(Issues, "E:/Projects/PBI-Gateway/GPOPR_Issues.csv", row.names = FALSE)

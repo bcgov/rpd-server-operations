@@ -63,7 +63,7 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
 }
 
 clean_data <- raw_data |>
-  purrr::pluck("data") |>
+  # purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
   # select_if(~ !all(is.na(.))) |>
@@ -142,7 +142,7 @@ clean_data <- raw_data |>
         source_created_ts,
         closed_date
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
   mutate(
@@ -278,7 +278,6 @@ clean_data <- raw_data |>
   )
 
 # dbRemoveTable(con, TARGET_TABLE)
-
 if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
@@ -298,13 +297,9 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       status_code_skey                           NVARCHAR(50)   NULL,
       actual_cost                                DECIMAL(18,2)  NULL,
       employee_cost_center                       NVARCHAR(100)  NULL,
-      edp_update_by                              NVARCHAR(100)  NULL,
       edp_update_ts                              DATETIME2(3)   NULL,
       source_system_code                         NVARCHAR(50)   NULL,
       source_unique_id                           NVARCHAR(50)   NULL,
-      source_record_hash                         NVARCHAR(255)  NULL,
-      client_skey                                NVARCHAR(50)   NULL,
-      source_client_name                         NVARCHAR(255)  NULL,
       activity_desc                              NVARCHAR(MAX)  NULL,
       activity_name                              NVARCHAR(MAX)  NULL,
       asset_sub_category_code_desc               NVARCHAR(255)  NULL,
@@ -411,9 +406,81 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
   dbExecute(con, sql)
 }
 
-# Database Transaction ####
+clean_data <- read.csv(here("input/CbreStaging/fm_workorder.csv")) |>
+  mutate(
+    across(
+      c(
+        RefreshDate
+      ),
+      ~ as.POSIXct(.x, format = "%Y-%m-%d %H:%M:%OS", tz = "America/Vancouver")
+    )
+  ) |>
+  mutate(
+    across(
+      c(
+        edp_update_ts,
+        estimated_completion_date_ts,
+        actual_completion_date_ts,
+        estimated_response_date_ts,
+        actual_arrival_ts,
+        actual_completed_ts,
+        target_completed_ts,
+        actual_start_ts,
+        target_start_ts,
+        due_date_ts,
+        scheduled_finish_ts,
+        scheduled_start_ts,
+        workorder_creation_date_ts,
+        workorder_dispatched_date_ts,
+        estimated_response_date_ts,
+        actual_response_date_ts,
+        activity_change_date,
+        activity_status_date,
+        local_workorder_creation_date_ts,
+        local_activity_status_date,
+        local_activity_change_date,
+        local_actual_response_date_ts,
+        local_target_start_ts,
+        local_workorder_dispatched_date_ts,
+        local_scheduled_finish_ts,
+        local_actual_completion_date_ts,
+        local_target_completed_ts,
+        local_estimated_response_date_ts,
+        local_actual_arrival_ts,
+        local_actual_completed_ts,
+        local_estimated_completion_date_ts,
+        local_scheduled_start_ts,
+        local_due_date_ts,
+        local_actual_start_ts,
+        local_source_created_ts,
+        source_created_ts,
+        closed_date
+      ),
+      ~ as.POSIXct(.x, format = "%Y-%m-%d %H:%M:%OS")
+    )
+  ) |>
+  select(
+    -c(
+      edp_update_by,
+      source_record_hash,
+      client_skey,
+      source_client_name
+    )
+  )
 
-etl_start_time <- Sys.time()
+clean_data_1 <- clean_data[1:250000, ]
+clean_data_2 <- clean_data[250001:500000, ]
+clean_data_3 <- clean_data[500001:750000, ]
+clean_data_4 <- clean_data[750001:1000000, ]
+clean_data_5 <- clean_data[1000001:1250000, ]
+clean_data_6 <- clean_data[1250001:1500000, ]
+clean_data_7 <- clean_data[1500001:1750000, ]
+clean_data_8 <- clean_data[1750001:2000000, ]
+clean_data_9 <- clean_data[2000001:2213706, ]
+
+data <- clean_data_7 # ran out of db space at this point.
+
+# Database Transaction ####
 
 etl_error <- NULL
 
@@ -443,13 +510,9 @@ tryCatch(
           status_code_skey                           NVARCHAR(50)   NULL,
           actual_cost                                DECIMAL(18,2)  NULL,
           employee_cost_center                       NVARCHAR(100)  NULL,
-          edp_update_by                              NVARCHAR(100)  NULL,
           edp_update_ts                              DATETIME2(3)   NULL,
           source_system_code                         NVARCHAR(50)   NULL,
           source_unique_id                           NVARCHAR(50)   NULL,
-          source_record_hash                         NVARCHAR(255)  NULL,
-          client_skey                                NVARCHAR(50)   NULL,
-          source_client_name                         NVARCHAR(255)  NULL,
           activity_desc                              NVARCHAR(MAX)  NULL,
           activity_name                              NVARCHAR(MAX)  NULL,
           asset_sub_category_code_desc               NVARCHAR(255)  NULL,
@@ -557,7 +620,7 @@ tryCatch(
     dbWriteTable(
       con,
       name = TEMP_TABLE,
-      value = clean_data,
+      value = data,
       append = TRUE,
       overwrite = FALSE
     )
@@ -603,13 +666,9 @@ tryCatch(
            tgt.status_code_skey                           = src.status_code_skey,
            tgt.actual_cost                                = src.actual_cost,
            tgt.employee_cost_center                       = src.employee_cost_center,
-           tgt.edp_update_by                              = src.edp_update_by,
            tgt.edp_update_ts                              = src.edp_update_ts,
            tgt.source_system_code                         = src.source_system_code,
            tgt.source_unique_id                           = src.source_unique_id,
-           tgt.source_record_hash                         = src.source_record_hash,
-           tgt.client_skey                                = src.client_skey,
-           tgt.source_client_name                         = src.source_client_name,
            tgt.activity_desc                              = src.activity_desc,
            tgt.activity_name                              = src.activity_name,
            tgt.asset_sub_category_code_desc               = src.asset_sub_category_code_desc,
@@ -743,13 +802,9 @@ tryCatch(
           status_code_skey,
           actual_cost,
           employee_cost_center,
-          edp_update_by,
           edp_update_ts,
           source_system_code,
           source_unique_id,
-          source_record_hash,
-          client_skey,
-          source_client_name,
           activity_desc,
           activity_name,
           asset_sub_category_code_desc,
@@ -864,13 +919,9 @@ tryCatch(
           src.status_code_skey,
           src.actual_cost,
           src.employee_cost_center,
-          src.edp_update_by,
           src.edp_update_ts,
           src.source_system_code,
           src.source_unique_id,
-          src.source_record_hash,
-          src.client_skey,
-          src.source_client_name,
           src.activity_desc,
           src.activity_name,
           src.asset_sub_category_code_desc,

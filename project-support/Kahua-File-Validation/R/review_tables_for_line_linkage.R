@@ -37,12 +37,29 @@ CBRE_TABLE_NAME <- "fin_purchase_order_purchase_order_line_link_vw"
 CBRE_TABLE_NAME <- "fin_fact_cost_distribution_detail_vw"
 # general_ledger_skey, cost_distribution_detail_skey, invoice_line_skey,
 #  purchase_order_line_skey, property_skey, invoice_skey, vendor_skey
-chunk_1 <- call_cbre_api(
-  CBRE_TABLE_NAME,
-  start_time = "2020-05-01T00:00:00Z",
-  end_time = "2026-06-05T00:00:00Z",
-  max_pages = 10
-)
+CBRE_TABLE_NAME <- "fm_benchmark_fact_capital_plan_budget_vw"
+# maybe interesting
+CBRE_TABLE_NAME <- "fm_benchmark_fact_capital_plan_budget_item_vw"
+# same as above
+CBRE_TABLE_NAME <- "fm_benchmark_dim_asset_vw"
+# asset_skey and asset_id as B# or N#
+CBRE_TABLE_NAME <- "fm_benchmark_dim_component_vw"
+# asset_skey, component_skey, interesting seems to have cost and planned replacement for assets
+CBRE_TABLE_NAME <- "fm_benchmark_dim_cost_location_vw"
+# cost_location_skey, seems like a more cbre specific table with only 5 rows for headquarter cities
+CBRE_TABLE_NAME <- "fm_benchmark_dim_cost_model_vw"
+# cost_model_skey, small table again, seems like its around an "average" building for several types
+CBRE_TABLE_NAME <- "fm_benchmark_dim_hierarchy_vw"
+# hierarchy_skey, 2 rows, one toronto one vancouver
+CBRE_TABLE_NAME <- "fm_benchmark_fact_cost_matrix_vw"
+# cost_location_skey, cost_model_skey, cost_matrix_skey
+CBRE_TABLE_NAME <-
+  chunk_1 <- call_cbre_api(
+    CBRE_TABLE_NAME,
+    start_time = "2020-05-01T00:00:00Z",
+    end_time = "2026-06-05T00:00:00Z",
+    max_pages = 10
+  )
 
 data <- chunk_1 |>
   purrr::pluck("data")
