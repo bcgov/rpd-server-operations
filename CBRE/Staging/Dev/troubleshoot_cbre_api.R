@@ -11,7 +11,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
-source(here::here("./utilities/R/cbre_api_function.R"))
+source(here("utilities/R/utilities.R"))
 
 base_url = "https://api.cbre.com:443/"
 username = "kWNLCjcu05JmqrlSsmDtMoSreuUa"
