@@ -36,7 +36,6 @@ for (script in scripts) {
           units = "secs"
         ))
       )
-      )
     },
     error = function(e) {
       results[[script]] <<- list(
