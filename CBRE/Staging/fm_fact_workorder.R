@@ -18,7 +18,7 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
-
+etl_window$start_time <- "2026-06-04T00:00:00Z"
 # Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
@@ -63,7 +63,7 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
 }
 
 clean_data <- raw_data |>
-  # purrr::pluck("data") |>
+  purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
   # select_if(~ !all(is.na(.))) |>
@@ -168,13 +168,9 @@ clean_data <- raw_data |>
     status_code_skey,
     actual_cost,
     employee_cost_center,
-    edp_update_by,
     edp_update_ts,
     source_system_code,
     source_unique_id,
-    source_record_hash,
-    client_skey,
-    source_client_name,
     activity_desc,
     activity_name,
     asset_sub_category_code_desc,
@@ -406,82 +402,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
   dbExecute(con, sql)
 }
 
-clean_data <- read.csv(here("input/CbreStaging/fm_workorder.csv")) |>
-  mutate(
-    across(
-      c(
-        RefreshDate
-      ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%d %H:%M:%OS", tz = "America/Vancouver")
-    )
-  ) |>
-  mutate(
-    across(
-      c(
-        edp_update_ts,
-        estimated_completion_date_ts,
-        actual_completion_date_ts,
-        estimated_response_date_ts,
-        actual_arrival_ts,
-        actual_completed_ts,
-        target_completed_ts,
-        actual_start_ts,
-        target_start_ts,
-        due_date_ts,
-        scheduled_finish_ts,
-        scheduled_start_ts,
-        workorder_creation_date_ts,
-        workorder_dispatched_date_ts,
-        estimated_response_date_ts,
-        actual_response_date_ts,
-        activity_change_date,
-        activity_status_date,
-        local_workorder_creation_date_ts,
-        local_activity_status_date,
-        local_activity_change_date,
-        local_actual_response_date_ts,
-        local_target_start_ts,
-        local_workorder_dispatched_date_ts,
-        local_scheduled_finish_ts,
-        local_actual_completion_date_ts,
-        local_target_completed_ts,
-        local_estimated_response_date_ts,
-        local_actual_arrival_ts,
-        local_actual_completed_ts,
-        local_estimated_completion_date_ts,
-        local_scheduled_start_ts,
-        local_due_date_ts,
-        local_actual_start_ts,
-        local_source_created_ts,
-        source_created_ts,
-        closed_date
-      ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%d %H:%M:%OS")
-    )
-  ) |>
-  select(
-    -c(
-      edp_update_by,
-      source_record_hash,
-      client_skey,
-      source_client_name
-    )
-  )
-
-clean_data_1 <- clean_data[1:250000, ]
-clean_data_2 <- clean_data[250001:500000, ]
-clean_data_3 <- clean_data[500001:750000, ]
-clean_data_4 <- clean_data[750001:1000000, ]
-clean_data_5 <- clean_data[1000001:1250000, ]
-clean_data_6 <- clean_data[1250001:1500000, ]
-clean_data_7 <- clean_data[1500001:1750000, ]
-clean_data_8 <- clean_data[1750001:2000000, ]
-clean_data_9 <- clean_data[2000001:2213706, ]
-
-data <- clean_data_7 # ran out of db space at this point.
-
 # Database Transaction ####
-
 etl_error <- NULL
 
 dbBegin(con)
@@ -620,7 +541,7 @@ tryCatch(
     dbWriteTable(
       con,
       name = TEMP_TABLE,
-      value = data,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
