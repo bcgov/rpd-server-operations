@@ -15,12 +15,16 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 # Load helper functions
 source(here::here("utilities/R/utilities.R"))
 
+# com_fact_property_hierarchy_extended_attribute_vw
+# com_fact_property_hierarchy_vw
+# fm_maintenance_plan_property_hierarchy_link_vw
 CBRE_TABLE_NAME <- "fm_fact_workorder_vw"
+
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2020-01-01T00:00:00Z",
-  end_time = "2023-01-01T00:00:00Z"
+  end_time = "2026-06-10T00:00:00Z"
 )
 
 chunk_2 <- call_cbre_api(
@@ -68,17 +72,17 @@ chunk_8 <- call_cbre_api(
 chunk_9 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2026-01-01T00:00:00Z",
-  end_time = "2026-06-04T00:00:00Z"
+  end_time = "2026-01-10T00:00:00Z"
 )
 
 raw_data <- rbind(
-  chunk_1$data,
-  chunk_2$data,
-  chunk_3$data,
-  chunk_4$data,
-  chunk_5$data,
-  chunk_6$data,
-  chunk_7$data,
-  chunk_8$data,
+  # chunk_1$data,
+  # chunk_2$data,
+  # chunk_3$data
+  # chunk_4$data,
+  # chunk_5$data,
+  # chunk_6$data,
+  # chunk_7$data,
+  # chunk_8$data,
   chunk_9$data
 )

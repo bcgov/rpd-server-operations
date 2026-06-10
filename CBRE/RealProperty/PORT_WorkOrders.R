@@ -45,6 +45,52 @@ con <- dbConnect(
 )
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreStaging.fm_fact_workorder")
+query <- dbSendQuery(
+  con,
+  "SELECT property_skey, FYCreation, COUNT(*) AS WorkOrderCount
+                     FROM CbreStaging.fm_fact_workorder
+                     GROUP BY property_skey, FYCreation;"
+)
 WorkOrderData <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT property_skey, Identifier FROM CbreStaging.dim_property;"
+)
+DimProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+# 31551 asset_skey for 1515 Blanshard, B0011221
+# property_skey 21117377
+WorkOrders <- WorkOrderData |>
+  left_join(DimProperty, by = join_by(property_skey))
+
+test <- WorkOrders |> filter(is.na(Identifier))
+
+query <- dbSendQuery(
+  con,
+  "SELECT * FROM CbreStaging.fm_benchmark_dim_asset;"
+)
+DimAsset <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT * FROM CbreStaging.fm_benchmark_property_asset_link;"
+)
+DimLink <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- WorkOrderData |>
+  left_join(DimLink, by = join_by(property_skey)) |>
+  filter(is.na(asset_skey))
+
+# 23269381
+query <- dbSendQuery(
+  con,
+  "SELECT * FROM CbreStaging.fm_fact_workorder
+                     WHERE property_skey = '23269381';"
+)
+weird_count <- dbFetch(query, n = -1)
 dbClearResult(query)

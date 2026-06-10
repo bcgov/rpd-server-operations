@@ -29,6 +29,8 @@ scripts <- c(
   "CBRE/Staging/fact_project_role.R",
   "CBRE/Staging/fact_project.R",
   "CBRE/Staging/fm_fact_workorder.R",
+  "CBRE/Staging/fm_benchmark_dim_asset.R",
+  "CBRE/Staging/fm_benchmark_property_asset_link.R",
   "CBRE/Staging/pjm_dim_budget.R",
   "CBRE/Staging/pjm_dim_contact.R",
   "CBRE/Staging/pjm_dim_project_activity.R",

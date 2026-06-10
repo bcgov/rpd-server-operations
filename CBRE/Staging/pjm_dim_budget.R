@@ -225,7 +225,6 @@ tryCatch(
     UPDATE tgt
     SET
         tgt.RefreshDate             = src.RefreshDate,
-        tgt.budget_skey             = src.budget_skey,
         tgt.budget_id               = src.budget_id,
         tgt.budget_number           = src.budget_number,
         tgt.budget_type             = src.budget_type,
