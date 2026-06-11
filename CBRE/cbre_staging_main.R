@@ -24,6 +24,7 @@ scripts <- c(
   "CBRE/Staging/dim_project_activity.R",
   "CBRE/Staging/dim_project_role.R",
   "CBRE/Staging/dim_project.R",
+  "CBRE/Staging/dim_property.R",
   "CBRE/Staging/fact_budget.R",
   "CBRE/Staging/fact_project_activity.R",
   "CBRE/Staging/fact_project_role.R",
