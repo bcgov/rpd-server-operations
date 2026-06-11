@@ -29,17 +29,44 @@ source(here::here("utilities/R/utilities.R"))
 # fm_benchmark_property_asset_link_vw
 # fm_benchmark_dim_asset_vw
 # fm_dim_property_extended_attribute_vw
-CBRE_TABLE_NAME <- "fm_dim_property_extended_attribute_vw"
+# es_dim_program_vw
+# es_dim_service_account_vw
+# es_energy_targets
+# es_fact_accrual_vw
+# es_dim_invoice_vw
+# es_fact_allocated_invoice_calendarized_vw
+# envizi utility data -electric, floor space, natural gas, sewer, water
+# es_fact_financial_planning_vw
+# es_fact_invoice_calendarized_vw
+# es_fact_invoice_vw
+# es_fact_service_account_vw
+# es_report_actual_budget_accruals_vw
+# es_fact_property_energy_usage_and_weather_trending_allocated_vw
+# es_fact_property_energy_usage_and_weather_trending_vw
+# es_fact_property_emission_trending_vw
+# es_fact_property_rating_vw
+# excel_master_building_list
+# com_dim_property_vw
+# envizi_property_grouping_vw
+# es_report_combined_vw
+# fin_dim_property_reporting_code_vw
+# es_fact_allocation_by_reporing_group_vw
+# es_fact_property_rating_vw_23apr_pobc
+# es_report_combined_vw_23apr_pobc
+CBRE_TABLE_NAME <- "es_report_combined_vw_23apr_pobc"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
-  start_time = "2010-01-01T00:00:00Z",
+  start_time = "2010-04-01T00:00:00Z",
   end_time = "2026-06-10T00:00:00Z",
   max_pages = 5
 )
 
 raw_data <- chunk_1$data
+
+raw_data <- raw_data |>
+  mutate(property_skey = as.character(property_skey))
 
 chunk_2 <- call_cbre_api(
   CBRE_TABLE_NAME,

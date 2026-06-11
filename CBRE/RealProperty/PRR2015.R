@@ -54,7 +54,7 @@ PRR2015 <- read_xlsx(
   ),
   start_row = 3
 ) |>
-  rename_with(~ gsub(" ", "", .x)) |> # BROKEN AFTER THIS POINT, need a column name agnostic approach
+  rename_with(~ gsub(" ", "", .x)) |>
   pivot_longer(
     cols = matches("^([0-9]{4})Year"),
     names_to = "raw_name",

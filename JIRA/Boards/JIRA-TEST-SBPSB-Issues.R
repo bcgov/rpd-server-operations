@@ -439,7 +439,8 @@ tryCatch(
         tgt.RequestType         = src.RequestType,
         tgt.Status              = src.Status,
         tgt.Parent              = src.Parent,
-        tgt.Project             = src.Project
+        tgt.Project             = src.Project,
+        tgt.Summary             = src.Summary
         FROM ",
         SCHEMA_NAME,
         ".",
@@ -476,7 +477,8 @@ tryCatch(
           RequestType,
           Status,
           Parent,
-          Project
+          Project,
+          Summary
         )
         SELECT
           src.RefreshDate,
@@ -494,7 +496,8 @@ tryCatch(
           src.RequestType,
           src.Status,
           src.Parent,
-          src.Project
+          src.Project,
+          src.Summary
         FROM ",
         TEMP_TABLE,
         " src
