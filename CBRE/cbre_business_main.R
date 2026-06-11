@@ -10,7 +10,8 @@ ORCHESTRATOR_NAME <- "cbre_business"
 scripts <- c(
   "CBRE/RealProperty/FacilityDetail.R",
   "CBRE/RealProperty/SpaceAllocation.R",
-  "CBRE/RealProperty/ActivityCodeReport.R"
+  "CBRE/RealProperty/ActivityCodeReport.R",
+  "CBRE/RealProperty/PORT_WorkOrders.R"
 )
 
 # -- Per-script result tracking --

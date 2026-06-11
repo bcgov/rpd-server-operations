@@ -28,12 +28,12 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "dim_property"
-CBRE_TABLE_NAME <- "dim_property_vw"
+TABLE_NAME <- "fm_dim_property_extended_attribute"
+CBRE_TABLE_NAME <- "fm_dim_property_extended_attribute_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "dim_property"
+SCRIPT_NAME <- "fm_dim_property_extended_attribute"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -78,9 +78,8 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
   stop("No new data from API")
 }
 
-
 clean_data <- raw_data |>
-  purrr::pluck("data") |>
+  # purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
   # select_if(~ !all(is.na(.))) |>
@@ -90,33 +89,21 @@ clean_data <- raw_data |>
   # select_if(~ !all(. == "-")) |>
   select(
     property_skey,
-    client_property_id,
-    client_property_name,
-    reporting_code_3,
-    client_additional_attrib,
-    address_line1,
-    city_name,
-    state_province_code,
-    zip_code,
-    country_code,
-    associated_project_number,
-    location_id,
-    source_unique_id,
+    attribute_value,
     source_system_code,
-    edp_update_ts
+    source_record_hash
   ) |>
   mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything()) |>
   mutate(
     Identifier = case_when(
-      source_system_code == "JDE" ~ reporting_code_3,
       source_system_code == "SI7" ~ stringr::str_extract(
-        client_additional_attrib,
+        attribute_value,
         '([B-N]\\d*)',
         group = TRUE
       )
     ),
     .keep = "unused",
-    .after = client_property_name
+    .after = property_skey
   ) |>
   mutate(
     across(
@@ -124,14 +111,6 @@ clean_data <- raw_data |>
         property_skey
       ),
       as.character
-    )
-  ) |>
-  mutate(
-    across(
-      c(
-        edp_update_ts
-      ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   )
 
@@ -145,19 +124,9 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     " (
       RefreshDate                    DATETIME2(3)   NOT NULL,
       property_skey                  NVARCHAR(20)   NOT NULL,
-      client_property_id             NVARCHAR(20)   NULL,
-      client_property_name           NVARCHAR(100)  NULL,
       Identifier                     NVARCHAR(100)  NULL,
-      address_line1                  NVARCHAR(100)  NULL,
-      city_name                      NVARCHAR(100)  NULL,
-      state_province_code            NVARCHAR(10)   NULL,
-      zip_code                       NVARCHAR(30)   NULL,
-      country_code                   NVARCHAR(10)   NULL,
-      associated_project_number      NVARCHAR(20)   NULL,
-      location_id                    NVARCHAR(10)   NULL,
-      source_unique_id               NVARCHAR(20)   NULL,
       source_system_code             NVARCHAR(10)   NULL,
-      edp_update_ts                  DATETIME2(3)   NULL
+      source_record_hash             NVARCHAR(50)   NULL
     );"
   )
 
@@ -183,19 +152,9 @@ tryCatch(
         " (
           RefreshDate                    DATETIME2(3)   NOT NULL,
           property_skey                  NVARCHAR(20)   NOT NULL,
-          client_property_id             NVARCHAR(20)   NULL,
-          client_property_name           NVARCHAR(100)  NULL,
           Identifier                     NVARCHAR(100)  NULL,
-          address_line1                  NVARCHAR(100)  NULL,
-          city_name                      NVARCHAR(100)  NULL,
-          state_province_code            NVARCHAR(10)   NULL,
-          zip_code                       NVARCHAR(30)   NULL,
-          country_code                   NVARCHAR(10)   NULL,
-          associated_project_number      NVARCHAR(20)   NULL,
-          location_id                    NVARCHAR(10)   NULL,
-          source_unique_id               NVARCHAR(20)   NULL,
           source_system_code             NVARCHAR(10)   NULL,
-          edp_update_ts                  DATETIME2(3)   NULL
+          source_record_hash             NVARCHAR(50)   NULL
         );"
       )
     )
@@ -239,19 +198,9 @@ tryCatch(
         "UPDATE tgt
          SET
            tgt.RefreshDate               = src.RefreshDate,
-           tgt.client_property_id        = src.client_property_id,
-           tgt.client_property_name      = src.client_property_name,
            tgt.Identifier                = src.Identifier,
-           tgt.address_line1             = src.address_line1,
-           tgt.city_name                 = src.city_name,
-           tgt.state_province_code       = src.state_province_code,
-           tgt.zip_code                  = src.zip_code,
-           tgt.country_code              = src.country_code,
-           tgt.associated_project_number = src.associated_project_number,
-           tgt.location_id               = src.location_id,
-           tgt.source_unique_id          = src.source_unique_id,
            tgt.source_system_code        = src.source_system_code,
-           tgt.edp_update_ts             = src.edp_update_ts
+           tgt.source_record_hash        = src.source_record_hash
          FROM ",
         SCHEMA_NAME,
         ".",
@@ -275,36 +224,16 @@ tryCatch(
         " (
           RefreshDate,
           property_skey,
-          client_property_id,
-          client_property_name,
           Identifier,
-          address_line1,
-          city_name,
-          state_province_code,
-          zip_code,
-          country_code,
-          associated_project_number,
-          location_id,
-          source_unique_id,
           source_system_code,
-          edp_update_ts
+          source_record_hash
         )
         SELECT
           src.RefreshDate,
           src.property_skey,
-          src.client_property_id,
-          src.client_property_name,
           src.Identifier,
-          src.address_line1,
-          src.city_name,
-          src.state_province_code,
-          src.zip_code,
-          src.country_code,
-          src.associated_project_number,
-          src.location_id,
-          src.source_unique_id,
           src.source_system_code,
-          src.edp_update_ts
+          src.source_record_hash
         FROM ",
         TEMP_TABLE,
         " src

@@ -85,3 +85,16 @@ dbWriteTable(
   append = FALSE,
   overwrite = TRUE
 )
+
+test <- PRR2015 |>
+  mutate(
+    cost_check_total = rowSums(across(BaseRent:Parking), na.rm = TRUE),
+    admin_check_total = rowSums(across(LLAdminFee:UtilitiesAdmin), na.rm = TRUE)
+  ) |>
+  relocate(
+    TotalCost,
+    cost_check_total,
+    TotalAdmin,
+    admin_check_total,
+    .before = everything()
+  )

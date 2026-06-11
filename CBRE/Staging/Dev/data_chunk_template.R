@@ -18,14 +18,28 @@ source(here::here("utilities/R/utilities.R"))
 # com_fact_property_hierarchy_extended_attribute_vw
 # com_fact_property_hierarchy_vw
 # fm_maintenance_plan_property_hierarchy_link_vw
-CBRE_TABLE_NAME <- "fm_fact_workorder_vw"
+# fm_fact_workorder_vw
+# fa_fa_property_xrefs_manager_default
+# fm_benchmark_dim_component_vw
+# asset_number, property (5 digit number), and activity_skey
+# fm_benchmark_fact_mr_task_vw
+# asset_skey, property_skey (all the numbers that start with 2's), component_skey, task_skey,
+# fm_benchmark_fact_ops_task_vw
+# asset_skey, property_skey, task_skey
+# fm_benchmark_property_asset_link_vw
+# fm_benchmark_dim_asset_vw
+# fm_dim_property_extended_attribute_vw
+CBRE_TABLE_NAME <- "fm_dim_property_extended_attribute_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
-  start_time = "2020-01-01T00:00:00Z",
-  end_time = "2026-06-10T00:00:00Z"
+  start_time = "2010-01-01T00:00:00Z",
+  end_time = "2026-06-10T00:00:00Z",
+  max_pages = 5
 )
+
+raw_data <- chunk_1$data
 
 chunk_2 <- call_cbre_api(
   CBRE_TABLE_NAME,
