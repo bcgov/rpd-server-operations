@@ -188,6 +188,14 @@ for (ii in 1:nrow(AddressList)) {
   )
   req <- request(paste0(query_url, location)) |>
     req_headers(API_KEY = API_KEY) |>
+    req_timeout(30) |>
+    # req_options(resolve = "geocoder.api.gov.bc.ca:443:142.34.229.4") |>
+    # req_retry(
+    #   max_tries = 3,
+    #   backoff = ~ 10,
+    #   is_transient = \(resp) resp_status(resp) %in% c(429, 500, 502, 503, 504)
+    # ) |>
+    # req_perform(verbosity = 3)
     req_perform()
   resp <- req |> resp_body_json()
   AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
