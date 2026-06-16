@@ -1,6 +1,6 @@
 # orchestrator_staging.R
 # Sourced by Task Scheduler via Rscript.exe
-# Runs all CBRE staging scripts, continues on error
+# Runs all CHEFS forms scripts, continues on error
 source(here::here("renv/activate.R"))
 
 # Load helper functions
@@ -26,14 +26,10 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Start orchestrator
 orchestrator_start <- Sys.time()
-ORCHESTRATOR_NAME <- "cbre_business"
+ORCHESTRATOR_NAME <- "chefs_kiss"
 
 scripts <- c(
-  "CBRE/RealProperty/FacilityDetail.R",
-  "CBRE/RealProperty/SpaceAllocation.R",
-  "CBRE/RealProperty/ActivityCodeReport.R",
-  "CBRE/RealProperty/PORT_ProjectCosts.R",
-  "CBRE/RealProperty/PORT_WorkOrders.R"
+  "CHEFS/Forms/CHEFS-Drawings-Request-Submission.R"
 )
 
 # -- Per-script result tracking --

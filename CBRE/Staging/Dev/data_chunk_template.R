@@ -53,14 +53,15 @@ source(here::here("utilities/R/utilities.R"))
 # es_fact_allocation_by_reporing_group_vw
 # es_fact_property_rating_vw_23apr_pobc
 # es_report_combined_vw_23apr_pobc
-CBRE_TABLE_NAME <- "es_report_combined_vw_23apr_pobc"
+# pjm_report_project_details_vw
+# client_property_id, property_skey
+CBRE_TABLE_NAME <- "pjm_report_project_details_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-04-01T00:00:00Z",
-  end_time = "2026-06-10T00:00:00Z",
-  max_pages = 5
+  end_time = "2026-06-17T00:00:00Z"
 )
 
 raw_data <- chunk_1$data

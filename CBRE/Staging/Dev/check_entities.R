@@ -1,6 +1,7 @@
+source(here::here("utilities/R/utilities.R"))
 base_url = "https://api.cbre.com:443/"
 endpoint_url = "t/digitaltech_us_edp/vantageanalytics/prod/v1/entities/"
-start_time = "2025-01-01T00:00:00Z"
+start_time = "2010-01-01T00:00:00Z"
 end_time = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
 username = "kWNLCjcu05JmqrlSsmDtMoSreuUa"
 credentials <- keyring::key_get(service = "CBRE_API", username = username)
@@ -32,4 +33,4 @@ entities <- resp |>
   arrange(entity)
 
 result <- entities |>
-  filter(if_any(-1, ~ . == "property_skey"))
+  filter(if_any(-1, ~ . == "client_property_id"))

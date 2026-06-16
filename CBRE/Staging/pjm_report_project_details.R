@@ -28,12 +28,12 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
-TABLE_NAME <- "pjm_fact_project"
-CBRE_TABLE_NAME <- "pjm_fact_project_vw"
+TABLE_NAME <- "pjm_report_project_details"
+CBRE_TABLE_NAME <- "pjm_report_project_details_vw"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
-SCRIPT_NAME <- "pjm_fact_project"
+SCRIPT_NAME <- "pjm_report_project_details"
 
 # Connect to SQL database
 con <- dbConnect(

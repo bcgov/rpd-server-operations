@@ -202,7 +202,7 @@ call_cbre_api <- function(
               resp <- httr2::resp_body_json(req)
 
               if (is.null(resp$data) || is.null(resp$data$rows)) {
-                stop("Invalid response structure: missing data or rows")
+                stop("NO_DATA_SENTINEL")
               }
 
               rows_returned <- rows_returned + resp$rowsReturned
@@ -264,6 +264,21 @@ call_cbre_api <- function(
   if (!is.null(extraction_error)) {
     failed_at_page <- current_page
 
+    if (
+      grepl(
+        "NO_DATA_SENTINEL",
+        conditionMessage(extraction_error),
+        fixed = TRUE
+      )
+    ) {
+      cat("\n--- No data returned ---\n")
+      return(list(
+        status = "no_data",
+        data = tibble::tibble(),
+        rows_collected = 0
+      ))
+    }
+
     cat("\n--- Extraction failed ---\n")
     cat("Error:", conditionMessage(extraction_error), "\n")
     cat(
@@ -278,7 +293,6 @@ call_cbre_api <- function(
       if (!is.null(Data)) nrow(Data) else 0,
       "\n"
     )
-
     return(list(
       status = "partial",
       data = if (!is.null(Data)) Data else tibble::tibble(),
