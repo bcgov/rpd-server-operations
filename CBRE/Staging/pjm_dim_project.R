@@ -128,7 +128,6 @@ clean_data <- raw_data |>
     RefreshDate,
     project_skey,
     project_number,
-    Identifier,
     project_id,
     csf_ytdworkcomplete,
     csf_wsiregion,
@@ -330,9 +329,6 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
-
-etl_start_time <- Sys.time()
-
 etl_error <- NULL
 
 # Control database transaction to ensure all steps done together or not at all
