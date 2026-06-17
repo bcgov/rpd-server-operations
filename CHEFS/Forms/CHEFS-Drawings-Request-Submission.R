@@ -12,8 +12,8 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "Chefs"
 FORM <- "Drawings_Request_Submission"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = Form)
-TEMP_TABLE <- paste0("#", Form, "Temp")
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = FORM)
+TEMP_TABLE <- paste0("#", FORM, "Temp")
 API_NAME <- "CHEFS"
 SCRIPT_NAME <- "CHEFS_Drawings_Request_Submission"
 base_url <- "https://submit.digital.gov.bc.ca/app/api/v1/"
