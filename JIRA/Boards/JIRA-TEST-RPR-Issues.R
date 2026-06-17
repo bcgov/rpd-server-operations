@@ -11,11 +11,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "Jira"
-DASHBOARD_ID <- "GPOPR"
+DASHBOARD_ID <- "RPR"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
 TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
 API_NAME <- "Jira"
-SCRIPT_NAME <- "Jira_GPOPR"
+SCRIPT_NAME <- "Jira_RPR"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -109,7 +109,9 @@ while (progress < 2) {
   )
 
   # Used to update total_results in while loop
-  nextPageToken <- resp["nextPageToken"][[1]]
+  nextPageToken <- resp
+  "nextPageToken"
+  1
 
   # total results isn't always accurate, check that response has issues
   if (length(resp$issues) == 0) {
@@ -145,75 +147,86 @@ while (progress < 2) {
     rename_with(~ gsub(" ", "", .)) |>
     select(
       IssueKey = key,
+      IssueType,
+      Status,
       Created,
       Updated,
       Resolved,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
-      Organization = `Ministry/BPSOrganization`,
-      City = CityDropdown,
-      RequestType,
-      Requestparticipants,
-      Priority,
       Duedate,
-      Status,
-      Summary
+      DueDateflexibility,
+      Timetofirstresponse,
+      Timetoresolution,
+      Assignee,
+      # Audience1 = `Audience-1`, # Possible source of issues here, right now all NA
+      Audience = `Audience-2`,
+      Frequency = `Frequency-RPR`,
+      Priority,
+      ReportName = Reportname,
+      Reporter,
+      RequestParticipants = Requestparticipants, # evaluate that the code dropped in still works
+      RequestType,
+      Summary,
+      # Team = `Team-2`,# Possible source of issues here, right now all NA
+      Team = `Team-RPR`,
+      Branch = `Branch-RPR`
     ) |>
-    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-    safe_hoist(
-      GPOPackageApprover,
-      GPOPackageApprover = "displayName",
-      .remove = FALSE
-    ) |>
+    safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
     safe_hoist(Status, Status = "name", .remove = FALSE) |>
     safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
     safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(City, City = "value", .remove = FALSE) |>
+    safe_hoist(
+      DueDateflexibility,
+      DueDateflexibility = "value",
+      .remove = FALSE
+    ) |>
+    safe_hoist(
+      Timetofirstresponse,
+      Timetofirstresponse = list(
+        "completedCycles",
+        1L,
+        "elapsedTime",
+        "millis"
+      ),
+      .remove = FALSE
+    ) |>
+    safe_hoist(
+      Timetoresolution,
+      Timetoresolution = list("ongoingCycle", "elapsedTime", "millis"),
+      .remove = FALSE
+    ) |>
+    safe_hoist(Audience, Audience = list("value"), .remove = FALSE) |>
+    safe_hoist(Frequency, Frequency = list("value"), .remove = FALSE) |>
+    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
     safe_hoist(
       RequestType,
       RequestType = list("requestType", "name"),
       .remove = FALSE
     ) |>
-    tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-    tidyr::unnest_wider(starts_with("Requestparticipants"), names_sep = "-") |>
-    rowwise() |>
-    mutate(
-      RequestParticipants = stringr::str_c(
-        c_across(
-          matches(
-            "Requestparticipants-[0-9]+-displayName"
-          )
-        ),
-        collapse = ";"
-      )
+    safe_hoist(
+      Branch,
+      Branch = list("value"),
+      .remove = FALSE
     ) |>
+    # tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
+    # tidyr::unnest_wider(starts_with("RequestParticipants"), names_sep = "-") |>
+    # rowwise() |>
+    # mutate(
+    #   RequestParticipants = stringr::str_c(
+    #     c_across(
+    #       matches(
+    #         "RequestParticipants-0-9+-displayName"
+    #       )
+    #     ),
+    #     collapse = ";"
+    #   )
+    # ) |>
     ungroup() |>
-    select(
-      IssueKey,
-      Created,
-      Updated,
-      Resolved,
-      Duedate,
-      Priority,
-      Status,
-      Assignee,
-      GPOPackageApprover,
-      GPOSubtype,
-      Organization,
-      City,
-      RequestType,
-      RequestParticipants,
-      Summary
-    ) |>
     mutate(
       across(
-        c(Created, Updated, Resolved, Duedate),
+        c(Created, Updated, Resolved),
         ~ as.Date(.x, format = "%Y-%m-%d")
       )
-    ) |>
-    # in dev all NA values so listed as logical, doubt that will hold long term
-    mutate(GPOSubtype = as.character(GPOSubtype))
+    )
 
   if (round == 1) {
     Issues <- issues
@@ -224,7 +237,16 @@ while (progress < 2) {
   round <- 2
 }
 
-Issues <- Issues |> mutate(RefreshDate = Sys.time(), .before = everything())
+Issues <- Issues |>
+  mutate(
+    across(
+      where(
+        is.character
+      ),
+      ~ na_if(.x, "")
+    )
+  ) |>
+  mutate(RefreshDate = Sys.time(), .before = everything())
 
 # Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)
@@ -235,28 +257,32 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     ".",
     DASHBOARD_ID,
     " (
-        RefreshDate          DATETIME2(3)     NOT NULL,
-        IssueKey             NVARCHAR(20)     NOT NULL,
-        Created              DATETIME2(3)     NULL,
-        Updated              DATETIME2(3)     NULL,
-        Resolved             DATETIME2(3)     NULL,
-        Duedate              DATETIME2(3)     NULL,
-        Priority             NVARCHAR(20)     NULL,
-        Status               NVARCHAR(50)     NULL,
-        Assignee             NVARCHAR(100)    NULL,
-        GPOPackageApprover   NVARCHAR(100)    NULL,
-        GPOSubtype           NVARCHAR(500)    NULL,
-        Organization         NVARCHAR(100)    NULL,
-        City                 NVARCHAR(200)    NULL,
-        RequestType          NVARCHAR(100)    NULL,
-        RequestParticipants  NVARCHAR(100)    NULL,
-        Summary              NVARCHAR(1000)   NULL
-      );
-      "
+      RefreshDate          DATETIME2(3)    NOT NULL,
+      IssueKey             NVARCHAR(10)    NOT NULL,
+      IssueType            NVARCHAR(10)    NULL,
+      Status               NVARCHAR(20)    NULL,
+      Created              DATE            NULL,
+      Updated              DATE            NULL,
+      Resolved             DATE            NULL,
+      Duedate              NVARCHAR(10)    NULL,
+      DueDateflexibility   NVARCHAR(10)    NULL,
+      Timetofirstresponse  BIGINT          NULL,
+      Timetoresolution     FLOAT           NULL,
+      Assignee             NVARCHAR(20)    NULL,
+      Audience             NVARCHAR(15)    NULL,
+      Frequency            NVARCHAR(20)    NULL,
+      Priority             NVARCHAR(10)    NULL,
+      ReportName           NVARCHAR(250)   NULL,
+      Reporter             NVARCHAR(25)    NULL,
+      RequestType          NVARCHAR(35)    NULL,
+      Summary              NVARCHAR(500)   NULL,
+      Team                 NVARCHAR(10)    NULL,
+      Branch               NVARCHAR(50)    NULL,
+      RequestParticipants  NVARCHAR(500)   NULL
+    );"
   )
   dbExecute(con, sql)
 }
-
 
 etl_error <- NULL
 
@@ -277,24 +303,29 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-          RefreshDate          DATETIME2(3)     NOT NULL,
-          IssueKey             NVARCHAR(20)     NOT NULL,
-          Created              DATETIME2(3)     NULL,
-          Updated              DATETIME2(3)     NULL,
-          Resolved             DATETIME2(3)     NULL,
-          Duedate              DATETIME2(3)     NULL,
-          Priority             NVARCHAR(20)     NULL,
-          Status               NVARCHAR(50)     NULL,
-          Assignee             NVARCHAR(100)    NULL,
-          GPOPackageApprover   NVARCHAR(100)    NULL,
-          GPOSubtype           NVARCHAR(500)    NULL,
-          Organization         NVARCHAR(100)    NULL,
-          City                 NVARCHAR(200)    NULL,
-          RequestType          NVARCHAR(100)    NULL,
-          RequestParticipants  NVARCHAR(100)    NULL,
-          Summary              NVARCHAR(1000)   NULL
-          );
-          "
+          RefreshDate          DATETIME2(3)    NOT NULL,
+          IssueKey             NVARCHAR(10)    NOT NULL,
+          IssueType            NVARCHAR(10)    NULL,
+          Status               NVARCHAR(20)    NULL,
+          Created              DATE            NULL,
+          Updated              DATE            NULL,
+          Resolved             DATE            NULL,
+          Duedate              NVARCHAR(10)    NULL,
+          DueDateflexibility   NVARCHAR(10)    NULL,
+          Timetofirstresponse  BIGINT          NULL,
+          Timetoresolution     FLOAT           NULL,
+          Assignee             NVARCHAR(20)    NULL,
+          Audience             NVARCHAR(15)    NULL,
+          Frequency            NVARCHAR(20)    NULL,
+          Priority             NVARCHAR(10)    NULL,
+          ReportName           NVARCHAR(250)   NULL,
+          Reporter             NVARCHAR(25)    NULL,
+          RequestType          NVARCHAR(35)    NULL,
+          Summary              NVARCHAR(500)   NULL,
+          Team                 NVARCHAR(10)    NULL,
+          Branch               NVARCHAR(50)    NULL,
+          RequestParticipants  NVARCHAR(500)   NULL
+        );"
       )
     )
 
@@ -335,32 +366,39 @@ tryCatch(
     n_updated <- dbExecute(
       con,
       paste0(
-        "UPDATE tgt
-        SET
-        tgt.RefreshDate         = src.RefreshDate,
-        tgt.Created             = src.Created,
-        tgt.Updated             = src.Updated,
-        tgt.Resolved            = src.Resolved,
-        tgt.Duedate             = src.Duedate,
-        tgt.Priority            = src.Priority,
-        tgt.Status              = src.Status,
-        tgt.Assignee            = src.Assignee,
-        tgt.GPOPackageApprover  = src.GPOPackageApprover,
-        tgt.GPOSubtype          = src.GPOSubtype,
-        tgt.Organization        = src.Organization,
-        tgt.City                = src.City,
-        tgt.RequestType         = src.RequestType,
-        tgt.RequestParticipants = src.RequestParticipants,
-        tgt.Summary             = src.Summary
-        FROM ",
+        "
+      UPDATE tgt
+      SET
+       tgt.RefreshDate         = src.RefreshDate,
+       tgt.IssueType           = src.IssueType,
+       tgt.Status              = src.Status,
+       tgt.Created             = src.Created,
+       tgt.Updated             = src.Updated,
+       tgt.Resolved            = src.Resolved,
+       tgt.Duedate             = src.Duedate,
+       tgt.DueDateflexibility  = src.DueDateflexibility,
+       tgt.Timetofirstresponse = src.Timetofirstresponse,
+       tgt.Timetoresolution    = src.Timetoresolution,
+       tgt.Assignee            = src.Assignee,
+       tgt.Audience            = src.Audience,
+       tgt.Frequency           = src.Frequency,
+       tgt.Priority            = src.Priority,
+       tgt.ReportName          = src.ReportName,
+       tgt.Reporter            = src.Reporter,
+       tgt.RequestType         = src.RequestType,
+       tgt.Summary             = src.Summary,
+       tgt.Team                = src.Team,
+       tgt.Branch              = src.Branch,
+       tgt.RequestParticipants = src.RequestParticipants
+      FROM ",
         SCHEMA_NAME,
         ".",
         DASHBOARD_ID,
         " tgt
-          INNER JOIN ",
+       INNER JOIN ",
         TEMP_TABLE,
         " src
-          ON tgt.IssueKey = src.IssueKey;"
+       ON tgt.IssueKey = src.IssueKey;"
       )
     )
 
@@ -372,51 +410,64 @@ tryCatch(
         SCHEMA_NAME,
         ".",
         DASHBOARD_ID,
-        " (
-          RefreshDate,
-          IssueKey,
-          Created,
-          Updated,
-          Resolved,
-          Duedate,
-          Priority,
-          Status,
-          Assignee,
-          GPOPackageApprover,
-          GPOSubtype,
-          Organization,
-          City,
-          RequestType,
-          RequestParticipants,
-          Summary
-          )
-        SELECT
-          src.RefreshDate,
-          src.IssueKey,
-          src.Created,
-          src.Updated,
-          src.Resolved,
-          src.Duedate,
-          src.Priority,
-          src.Status,
-          src.Assignee,
-          src.GPOPackageApprover,
-          src.GPOSubtype,
-          src.Organization,
-          src.City,
-          src.RequestType,
-          src.RequestParticipants,
-          src.Summary
-        FROM ",
+        "
+         (
+           RefreshDate,
+           IssueKey,
+           IssueType,
+           Status,
+           Created,
+           Updated,
+           Resolved,
+           Duedate,
+           DueDateflexibility,
+           Timetofirstresponse,
+           Timetoresolution,
+           Assignee,
+           Audience,
+           Frequency,
+           Priority,
+           ReportName,
+           Reporter,
+           RequestType,
+           Summary,
+           Team,
+           Branch,
+           RequestParticipants
+         )
+         SELECT
+           src.RefreshDate,
+           src.IssueKey,
+           src.IssueType,
+           src.Status,
+           src.Created,
+           src.Updated,
+           src.Resolved,
+           src.Duedate,
+           src.DueDateflexibility,
+           src.Timetofirstresponse,
+           src.Timetoresolution,
+           src.Assignee,
+           src.Audience,
+           src.Frequency,
+           src.Priority,
+           src.ReportName,
+           src.Reporter,
+           src.RequestType,
+           src.Summary,
+           src.Team,
+           src.Branch,
+           src.RequestParticipants
+         FROM ",
         TEMP_TABLE,
         " src
-        LEFT JOIN ",
+         LEFT JOIN ",
         SCHEMA_NAME,
         ".",
         DASHBOARD_ID,
         " tgt
-        ON tgt.IssueKey = src.IssueKey
-        WHERE tgt.IssueKey IS NULL;"
+           ON tgt.IssueKey = src.IssueKey
+         WHERE tgt.IssueKey IS NULL;"
       )
     )
 
@@ -461,5 +512,3 @@ if (is.null(etl_error)) {
   )
   stop(etl_error)
 }
-
-write.csv(Issues, "E:/Projects/PBI-Gateway/GPOPR_Issues.csv", row.names = FALSE)

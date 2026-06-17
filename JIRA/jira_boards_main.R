@@ -1,9 +1,25 @@
 # orchestrator_staging.R
 # Sourced by Task Scheduler via Rscript.exe
-# Runs all CBRE staging scripts, continues on error
+# Runs all Jira board scripts, continues on error
 source(here::here("renv/activate.R"))
+
+# Load helper functions
 source(here::here("utilities/R/utilities.R"))
 
+# Load necessary packages
+library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
+library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
+library(httr2, quietly = TRUE, warn.conflicts = FALSE)
+library(jsonlite, quietly = TRUE, warn.conflicts = FALSE)
+library(lubridate, quietly = TRUE, warn.conflicts = FALSE)
+library(purrr, quietly = TRUE, warn.conflicts = FALSE)
+library(tibble, quietly = TRUE, warn.conflicts = FALSE)
+library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
+
+library(odbc, quietly = TRUE, warn.conflicts = FALSE)
+library(DBI, quietly = TRUE, warn.conflicts = FALSE)
+
+# Setup orchestrator variables
 orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "jira_boards"
 
@@ -13,6 +29,7 @@ scripts <- c(
   "JIRA/Boards/JIRA-TEST-PAR-Issues.R",
   "JIRA/Boards/JIRA-TEST-PSO-Issues.R",
   "JIRA/Boards/JIRA-TEST-RBAS-Issues.R",
+  "JIRA/Boards/JIRA-TEST-RPR-Issues.R",
   "JIRA/Boards/JIRA-TEST-SBP-Issues.R",
   "JIRA/Boards/JIRA-TEST-SBPSB-Issues.R"
 )
