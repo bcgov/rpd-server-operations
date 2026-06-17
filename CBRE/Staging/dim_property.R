@@ -2,23 +2,6 @@
 # Begin timer
 task_start <- Sys.time()
 
-# Load helper functions
-source(here::here("utilities/R/utilities.R"))
-
-# Load libraries
-library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
-library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
-library(here, quietly = TRUE, warn.conflicts = FALSE)
-library(httr2, quietly = TRUE, warn.conflicts = FALSE)
-library(jsonlite, quietly = TRUE, warn.conflicts = FALSE)
-library(lubridate, quietly = TRUE, warn.conflicts = FALSE)
-library(purrr, quietly = TRUE, warn.conflicts = FALSE)
-library(tibble, quietly = TRUE, warn.conflicts = FALSE)
-library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
-
-library(odbc, quietly = TRUE, warn.conflicts = FALSE)
-library(DBI, quietly = TRUE, warn.conflicts = FALSE)
-
 # Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
@@ -92,7 +75,11 @@ if (raw_data$status == "no_data") {
     status = "NO_DATA",
     message = no_data_msg
   )
-  stop("No new data from API")
+  cond <- structure(
+    class = c("no_data_condition", "condition"),
+    list(message = no_data_msg)
+  )
+  stop(cond)
 }
 
 clean_data <- raw_data |>
