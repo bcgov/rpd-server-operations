@@ -109,9 +109,7 @@ while (progress < 2) {
   )
 
   # Used to update total_results in while loop
-  nextPageToken <- resp
-  "nextPageToken"
-  1
+  nextPageToken <- resp["nextPageToken"][[1]]
 
   # total results isn't always accurate, check that response has issues
   if (length(resp$issues) == 0) {
@@ -151,7 +149,9 @@ while (progress < 2) {
       Status,
       Created,
       Updated,
+      # Enddate,
       Resolved,
+      # Resolution,
       Duedate,
       DueDateflexibility,
       Timetofirstresponse,
@@ -207,25 +207,22 @@ while (progress < 2) {
       Branch = list("value"),
       .remove = FALSE
     ) |>
-    # tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-    # tidyr::unnest_wider(starts_with("RequestParticipants"), names_sep = "-") |>
-    # rowwise() |>
-    # mutate(
-    #   RequestParticipants = stringr::str_c(
-    #     c_across(
-    #       matches(
-    #         "RequestParticipants-0-9+-displayName"
-    #       )
-    #     ),
-    #     collapse = ";"
-    #   )
-    # ) |>
+    safe_hoist_all(
+      RequestParticipants,
+      RequestParticipants = list("displayName")
+    ) |>
     ungroup() |>
     mutate(
       across(
         c(Created, Updated, Resolved),
         ~ as.Date(.x, format = "%Y-%m-%d")
       )
+    ) |>
+    mutate(
+      DaysToResolution = Timetoresolution / (1000 * 60 * 60 * 24),
+      MinutesToFirstResponse = Timetofirstresponse / (1000 * 60),
+      .keep = "unused",
+      .after = DueDateflexibility
     )
 
   if (round == 1) {
@@ -257,28 +254,28 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     ".",
     DASHBOARD_ID,
     " (
-      RefreshDate          DATETIME2(3)    NOT NULL,
-      IssueKey             NVARCHAR(10)    NOT NULL,
-      IssueType            NVARCHAR(10)    NULL,
-      Status               NVARCHAR(20)    NULL,
-      Created              DATE            NULL,
-      Updated              DATE            NULL,
-      Resolved             DATE            NULL,
-      Duedate              NVARCHAR(10)    NULL,
-      DueDateflexibility   NVARCHAR(10)    NULL,
-      Timetofirstresponse  BIGINT          NULL,
-      Timetoresolution     FLOAT           NULL,
-      Assignee             NVARCHAR(20)    NULL,
-      Audience             NVARCHAR(15)    NULL,
-      Frequency            NVARCHAR(20)    NULL,
-      Priority             NVARCHAR(10)    NULL,
-      ReportName           NVARCHAR(250)   NULL,
-      Reporter             NVARCHAR(25)    NULL,
-      RequestType          NVARCHAR(35)    NULL,
-      Summary              NVARCHAR(500)   NULL,
-      Team                 NVARCHAR(10)    NULL,
-      Branch               NVARCHAR(50)    NULL,
-      RequestParticipants  NVARCHAR(500)   NULL
+      RefreshDate             DATETIME2(3)    NOT NULL,
+      IssueKey                NVARCHAR(10)    NOT NULL,
+      IssueType               NVARCHAR(10)    NULL,
+      Status                  NVARCHAR(20)    NULL,
+      Created                 DATE            NULL,
+      Updated                 DATE            NULL,
+      Resolved                DATE            NULL,
+      Duedate                 NVARCHAR(10)    NULL,
+      DueDateflexibility      NVARCHAR(10)    NULL,
+      MinutesToFirstResponse  Decimal(18,9)   NULL,
+      DaysToResolution        Decimal(18,9)   NULL,
+      Assignee                NVARCHAR(20)    NULL,
+      Audience                NVARCHAR(15)    NULL,
+      Frequency               NVARCHAR(20)    NULL,
+      Priority                NVARCHAR(10)    NULL,
+      ReportName              NVARCHAR(250)   NULL,
+      Reporter                NVARCHAR(25)    NULL,
+      RequestType             NVARCHAR(35)    NULL,
+      Summary                 NVARCHAR(500)   NULL,
+      Team                    NVARCHAR(10)    NULL,
+      Branch                  NVARCHAR(50)    NULL,
+      RequestParticipants     NVARCHAR(500)   NULL
     );"
   )
   dbExecute(con, sql)
@@ -303,28 +300,28 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-          RefreshDate          DATETIME2(3)    NOT NULL,
-          IssueKey             NVARCHAR(10)    NOT NULL,
-          IssueType            NVARCHAR(10)    NULL,
-          Status               NVARCHAR(20)    NULL,
-          Created              DATE            NULL,
-          Updated              DATE            NULL,
-          Resolved             DATE            NULL,
-          Duedate              NVARCHAR(10)    NULL,
-          DueDateflexibility   NVARCHAR(10)    NULL,
-          Timetofirstresponse  BIGINT          NULL,
-          Timetoresolution     FLOAT           NULL,
-          Assignee             NVARCHAR(20)    NULL,
-          Audience             NVARCHAR(15)    NULL,
-          Frequency            NVARCHAR(20)    NULL,
-          Priority             NVARCHAR(10)    NULL,
-          ReportName           NVARCHAR(250)   NULL,
-          Reporter             NVARCHAR(25)    NULL,
-          RequestType          NVARCHAR(35)    NULL,
-          Summary              NVARCHAR(500)   NULL,
-          Team                 NVARCHAR(10)    NULL,
-          Branch               NVARCHAR(50)    NULL,
-          RequestParticipants  NVARCHAR(500)   NULL
+          RefreshDate             DATETIME2(3)    NOT NULL,
+          IssueKey                NVARCHAR(10)    NOT NULL,
+          IssueType               NVARCHAR(10)    NULL,
+          Status                  NVARCHAR(20)    NULL,
+          Created                 DATE            NULL,
+          Updated                 DATE            NULL,
+          Resolved                DATE            NULL,
+          Duedate                 NVARCHAR(10)    NULL,
+          DueDateflexibility      NVARCHAR(10)    NULL,
+          MinutesToFirstResponse  Decimal(18,9)   NULL,
+          DaysToResolution        Decimal(18,9)   NULL,
+          Assignee                NVARCHAR(20)    NULL,
+          Audience                NVARCHAR(15)    NULL,
+          Frequency               NVARCHAR(20)    NULL,
+          Priority                NVARCHAR(10)    NULL,
+          ReportName              NVARCHAR(250)   NULL,
+          Reporter                NVARCHAR(25)    NULL,
+          RequestType             NVARCHAR(35)    NULL,
+          Summary                 NVARCHAR(500)   NULL,
+          Team                    NVARCHAR(10)    NULL,
+          Branch                  NVARCHAR(50)    NULL,
+          RequestParticipants     NVARCHAR(500)   NULL
         );"
       )
     )
@@ -369,27 +366,27 @@ tryCatch(
         "
       UPDATE tgt
       SET
-       tgt.RefreshDate         = src.RefreshDate,
-       tgt.IssueType           = src.IssueType,
-       tgt.Status              = src.Status,
-       tgt.Created             = src.Created,
-       tgt.Updated             = src.Updated,
-       tgt.Resolved            = src.Resolved,
-       tgt.Duedate             = src.Duedate,
-       tgt.DueDateflexibility  = src.DueDateflexibility,
-       tgt.Timetofirstresponse = src.Timetofirstresponse,
-       tgt.Timetoresolution    = src.Timetoresolution,
-       tgt.Assignee            = src.Assignee,
-       tgt.Audience            = src.Audience,
-       tgt.Frequency           = src.Frequency,
-       tgt.Priority            = src.Priority,
-       tgt.ReportName          = src.ReportName,
-       tgt.Reporter            = src.Reporter,
-       tgt.RequestType         = src.RequestType,
-       tgt.Summary             = src.Summary,
-       tgt.Team                = src.Team,
-       tgt.Branch              = src.Branch,
-       tgt.RequestParticipants = src.RequestParticipants
+       tgt.RefreshDate            = src.RefreshDate,
+       tgt.IssueType              = src.IssueType,
+       tgt.Status                 = src.Status,
+       tgt.Created                = src.Created,
+       tgt.Updated                = src.Updated,
+       tgt.Resolved               = src.Resolved,
+       tgt.Duedate                = src.Duedate,
+       tgt.DueDateflexibility     = src.DueDateflexibility,
+       tgt.MinutesToFirstResponse = src.MinutesToFirstResponse,
+       tgt.DaysToResolution       = src.DaysToResolution,
+       tgt.Assignee               = src.Assignee,
+       tgt.Audience               = src.Audience,
+       tgt.Frequency              = src.Frequency,
+       tgt.Priority               = src.Priority,
+       tgt.ReportName             = src.ReportName,
+       tgt.Reporter               = src.Reporter,
+       tgt.RequestType            = src.RequestType,
+       tgt.Summary                = src.Summary,
+       tgt.Team                   = src.Team,
+       tgt.Branch                 = src.Branch,
+       tgt.RequestParticipants    = src.RequestParticipants
       FROM ",
         SCHEMA_NAME,
         ".",
@@ -421,8 +418,8 @@ tryCatch(
            Resolved,
            Duedate,
            DueDateflexibility,
-           Timetofirstresponse,
-           Timetoresolution,
+           MinutesToFirstResponse,
+           DaysToResolution,
            Assignee,
            Audience,
            Frequency,
@@ -445,8 +442,8 @@ tryCatch(
            src.Resolved,
            src.Duedate,
            src.DueDateflexibility,
-           src.Timetofirstresponse,
-           src.Timetoresolution,
+           src.MinutesToFirstResponse,
+           src.DaysToResolution,
            src.Assignee,
            src.Audience,
            src.Frequency,

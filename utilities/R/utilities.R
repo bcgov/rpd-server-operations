@@ -455,109 +455,126 @@ safe_hoist <- function(.data, .col, ...) {
 #' Extracts specified fields from all elements at a given level in nested list
 #' structures and concatenates them into a single string. Handles variable list
 #' lengths, NA values, and complex nested structures commonly found in API responses.
+#' When the source column is not a list (e.g. a vector of NAs returned by an API
+#' call with no data), all output columns are gracefully populated with NA.
 #'
-#' @param .data A data frame
-#' @param .col Column name containing nested lists (supports tidy selection)
-#' @param path A vector or list specifying the path to navigate through the nested
-#'   structure. Can contain numeric indices (for list positions) and character
-#'   strings (for named elements). The final element should be the field name
-#'   to extract from all elements at that level.
-#' @param sep Character string to separate multiple extracted values (default: ";")
-#' @param .remove Logical; if TRUE, removes the original nested column from the
-#'   result (default: FALSE)
+#' @param .data A data frame.
+#' @param .col Column name containing nested lists (supports tidy selection).
+#' @param ... Named arguments of the form \code{new_col_name = path}, where the
+#'   argument name becomes the output column name and the value is a character
+#'   vector or list specifying the path to navigate through the nested structure.
+#'   Multiple arguments can be supplied to extract several fields in one call;
+#'   output columns are inserted in order after \code{.col}. Numeric values in
+#'   the path navigate to a list index (1-based); character values navigate to a
+#'   named element. The final element in the path is extracted from all objects
+#'   at that level and concatenated.
+#' @param sep Character string used to separate multiple extracted values.
+#'   Default: \code{";"}.
+#' @param .remove Logical; if \code{TRUE}, removes the original nested column
+#'   from the result. Default: \code{FALSE}.
 #'
-#' @return A data frame with a new column containing the concatenated extracted
-#'   values. The new column name follows the pattern: original_col_path_elements
+#' @return A data frame with one new column per \code{...} argument, each
+#'   containing the concatenated extracted values for that path, inserted after
+#'   \code{.col}.
 #'
-#' @details This function is designed for complex nested API responses where you
-#' need to extract the same field from multiple nested objects. For example,
-#' extracting all participant names from a list of participant objects.
+#' @details
+#' This function is designed for complex nested API responses where you need to
+#' extract the same field from multiple nested objects — for example, pulling
+#' \code{displayName} from every participant in a list of participant objects.
 #'
-#' The path parameter works as follows:
-#' - Numeric values: Navigate to that index in a list (1-based indexing)
-#' - Character values: Navigate to that named element
-#' - Final character value: Extract this field from all elements at the current level
+#' Unlike \code{\link{safe_hoist}}, which uses \code{tidyr::hoist()} internally
+#' and targets a single element at a known index, \code{safe_hoist_all} fans out
+#' across all elements at the terminal level of the path and concatenates the
+#' results. Integer indexing mid-path is supported for intermediate navigation,
+#' but the final path step should always be a named field.
 #'
 #' @examples
 #' \dontrun{
-#' # Extract displayName from all participants
-#' issues %>% safe_hoist_all(RequestParticipants, path = list("displayName"))
+#' # Extract displayName from all participants, naming the output column
+#' issues |> safe_hoist_all(RequestParticipants, Participants = "displayName")
 #'
-#' # Extract from deeper nested structure
-#' data %>% safe_hoist_all(nested_col,
-#'                         path = list("users", "profile", "name"),
-#'                         sep = " | ")
+#' # Extract multiple fields in one call
+#' issues |>
+#'   safe_hoist_all(
+#'     RequestParticipants,
+#'     Participants     = "displayName",
+#'     ParticipantEmail = "emailAddress"
+#'   )
 #'
-#' # Navigate by index then extract field
-#' data %>% safe_hoist_all(responses,
-#'                         path = list(1L, "answers", "text"),
-#'                         .remove = TRUE)
+#' # Navigate a deeper path before fanning out, with a custom separator
+#' data |>
+#'   safe_hoist_all(
+#'     nested_col,
+#'     Names = c("users", "profile", "name"),
+#'     sep = " | "
+#'   )
+#'
+#' # Remove the source column after extraction
+#' data |> safe_hoist_all(responses, Answers = c("answers", "text"), .remove = TRUE)
 #' }
 #'
-#' @seealso \code{\link{safe_hoist}} for simpler list column extraction
+#' @seealso \code{\link{safe_hoist}} for single-element extraction from list columns.
 #' @export
-#'
-safe_hoist_all <- function(.data, .col, path, sep = ";", .remove = FALSE) {
-  .col <- tidyselect::vars_pull(names(.data), {{ .col }})
-  col_data <- .data[[.col]]
+safe_hoist_all <- function(.data, .col, ..., sep = ";", .remove = FALSE) {
+  .col_name <- unname(tidyselect::vars_pull(names(.data), {{ .col }}))
+  col_data <- .data[[.col_name]]
 
-  # Function to extract values from a single nested list element
+  # Capture named ... args — name = output column, value = path vector
+  dot_args <- list(...)
+  if (
+    length(dot_args) == 0 ||
+      is.null(names(dot_args)) ||
+      any(names(dot_args) == "")
+  ) {
+    rlang::abort(
+      "All `...` arguments must be named. Use `new_col_name = path` syntax."
+    )
+  }
+
   extract_nested_values <- function(x, path) {
-    # Handle NA/NULL cases more carefully
-    if (length(x) == 1 && (is.na(x) || is.null(x))) {
+    if (is.null(x) || (length(x) == 1 && is.na(x))) {
       return(NA_character_)
     }
     if (!is.list(x)) {
       return(NA_character_)
     }
 
-    # Navigate through the path step by step
     current <- x
+    path <- as.list(path) # normalise — accepts c() or list() from caller
+
     for (i in seq_along(path)) {
       step <- path[[i]]
-
-      # Check if current is valid before proceeding
       if (is.null(current) || !is.list(current)) {
         return(NA_character_)
       }
 
-      # If this is the last step in the path
       if (i == length(path)) {
-        # This should be the field we want to extract from all elements
         if (is.character(step)) {
-          # Extract the field from all elements at this level
-          if (length(current) > 0 && all(map_lgl(current, is.list))) {
-            # We have a list of list elements (participants)
+          if (length(current) > 0 && all(purrr::map_lgl(current, is.list))) {
             values <- purrr::map_chr(current, function(element) {
               if (is.list(element) && step %in% names(element)) {
                 val <- element[[step]]
                 if (is.null(val)) {
                   return(NA_character_)
                 }
-                return(as.character(val))
+                as.character(val)
               } else {
-                return(NA_character_)
+                NA_character_
               }
             })
-            # Remove NA values and concatenate
             values <- values[!is.na(values)]
-            if (length(values) > 0) {
-              return(paste(values, collapse = sep))
-            }
+            if (length(values) > 0) return(paste(values, collapse = sep))
           }
         }
         return(NA_character_)
       } else {
-        # Navigate deeper - this is an intermediate step
         if (is.numeric(step)) {
-          # Index into the list
           if (length(current) >= step && step > 0) {
             current <- current[[step]]
           } else {
             return(NA_character_)
           }
         } else if (is.character(step)) {
-          # Navigate by name
           if (step %in% names(current)) {
             current <- current[[step]]
           } else {
@@ -568,28 +585,39 @@ safe_hoist_all <- function(.data, .col, path, sep = ";", .remove = FALSE) {
         }
       }
     }
-
     return(NA_character_)
   }
 
-  # Apply the extraction to each row - handle potential errors
-  extracted_values <- purrr::map_chr(col_data, function(x) {
-    purrr::possibly(extract_nested_values, NA_character_)(x, path)
-  })
+  # Process each named ... arg and add its column, chaining .after the previous
+  result <- .data
+  after_col <- .col_name
 
-  # Create new column name
-  new_col_name <- paste0(.col, "_", paste(path, collapse = "_"))
+  for (new_col_name in names(dot_args)) {
+    path <- dot_args[[new_col_name]]
+    # cat("new_col_name:", new_col_name, "\n")
+    # cat("last_col class:", class(after_col), "\n")
+    # cat("last_col typeof:", typeof(after_col), "\n")
+    # cat("last_col value:", after_col, "\n")
 
-  # Add the new column to the data frame
-  result <- .data %>%
-    mutate(!!new_col_name := extracted_values, .after = all_of(.col))
-
-  # Optionally remove the original column
-  if (.remove) {
-    result <- result %>% select(-all_of(.col))
+    extracted_values <- purrr::map_chr(col_data, function(x) {
+      tryCatch(
+        extract_nested_values(x, path),
+        error = function(e) NA_character_
+      )
+    })
+    result <- mutate(
+      result,
+      !!new_col_name := extracted_values,
+      .after = all_of(after_col)
+    )
+    last_col <- new_col_name
   }
 
-  return(result)
+  if (.remove) {
+    result <- select(result, -all_of(.col_name))
+  }
+
+  result
 }
 
 

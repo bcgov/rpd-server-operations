@@ -57,9 +57,17 @@ clean_data <- resp |>
   tidyr::unnest_wider(
     doTheseFilesContainInformationThatIfCompromisedCouldCauseExtremelyGraveInjuryToAnIndividualOrganizationOrGovernment
   ) |>
+  # can we get these two into a safe_hoist_all() single call?
   safe_hoist(
     form,
     SubmissionId = list("submissionId"),
+    # SubmissionTime = list("submittedAt"),
+    .remove = FALSE
+  ) |>
+  safe_hoist(
+    form,
+    # SubmissionId = list("submissionId"),
+    SubmissionTime = list("submittedAt"),
     .remove = FALSE
   ) |>
   safe_hoist(
@@ -126,6 +134,7 @@ clean_data <- resp |>
   ) |>
   select(
     SubmissionId,
+    SubmissionTime,
     ProjectName,
     ProjectNumberOrWorkOrder,
     Building,
@@ -152,6 +161,9 @@ clean_data <- resp |>
     RequestorInformation,
     DateRequired
   ) |>
+  mutate(
+    SubmissionTime = as.POSIXct(SubmissionTime, format = "%Y-%m-%dT%H:%M:%OS")
+  ) |>
   mutate(RefreshDate = Sys.time(), .before = everything()) |>
   mutate(across(where(is.character), ~ na_if(., "")))
 
@@ -166,6 +178,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     " (
         RefreshDate                    DATETIME2(3)     NOT NULL,
         SubmissionId                   NVARCHAR(36)     NOT NULL,
+        SubmissionTime                 DATETIME2(3)     NOT NULL,
         ProjectName                    NVARCHAR(1500)   NULL,
         ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
         Building                       NVARCHAR(250)    NULL,
@@ -216,6 +229,7 @@ tryCatch(
         " (
           RefreshDate                    DATETIME2(3)     NOT NULL,
           SubmissionId                   NVARCHAR(36)     NOT NULL,
+          SubmissionTime                 DATETIME2(3)     NOT NULL,
           ProjectName                    NVARCHAR(1500)   NULL,
           ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
           Building                       NVARCHAR(250)    NULL,
@@ -302,6 +316,7 @@ tryCatch(
         "UPDATE tgt
         SET
           tgt.RefreshDate                    = src.RefreshDate,
+          tgt.SubmissionTime                 = src.SubmissionTime,
           tgt.ProjectName                    = src.ProjectName,
           tgt.ProjectNumberOrWorkOrder       = src.ProjectNumberOrWorkOrder,
           tgt.Building                       = src.Building,
@@ -351,6 +366,7 @@ tryCatch(
           (
           RefreshDate,
           SubmissionId,
+          SubmissionTime,
           ProjectName,
           ProjectNumberOrWorkOrder,
           Building,
@@ -380,6 +396,7 @@ tryCatch(
         SELECT
           src.RefreshDate,
           src.SubmissionId,
+          src.SubmissionTime,
           src.ProjectName,
           src.ProjectNumberOrWorkOrder,
           src.Building,

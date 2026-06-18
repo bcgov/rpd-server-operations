@@ -186,13 +186,13 @@ while (progress < 2) {
     safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
     safe_hoist_all(
       RequestParticipants,
-      path = list("displayName"),
+      RequestParticipants = list("displayName"),
       .remove = FALSE
     ) |>
-    mutate(
-      RequestParticipants = RequestParticipants_displayName,
-      .keep = "unused"
-    ) |>
+    # mutate(
+    #   RequestParticipants = RequestParticipants_displayName,
+    #   .keep = "unused"
+    # ) |>
     safe_hoist(
       RequestType,
       RequestType = list("requestType", "name"),
