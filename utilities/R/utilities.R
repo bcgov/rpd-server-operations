@@ -647,7 +647,7 @@ log_daily_etl_run <- function(
 
   # Construct log row
   log_row <- tibble::tibble(
-    run_timestamp = as.POSIXct(Sys.time()),
+    run_timestamp = format(lubridate::with_tz(Sys.time(), tzone = "America/Vancouver"), "%Y-%m-%d %H:%M:%S"),
     etl_env = etl_env,
     host = Sys.info()[["nodename"]],
     api_name = api_name,

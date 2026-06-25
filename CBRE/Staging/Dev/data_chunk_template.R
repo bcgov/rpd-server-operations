@@ -55,19 +55,56 @@ source(here::here("utilities/R/utilities.R"))
 # es_report_combined_vw_23apr_pobc
 # pjm_report_project_details_vw
 # client_property_id, property_skey
-CBRE_TABLE_NAME <- "pjm_report_project_details_vw"
+
+# es_fact_property_rating_vw
+#   No Data
+# es_fact_service_account_vw
+#   5319 rows of data
+# es_fact_service_account_allocation_vw
+#   No Data
+# es_fact_property_energy_usage_and_weather_trending_vw
+#   266 pages
+# es_fact_property_energy_usage_and_weather_trending_allocated_vw
+#   266 pages
+# es_fact_property_emission_trending_vw
+#   152 pages
+# es_fact_program_action_vw
+#   No Data
+# es_fact_invoice_vw
+#   273 pages...if searching for most recent date.
+# es_fact_invoice_calendarized_vw
+# es_fact_financial_planning_vw
+# es_fact_allocation_by_reporing_group_vw
+#   510 pages
+# es_fact_allocated_invoice_calendarized_vw
+#   3847 pages
+# es_fact_accrual_vw
+#   No Data
+# es_fact_accrual_allocated_vw
+#   No Data
+# es_energy_targets
+#   27 rows - goal targets for various services
+# es_dim_service_account_vw
+#   5318 rows
+# es_dim_program_vw
+#   No Data
+# es_dim_program_action_plan_vw
+#   No Data
+# es_dim_invoice_vw
+#   273 pages -- first 5k rows have mainly missing data columns??
+# com_fact_property_reporting_group_vw
+
+CBRE_TABLE_NAME <- "dim_property_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-04-01T00:00:00Z",
-  end_time = "2026-06-17T00:00:00Z"
+  end_time = "2026-06-25T23:59:59Z"
 )
 
 raw_data <- chunk_1$data
 
-raw_data <- raw_data |>
-  mutate(property_skey = as.character(property_skey))
 
 chunk_2 <- call_cbre_api(
   CBRE_TABLE_NAME,

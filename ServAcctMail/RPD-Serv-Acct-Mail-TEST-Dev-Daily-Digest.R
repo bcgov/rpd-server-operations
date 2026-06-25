@@ -40,7 +40,7 @@ n_orch <- nrow(orch_rows)
 n_orch_ok <- sum(orch_rows$status == "SUCCESS")
 n_orch_fail <- sum(orch_rows$status %in% c("ERROR", "PARTIAL_FAILURE"))
 n_scripts <- nrow(script_rows)
-n_scripts_ok <- sum(script_rows$status == "SUCCESS")
+n_scripts_ok <- sum(script_rows$status %in% c("SUCCESS", "NO_DATA"))
 n_scripts_fail <- n_scripts - n_scripts_ok
 total_ins <- sum(script_rows$n_inserted, na.rm = TRUE)
 total_upd <- sum(script_rows$n_updated, na.rm = TRUE)

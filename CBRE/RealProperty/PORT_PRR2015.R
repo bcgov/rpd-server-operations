@@ -53,3 +53,5 @@ query <- dbSendQuery(
 )
 WorkOrderData <- dbFetch(query, n = -1)
 dbClearResult(query)
+
+# Have to link the property_skey to something with building/land information.
