@@ -53,7 +53,20 @@ while (progress < 2) {
     req_headers(Authorization = token_string) |>
     # configure project, max_results, and start_at
     req_url_query(
-      jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
+      # jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
+      jql = I(
+        # I wrapper skips auto-formatting of the extra "=" sign
+        utils::URLencode(
+          paste0(
+            "project=",
+            DASHBOARD_ID,
+            " AND updated >= \"",
+            etl_window$jira_start_time,
+            "\""
+          ),
+          repeated = TRUE
+        )
+      ),
       expand = expand_opts,
       maxResults = max_results,
       fields = "*all",
