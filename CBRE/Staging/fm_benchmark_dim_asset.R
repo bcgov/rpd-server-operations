@@ -30,8 +30,8 @@ con <- dbConnect(
 # Query API
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
-  start_time = etl_window$start_time,
-  end_time = etl_window$end_time
+  start_time = etl_window$cbre_start_time,
+  end_time = etl_window$cbre_end_time
 )
 
 if (raw_data$status == "partial") {

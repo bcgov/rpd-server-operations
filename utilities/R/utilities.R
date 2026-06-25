@@ -708,12 +708,13 @@ get_etl_window <- function(today = Sys.Date()) {
   lookback_days <- if (day_of_week == "Monday") 3L else 1L
 
   list(
-    start_time = paste0(today - lookback_days, "T00:00:00Z"),
-    end_time = paste0(
+    cbre_start_time = paste0(today - lookback_days, "T00:00:00Z"),
+    cbre_end_time = paste0(
       today,
       "T",
       format(lubridate::with_tz(Sys.time(), tzone = "UTC"), "%H:%M:%S"),
       "Z"
-    )
+    ),
+    jira_start_time = paste(today - lookback_days, "00:00")
   )
 }

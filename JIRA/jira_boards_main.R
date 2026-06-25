@@ -23,6 +23,8 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "jira_boards"
 
+etl_window <- get_etl_window()
+
 scripts <- c(
   "JIRA/Boards/JIRA-TEST-CSR-Issues.R",
   "JIRA/Boards/JIRA-TEST-GPOPR-Issues.R",

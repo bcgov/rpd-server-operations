@@ -53,7 +53,20 @@ while (progress < 2) {
     req_headers_redacted(Authorization = token_string) |> # redacted by httr2 in printed output
     # configure project, max_results, and start_at
     req_url_query(
-      jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
+      # jql = I(paste0("project=", DASHBOARD_ID)),
+      jql = I(
+        # I wrapper skips auto-formatting of the extra "=" sign
+        utils::URLencode(
+          paste0(
+            "project=",
+            DASHBOARD_ID,
+            " AND updated >= \"",
+            etl_window$jira_start_time,
+            "\""
+          ),
+          repeated = TRUE
+        )
+      ),
       expand = expand_opts,
       maxResults = max_results,
       fields = "*all",
@@ -285,6 +298,25 @@ StatusChange <- Issues |>
   summarise(TimeElapsed = sum(TimeElapsed, na.rm = TRUE)) |>
   pivot_wider(names_from = item_fromString, values_from = TimeElapsed) |>
   ungroup()
+
+# With smaller datasets now that I filter on updated, need to make sure all status type columns exist
+status_cols <- c(
+  "Closed",
+  "InProgress",
+  "Open",
+  "Reopened",
+  "WaitingforCustomer",
+  "OnHold"
+)
+
+missing_cols <- setdiff(status_cols, names(StatusChange))
+
+if (length(missing_cols) > 0) {
+  StatusChange <- add_column(
+    StatusChange,
+    !!!set_names(rep(list(NA_real_), length(missing_cols)), missing_cols)
+  )
+}
 
 # Deal with issues where extra newline characters screwed up the read in of data to power bi
 Issues <- Issues |>
