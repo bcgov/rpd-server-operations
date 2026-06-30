@@ -47,11 +47,191 @@ con <- dbConnect(
 # Query SQL Datasets ####
 query <- dbSendQuery(
   con,
-  "SELECT property_skey, FYCreation, COUNT(*) AS WorkOrderCount
-                     FROM CbreStaging.fm_fact_workorder
-                     GROUP BY property_skey, FYCreation;"
+  "SELECT
+   property_skey AS property_skey,
+   address_line1 AS com_address,
+   client_property_name AS com_client_property_name,
+   client_property_id AS com_client_property_id,
+   alternate_property_id AS com_alternate_property_id
+   FROM CbreStaging.com_dim_property"
 )
-WorkOrderData <- dbFetch(query, n = -1)
+
+ComDimProperty <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-# Have to link the property_skey to something with building/land information.
+query <- dbSendQuery(
+  con,
+  "SELECT
+   DISTINCT property_skey
+   FROM CbreStaging.es_fact_invoice"
+)
+EsFactInvoice <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT
+   property_skey,
+   client_property_id,
+   client_property_name,
+   Identifier,
+   address_line1
+   FROM CbreStaging.dim_property"
+)
+DimProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT
+   *
+   FROM CbreStaging.dim_property"
+)
+DimFullProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT * FROM RealProperty.FacilityDetail"
+)
+FacilityDetail <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- EsFactInvoice |>
+  left_join(ComDimProperty, by = join_by(property_skey)) |>
+  left_join(
+    DimProperty,
+    by = join_by(com_alternate_property_id == client_property_id)
+  ) |>
+  mutate(
+    Unified_Identifer = case_when(
+      is.na(Identifier) ~ com_alternate_property_id, # cases where this is an RPD### value, need fix
+      .default = Identifier
+    ),
+    envizi_property_skey = property_skey.x,
+    archibus_property_skey = property_skey.y,
+    .before = everything()
+  )
+
+test2 <- test |>
+  filter(!startsWith(Unified_Identifer, "B"))
+
+test3 <- test2 |>
+  select(-c(property_skey.x, property_skey.y)) |>
+  left_join(
+    ComFullProperty,
+    by = join_by(com_client_property_id == client_property_id)
+  )
+# Need to get by building,
+# RentableArea, ParkingStalls, BaseRent, O&M, Utilities, Admin (all kinds), LLO&M,
+
+# mirror for B0027003
+
+# Build property and building sets.
+
+query <- dbSendQuery(
+  con,
+  "SELECT
+  *
+  FROM CbreStaging.com_dim_property"
+)
+
+ComFullProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+ComSet <- ComFullProperty |>
+  select(
+    property_skey,
+    com_address_line1 = address_line1,
+    com_client_property_name = client_property_name,
+    com_client_property_id = client_property_id,
+    com_source_system_code = source_system_code
+  )
+
+query <- dbSendQuery(
+  con,
+  "SELECT
+   *
+   FROM CbreStaging.dim_property"
+)
+DimFullProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+DimPropSet <- DimFullProperty |>
+  select(
+    property_skey,
+    Identifier,
+    dim_address_line1 = address_line1,
+    dim_client_property_name = client_property_name,
+    dim_client_property_id = client_property_id
+  )
+
+test_skey_join <- ComSet |>
+  full_join(DimPropSet, by = join_by(property_skey)) |>
+  mutate(
+    dim_address_line1 = str_replace(
+      dim_address_line1,
+      "\\s{2,}",
+      NA_character_
+    ),
+    Identifier = na_if(Identifier, "")
+  )
+
+subset <- test_skey_join |>
+  filter(!is.na(Identifier))
+
+subset_na <- test_skey_join |>
+  filter(is.na(Identifier))
+
+# 100% fails to join by property_skey
+subset_envizi <- test_skey_join |>
+  filter(com_source_system_code == "Envizi")
+
+# fix by joining on client_property_id? -- Nope
+subset_envizi_client_id <- subset_envizi |>
+  select(
+    com_property_skey = property_skey,
+    com_address_line1,
+    com_client_property_name,
+    com_client_property_id,
+    com_source_system_code
+  ) |>
+  left_join(
+    DimPropSet,
+    by = join_by(com_client_property_id == dim_client_property_id)
+  )
+
+envizi_full_set <- ComFullProperty |>
+  filter(source_system_code == "Envizi")
+#  only one row falls into this condition, but it links of property_skey and has a populated Identifier
+# subset_no_com <- test_skey_join |>
+#   filter(is.na(com_source_system_code))
+range(envizi_full_set$property_skey)
+# [1] "20725346" "26083602"
+range(DimFullProperty$property_skey)
+# [1] "14418084" "16337411"
+
+query <- dbSendQuery(
+  con,
+  "SELECT property_skey, Identifier FROM CbreStaging.fm_dim_property_extended_attribute;"
+)
+DimProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+range(DimProperty$property_skey)
+range(DimProperty$property_skey)
+# [1] "14418084" "27779682"
+
+test_envizi <- envizi_full_set |>
+  left_join(DimProperty, by = join_by(property_skey))
+
+
+test_client_id <- ComFullProperty |>
+  select(
+    property_skey,
+    address_line1,
+    client_property_name,
+    client_property_id
+  ) |>
+  left_join(DimFullProperty, by = join_by(client_property_id)) |>
+  filter(!(is.na(address_line1.y) | grepl("\\s{2,}", address_line1.y)))

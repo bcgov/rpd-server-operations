@@ -36,6 +36,7 @@ scripts <- c(
   "CBRE/Staging/archibus_dv.R",
   "CBRE/Staging/archibus_dp.R",
   # Uses etl_window
+  "CBRE/Staging/com_dim_property.R",
   "CBRE/Staging/dim_budget.R",
   "CBRE/Staging/dim_contact.R",
   "CBRE/Staging/dim_project_activity.R",
