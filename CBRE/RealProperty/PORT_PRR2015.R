@@ -235,3 +235,127 @@ test_client_id <- ComFullProperty |>
   ) |>
   left_join(DimFullProperty, by = join_by(client_property_id)) |>
   filter(!(is.na(address_line1.y) | grepl("\\s{2,}", address_line1.y)))
+
+
+query <- dbSendQuery(
+  con,
+  "SELECT DISTINCT property_skey
+  FROM CbreStaging.es_fact_invoice;"
+)
+EsInvoice <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+query <- dbSendQuery(
+  con,
+  "SELECT
+  *
+  FROM CbreStaging.com_dim_property
+  "
+)
+
+ComFullProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+EsInvoiceSet <- EsInvoice |>
+  left_join(ComFullProperty, by = join_by(property_skey)) |>
+  select(
+    property_skey,
+    property_status,
+    address_line1,
+    client_property_name,
+    client_property_id,
+    alternate_property_id,
+    reporting_code_1,
+    reporting_code_2,
+    reporting_code_3,
+    reporting_code_4,
+    reporting_code_5,
+    reporting_code_6,
+    reporting_code_7
+  )
+
+query <- dbSendQuery(
+  con,
+  "SELECT
+   property_skey,
+   client_property_id,
+   Identifier,
+   address_line1,
+   city_name,
+   location_id,
+   source_unique_id
+   FROM CbreStaging.dim_property"
+)
+DimFullSetProperty <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+# Fails to join anything
+# EsInvoiceSetTwo <- EsInvoiceSet |>
+#   left_join(DimFullProperty, by = join_by(property_skey)) |>
+#   # filter(!is.na(client_property_id.y))
+#   filter(!is.na(Identifier))
+
+# Nope
+# EsInvoiceSetTwo <- EsInvoiceSet |>
+#   left_join(DimFullProperty, by = join_by(client_property_id))
+
+EsInvoiceSetTwo <- EsInvoiceSet |>
+  left_join(
+    DimFullSetProperty,
+    by = join_by(alternate_property_id == client_property_id)
+  ) |>
+  select(
+    envizi_property_skey = property_skey.x,
+    com_property_skey = property_skey.y,
+    Identifier,
+    property_status,
+    client_property_name,
+    client_property_id,
+    alternate_property_id,
+    envizi_address_line1 = address_line1.x,
+    com_address_line1 = address_line1.y,
+    city_name,
+    location_id,
+    reporting_code_1,
+    reporting_code_2,
+    reporting_code_3,
+    reporting_code_4,
+    reporting_code_5,
+    reporting_code_6,
+    reporting_code_7
+  )
+
+EsInvoiceSetTwoCleaned <- EsInvoiceSetTwo |>
+  mutate(Identifier = na_if(Identifier, "")) |>
+  mutate(
+    Identifier = case_when(
+      is.na(Identifier) &
+        startsWith(alternate_property_id, "B") ~ alternate_property_id,
+      .default = Identifier
+    )
+  )
+
+EsInvoiceMissingId <- EsInvoiceSetTwoCleaned |>
+  filter(is.na(Identifier)) |>
+  left_join(ComFullProperty, join_by(com_property_skey == property_skey))
+
+# Check if missing ones are outside a reasonable date range
+query <- dbSendQuery(
+  con,
+  "SELECT *
+  FROM CbreStaging.es_fact_invoice;"
+)
+EsInvoiceFull <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+subset_prop_keys <- subset |>
+  select(property_skey) |>
+  distinct() |>
+  mutate(Source = "DateRangeRestriction")
+
+test <- EsInvoiceMissingId |>
+  left_join(
+    subset_prop_keys,
+    by = join_by(envizi_property_skey == property_skey)
+  )
+# nope

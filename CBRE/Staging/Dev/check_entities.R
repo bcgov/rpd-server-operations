@@ -33,4 +33,4 @@ entities <- resp |>
   arrange(entity)
 
 result <- entities |>
-  filter(if_any(-1, ~ . == "client_property_id"))
+  filter(if_any(-1, ~ . == "location_id"))
