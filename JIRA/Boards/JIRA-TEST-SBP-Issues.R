@@ -132,7 +132,7 @@ while (progress < 2) {
     progress <- 2
   }
 
-  if (length(resp$issues == 0)) {
+  if (length(resp$issues) == 0) {
     # API succeeded, nothing to load
     no_data_msg <- paste0(
       "No data returned from API for window ",
