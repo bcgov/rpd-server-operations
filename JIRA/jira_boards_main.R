@@ -75,7 +75,7 @@ orchestrator_duration <- as.numeric(
   difftime(Sys.time(), orchestrator_start, units = "secs")
 )
 
-n_success <- sum(sapply(results, \(r) r$status == "SUCCESS"))
+n_success <- sum(sapply(results, \(r) r$status %in% c("SUCCESS", "NO_DATA")))
 n_error <- sum(sapply(results, \(r) r$status == "ERROR"))
 overall_status <- if (n_error == 0) "SUCCESS" else "PARTIAL_FAILURE"
 
