@@ -203,6 +203,11 @@ while (progress < 2) {
       GPOPackageApprover = "displayName",
       .remove = FALSE
     ) |>
+    safe_hoist(
+      HelpTopic,
+      HelpTopicDetail = list("child", "value"),
+      .remove = FALSE
+    ) |>
     safe_hoist(HelpTopic, HelpTopic = "value", .remove = FALSE) |>
     safe_hoist(ComplexBeliefs, ComplexBeliefs = "value", .remove = FALSE) |>
     safe_hoist(
@@ -332,6 +337,7 @@ while (progress < 2) {
       Created,
       GPOPackageApprover,
       HelpTopic,
+      HelpTopicDetail,
       ComplexBeliefs,
       DeadlineFinancialDriver,
       RequestRelatedProject,
@@ -392,6 +398,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       Created                        DATETIME2(3)    NOT NULL,
       GPOPackageApprover             NVARCHAR(100)   NULL,
       HelpTopic                      NVARCHAR(250)   NULL,
+      HelpTopicDetail                NVARCHAR(250)   NULL,
       ComplexBeliefs                 NVARCHAR(250)   NULL,
       DeadlineFinancialDriver        NVARCHAR(25)    NULL,
       RequestRelatedProject          NVARCHAR(25)    NULL,
@@ -455,6 +462,7 @@ tryCatch(
           Created                        DATETIME2(3)    NOT NULL,
           GPOPackageApprover             NVARCHAR(100)   NULL,
           HelpTopic                      NVARCHAR(250)   NULL,
+          HelpTopicDetail                NVARCHAR(250)   NULL,
           ComplexBeliefs                 NVARCHAR(250)   NULL,
           DeadlineFinancialDriver        NVARCHAR(25)    NULL,
           RequestRelatedProject          NVARCHAR(25)    NULL,
@@ -537,6 +545,7 @@ tryCatch(
          tgt.Created                      = src.Created,
          tgt.GPOPackageApprover           = src.GPOPackageApprover,
          tgt.HelpTopic                    = src.HelpTopic,
+         tgt.HelpTopicDetail              = src.HelpTopicDetail,
          tgt.ComplexBeliefs               = src.ComplexBeliefs,
          tgt.DeadlineFinancialDriver      = src.DeadlineFinancialDriver,
          tgt.RequestRelatedProject        = src.RequestRelatedProject,
@@ -595,6 +604,7 @@ tryCatch(
           Created,
           GPOPackageApprover,
           HelpTopic,
+          HelpTopicDetail,
           ComplexBeliefs,
           DeadlineFinancialDriver,
           RequestRelatedProject,
@@ -635,6 +645,7 @@ tryCatch(
           src.Created,
           src.GPOPackageApprover,
           src.HelpTopic,
+          src.HelpTopicDetail,
           src.ComplexBeliefs,
           src.DeadlineFinancialDriver,
           src.RequestRelatedProject,

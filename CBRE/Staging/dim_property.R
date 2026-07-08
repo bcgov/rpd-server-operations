@@ -86,41 +86,42 @@ clean_data <- raw_data |>
   purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
-  # select_if(~ !all(is.na(.))) |>
-  # select_if(~ !all(. == 0)) |>
-  # select_if(~ !all(. == '-1')) |>
-  # select_if(~ !all(. == "N/A")) |>
-  # select_if(~ !all(. == "-")) |>
+  mutate(
+    across(
+      where(is.character),
+      ~ if_else(grepl("^\\s*$", .), NA_character_, .)
+    )
+  ) |>
+  select_if(~ !all(is.na(.))) |>
+  select_if(~ !all(. == 0)) |>
+  select_if(~ !all(. == '-1')) |>
+  select_if(~ !all(. == "N/A")) |>
+  select_if(~ !all(. == "-")) |>
   select(
     property_skey,
+    property_status,
     client_property_id,
     client_property_name,
-    reporting_code_3,
-    client_additional_attrib,
     address_line1,
     city_name,
     state_province_code,
     zip_code,
     country_code,
+    principal_agency_code,
+    reporting_code_3,
+    reporting_code_4,
+    reporting_code_5,
+    reporting_code_6,
+    reporting_code_7,
     associated_project_number,
+    client_additional_attrib,
+    property_desc,
     location_id,
     source_unique_id,
     source_system_code,
     edp_update_ts
   ) |>
   mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything()) |>
-  mutate(
-    Identifier = case_when(
-      source_system_code == "JDE" ~ reporting_code_3,
-      source_system_code == "SI7" ~ stringr::str_extract(
-        client_additional_attrib,
-        '([B-N]\\d*)',
-        group = TRUE
-      )
-    ),
-    .keep = "unused",
-    .after = client_property_name
-  ) |>
   mutate(
     across(
       c(
@@ -148,17 +149,25 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     " (
       RefreshDate                    DATETIME2(3)   NOT NULL,
       property_skey                  NVARCHAR(20)   NOT NULL,
+      property_status                NVARCHAR(20)   NULL,
       client_property_id             NVARCHAR(20)   NULL,
       client_property_name           NVARCHAR(100)  NULL,
-      Identifier                     NVARCHAR(100)  NULL,
       address_line1                  NVARCHAR(100)  NULL,
       city_name                      NVARCHAR(100)  NULL,
       state_province_code            NVARCHAR(10)   NULL,
       zip_code                       NVARCHAR(30)   NULL,
       country_code                   NVARCHAR(10)   NULL,
+      principal_agency_code          NVARCHAR(10)   NULL,
+      reporting_code_3               NVARCHAR(20)   NULL,
+      reporting_code_4               NVARCHAR(20)   NULL,
+      reporting_code_5               NVARCHAR(20)   NULL,
+      reporting_code_6               NVARCHAR(10)   NULL,
+      reporting_code_7               NVARCHAR(10)   NULL,
       associated_project_number      NVARCHAR(20)   NULL,
+      client_additional_attrib       NVARCHAR(50)   NULL,
+      property_desc                  NVARCHAR(100)  NULL,
       location_id                    NVARCHAR(10)   NULL,
-      source_unique_id               NVARCHAR(20)   NULL,
+      source_unique_id               NVARCHAR(30)   NULL,
       source_system_code             NVARCHAR(10)   NULL,
       edp_update_ts                  DATETIME2(3)   NULL
     );"
@@ -186,19 +195,28 @@ tryCatch(
         " (
           RefreshDate                    DATETIME2(3)   NOT NULL,
           property_skey                  NVARCHAR(20)   NOT NULL,
+          property_status                NVARCHAR(20)   NULL,
           client_property_id             NVARCHAR(20)   NULL,
           client_property_name           NVARCHAR(100)  NULL,
-          Identifier                     NVARCHAR(100)  NULL,
           address_line1                  NVARCHAR(100)  NULL,
           city_name                      NVARCHAR(100)  NULL,
           state_province_code            NVARCHAR(10)   NULL,
           zip_code                       NVARCHAR(30)   NULL,
           country_code                   NVARCHAR(10)   NULL,
+          principal_agency_code          NVARCHAR(10)   NULL,
+          reporting_code_3               NVARCHAR(20)   NULL,
+          reporting_code_4               NVARCHAR(20)   NULL,
+          reporting_code_5               NVARCHAR(20)   NULL,
+          reporting_code_6               NVARCHAR(10)   NULL,
+          reporting_code_7               NVARCHAR(10)   NULL,
           associated_project_number      NVARCHAR(20)   NULL,
+          client_additional_attrib       NVARCHAR(50)   NULL,
+          property_desc                  NVARCHAR(100)  NULL,
           location_id                    NVARCHAR(10)   NULL,
-          source_unique_id               NVARCHAR(20)   NULL,
+          source_unique_id               NVARCHAR(30)   NULL,
           source_system_code             NVARCHAR(10)   NULL,
           edp_update_ts                  DATETIME2(3)   NULL
+
         );"
       )
     )
@@ -242,19 +260,28 @@ tryCatch(
         "UPDATE tgt
          SET
            tgt.RefreshDate               = src.RefreshDate,
+           tgt.property_status           = src.property_status,
            tgt.client_property_id        = src.client_property_id,
            tgt.client_property_name      = src.client_property_name,
-           tgt.Identifier                = src.Identifier,
            tgt.address_line1             = src.address_line1,
            tgt.city_name                 = src.city_name,
            tgt.state_province_code       = src.state_province_code,
            tgt.zip_code                  = src.zip_code,
            tgt.country_code              = src.country_code,
+           tgt.principal_agency_code     = src.principal_agency_code,
+           tgt.reporting_code_3          = src.reporting_code_3,
+           tgt.reporting_code_4          = src.reporting_code_4,
+           tgt.reporting_code_5          = src.reporting_code_5,
+           tgt.reporting_code_6          = src.reporting_code_6,
+           tgt.reporting_code_7          = src.reporting_code_7,
            tgt.associated_project_number = src.associated_project_number,
+           tgt.client_additional_attrib  = src.client_additional_attrib,
+           tgt.property_desc             = src.property_desc,
            tgt.location_id               = src.location_id,
            tgt.source_unique_id          = src.source_unique_id,
            tgt.source_system_code        = src.source_system_code,
            tgt.edp_update_ts             = src.edp_update_ts
+
          FROM ",
         SCHEMA_NAME,
         ".",
@@ -278,15 +305,23 @@ tryCatch(
         " (
           RefreshDate,
           property_skey,
+          property_status,
           client_property_id,
           client_property_name,
-          Identifier,
           address_line1,
           city_name,
           state_province_code,
           zip_code,
           country_code,
+          principal_agency_code,
+          reporting_code_3,
+          reporting_code_4,
+          reporting_code_5,
+          reporting_code_6,
+          reporting_code_7,
           associated_project_number,
+          client_additional_attrib,
+          property_desc,
           location_id,
           source_unique_id,
           source_system_code,
@@ -295,15 +330,23 @@ tryCatch(
         SELECT
           src.RefreshDate,
           src.property_skey,
+          src.property_status,
           src.client_property_id,
           src.client_property_name,
-          src.Identifier,
           src.address_line1,
           src.city_name,
           src.state_province_code,
           src.zip_code,
           src.country_code,
+          src.principal_agency_code,
+          src.reporting_code_3,
+          src.reporting_code_4,
+          src.reporting_code_5,
+          src.reporting_code_6,
+          src.reporting_code_7,
           src.associated_project_number,
+          src.client_additional_attrib,
+          src.property_desc,
           src.location_id,
           src.source_unique_id,
           src.source_system_code,
