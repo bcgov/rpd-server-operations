@@ -294,11 +294,11 @@ Output <- ComDimPropertyCleaned |>
   ) |>
   group_by(id_group) |>
   tidyr::fill(Identifier, .direction = "updown") |>
-  ungroup() |>
-  mutate(
-    AddressEdit = gsub(address_line1),
-    .before = address_line1
-  )
+  ungroup() #|>
+mutate(
+  AddressEdit = gsub(address_line1),
+  .before = address_line1
+)
 
 sum(is.na(Output$Identifier))
 
@@ -315,6 +315,12 @@ dbClearResult(query)
 
 Test <- EsFactInvoice |>
   left_join(Output, by = join_by(property_skey))
+
+Test2 <- EsFactInvoice |>
+  left_join(ComDimPropertyCleaned, by = join_by(property_skey))
+
+Test3 <- EsFactInvoice |>
+  left_join(DimPropertyCleaned, by = join_by(property_skey))
 
 Test_missing <- Test |>
   filter(is.na(Identifier))
@@ -355,3 +361,21 @@ dbClearResult(query)
 # fin_dim_property_reporting_code_vw
 # fin_jde_h1_5
 # pjm_fact_project_vw
+
+clean_data <- raw_data |>
+  select_if(~ !all(is.na(.))) |>
+  select_if(~ !all(. == 0)) |>
+  select_if(~ !all(. == '-1')) |>
+  select_if(~ !all(. == "N/A")) |>
+  select_if(~ !all(. == "-"))
+
+es_invoice_today <- raw_data |>
+  select_if(~ !all(is.na(.))) |>
+  select_if(~ !all(. == 0)) |>
+  select_if(~ !all(. == '-1')) |>
+  select_if(~ !all(. == "N/A")) |>
+  select_if(~ !all(. == "-"))
+
+distinct_es <- es_invoice_today |>
+  select(property_skey) |>
+  distinct()

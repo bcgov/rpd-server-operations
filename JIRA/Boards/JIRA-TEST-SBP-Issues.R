@@ -177,6 +177,7 @@ while (progress < 2) {
     tidyr::unnest_wider(value) |>
     tidyr::unnest_wider(fields) |>
     plyr::rename(names) |>
+    rename_with(~ gsub(" ", "", .)) |>
     # Parent column is sometimes missing as sparsely populated
     mutate(
       Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
@@ -184,23 +185,23 @@ while (progress < 2) {
     # Select fields of interest
     select(
       IssueKey = key,
-      IssueType = `Issue Type`,
+      IssueType,
       Address,
       Assignee,
       Created,
-      RequestedDueDate = `Requested Due Date`,
-      SpaceBookingAdmin = `Name of Space Booking Admin`,
-      NumberOfSpaces = `Number of Spaces to Onboard`,
-      FloorPlan = `Do you have a floor plan?`,
-      FurniturePlan = `Do you have a furniture plan?`,
-      LastUpdatedStatus = `Last Updated Status`,
+      RequestedDueDate,
+      SpaceBookingAdmin = `NameofSpaceBookingAdmin`,
+      NumberOfSpaces = `NumberofSpacestoOnboard`,
+      FloorPlan = `Doyouhaveafloorplan?`,
+      FurniturePlan = `Doyouhaveafurnitureplan?`,
+      LastUpdatedStatus,
       Department = `Department-1`,
-      DueDate = `Due date`,
-      Organization = `Ministry/BPS Organization`,
+      DueDate = Duedate,
+      Organization = `Ministry/BPSOrganization`,
       Priority,
       Reporter,
-      RequestParticipants = `Request participants`,
-      RequestType = `Request Type`,
+      RequestParticipants = Requestparticipants,
+      RequestType,
       Resolved,
       Status,
       Summary,

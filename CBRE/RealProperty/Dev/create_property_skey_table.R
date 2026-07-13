@@ -2,7 +2,6 @@ query <- dbSendQuery(
   con,
   "SELECT
    property_skey,
-   Identifier,
    client_property_name,
    client_property_id,
    address_line1,
@@ -18,7 +17,6 @@ dbClearResult(query)
 DimPropSkey <- DimProperty |>
   select(
     property_skey,
-    Identifier,
     address_line1,
     city_name,
     state_province_code,

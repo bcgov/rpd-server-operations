@@ -29,8 +29,8 @@ options(scipen = 999)
 options(digits = 7)
 
 # Load helper functions
-source(here::here("./utilities/R/event_logger.R"))
-source(here::here("./utilities/R/sql_helper_functions.R"))
+source(here::here("utilities/R/utilities.R"))
+
 
 # Connect to SQL database
 con <- dbConnect(
@@ -59,13 +59,17 @@ OracleDb <- dbConnect(
 password <- keyring::key_get(service = "IWP", username = "DRATTRAY")
 OracleDb <- dbConnect(
   odbc::odbc(),
-  driver = "Oracle in instantclient_19_8", # Must match your installed driver name
+  driver = "Oracle in instantclient_23_0", # Must match your installed driver name
+  DBQ = "IWP.BCGOV",
   host = "pollux.bcgov",
-  svc = "IWP.bcgov",
   uid = "DRATTRAY",
   pwd = password,
   port = 1521
 )
+
+
+dbGetQuery(con, "SELECT * FROM dual")
+
 
 "
 SELECT

@@ -147,6 +147,7 @@ while (progress < 2) {
     tidyr::unnest_wider(value) |>
     tidyr::unnest_wider(fields) |>
     plyr::rename(names) |>
+    rename_with(~ gsub(" ", "", .)) |>
     # Parent column is sometimes missing as sparsely populated
     mutate(
       Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
@@ -154,18 +155,18 @@ while (progress < 2) {
     # Select fields of interest
     select(
       IssueKey = key,
-      IssueType = `Issue Type`,
+      IssueType = `IssueType-2`,
       Assignee,
       Created,
       Labels,
-      OriginalEstimate = `Original estimate`,
-      ApprovedByExecutive = `Approved by Executives`,
+      OriginalEstimate = Originalestimate,
+      ApprovedByExecutive = ApprovedbyExecutives,
       MoSoCOW,
-      ImpactToUser = `Impact to User`,
-      LinkedIssues = `Linked Issues`,
+      ImpactToUser = ImpacttoUser,
+      LinkedIssues,
       Priority,
       Reporter,
-      RequestType = `Request Type`,
+      RequestType,
       Status,
       Parent,
       Project,

@@ -94,13 +94,13 @@ source(here::here("utilities/R/utilities.R"))
 #   273 pages -- first 5k rows have mainly missing data columns??
 # com_fact_property_reporting_group_vw
 
-CBRE_TABLE_NAME <- "dim_property_vw"
+CBRE_TABLE_NAME <- "kahua_cashflow"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-09T00:00:00Z"
+  end_time = "2026-07-14T00:00:00Z"
 )
 
 # only 273 pages...
