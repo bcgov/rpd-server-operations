@@ -119,94 +119,114 @@ while (progress < 2) {
     progress <- 2
   }
 
-  names <- resp |>
-    purrr::pluck("names") |>
-    tibble::enframe() |>
-    safe_hoist(value, Value = 1L) |>
-    group_by(Value) |>
-    mutate(row_name = row_number(), row_count = n()) |>
-    mutate(
-      Value = case_when(
-        row_count > 1 ~ paste0(Value, "-", row_name),
-        .default = Value
-      )
-    ) |>
-    select(-c(row_name, row_count)) |>
-    tibble::deframe()
+  tryCatch(
+    {
+      names <- resp |>
+        purrr::pluck("names") |>
+        tibble::enframe() |>
+        safe_hoist(value, Value = 1L) |>
+        group_by(Value) |>
+        mutate(row_name = row_number(), row_count = n()) |>
+        mutate(
+          Value = case_when(
+            row_count > 1 ~ paste0(Value, "-", row_name),
+            .default = Value
+          )
+        ) |>
+        select(-c(row_name, row_count)) |>
+        tibble::deframe()
 
-  issues <- resp |>
-    purrr::pluck("issues") |>
-    tibble::enframe() |>
-    tidyr::unnest_wider(value) |>
-    tidyr::unnest_wider(fields) |>
-    plyr::rename(names) |>
-    # select_if(~ !all(is.na(.))) |>
-    rename_with(~ gsub(" ", "", .)) |>
-    select(
-      IssueKey = key,
-      ProjectEffectiveDate,
-      Created,
-      Resolved,
-      Updated,
-      Organization = `Ministry/BPSOrganization`,
-      RequestType,
-      Status,
-      StatusCategory,
-      StatusCategoryChanged,
-      Assignee,
-      Reporter,
-      Resolution,
-      Summary
-    ) |>
-    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-    safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
-    safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
-    safe_hoist(
-      RequestType,
-      RequestType = list("requestType", "name"),
-      .remove = FALSE
-    ) |>
-    mutate(
-      ProjectEffectiveDate = as.Date(ProjectEffectiveDate, format = "%Y-%m-%d")
-    ) |>
-    mutate(
-      Created = as.POSIXct(
-        Created,
-        tz = "UTC",
-        format = "%Y-%m-%dT%H:%M:%OS%z"
+      issues <- resp |>
+        purrr::pluck("issues") |>
+        tibble::enframe() |>
+        tidyr::unnest_wider(value) |>
+        tidyr::unnest_wider(fields) |>
+        plyr::rename(names) |>
+        # select_if(~ !all(is.na(.))) |>
+        rename_with(~ gsub(" ", "", .)) |>
+        select(
+          IssueKey = key,
+          ProjectEffectiveDate,
+          Created,
+          Resolved,
+          Updated,
+          Organization = `Ministry/BPSOrganization`,
+          RequestType,
+          Status,
+          StatusCategory,
+          StatusCategoryChanged,
+          Assignee,
+          Reporter,
+          Resolution,
+          Summary
+        ) |>
+        safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+        safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
+        safe_hoist(Status, Status = "name", .remove = FALSE) |>
+        safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
+        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+        safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+        safe_hoist(
+          RequestType,
+          RequestType = list("requestType", "name"),
+          .remove = FALSE
+        ) |>
+        mutate(
+          ProjectEffectiveDate = as.Date(
+            ProjectEffectiveDate,
+            format = "%Y-%m-%d"
+          )
+        ) |>
+        mutate(
+          Created = as.POSIXct(
+            Created,
+            tz = "UTC",
+            format = "%Y-%m-%dT%H:%M:%OS%z"
+          )
+        ) |>
+        mutate(
+          Resolved = as.POSIXct(
+            Resolved,
+            tz = "UTC",
+            format = "%Y-%m-%dT%H:%M:%OS%z"
+          )
+        ) |>
+        mutate(
+          Updated = as.POSIXct(
+            Updated,
+            tz = "UTC",
+            format = "%Y-%m-%dT%H:%M:%OS%z"
+          )
+        ) |>
+        mutate(
+          StatusCategoryChanged = as.POSIXct(
+            StatusCategoryChanged,
+            tz = "UTC",
+            format = "%Y-%m-%dT%H:%M:%OS%z"
+          )
+        ) |>
+        mutate(
+          TimeToCompletion = case_when(
+            is.na(Resolved) ~ NA,
+            !is.na(Resolved) ~
+              ((as.duration(interval(Created, Resolved))@.Data) / 60) / 60
+          )
+        )
+    },
+    error = function(e) {
+      log_daily_etl_run(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = DASHBOARD_ID,
+        status = "FAILURE",
+        message = paste0(
+          "Data wrangling failure: ",
+          substr(conditionMessage(e), 1, 500)
+        )
       )
-    ) |>
-    mutate(
-      Resolved = as.POSIXct(
-        Resolved,
-        tz = "UTC",
-        format = "%Y-%m-%dT%H:%M:%OS%z"
-      )
-    ) |>
-    mutate(
-      Updated = as.POSIXct(
-        Updated,
-        tz = "UTC",
-        format = "%Y-%m-%dT%H:%M:%OS%z"
-      )
-    ) |>
-    mutate(
-      StatusCategoryChanged = as.POSIXct(
-        StatusCategoryChanged,
-        tz = "UTC",
-        format = "%Y-%m-%dT%H:%M:%OS%z"
-      )
-    ) |>
-    mutate(
-      TimeToCompletion = case_when(
-        is.na(Resolved) ~ NA,
-        !is.na(Resolved) ~
-          ((as.duration(interval(Created, Resolved))@.Data) / 60) / 60
-      )
-    )
+      stop(e) # rethrow so Task Scheduler/Nagios still flags it
+    }
+  )
 
   if (round == 1) {
     Issues <- issues

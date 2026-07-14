@@ -156,88 +156,109 @@ while (progress < 2) {
     stop(cond)
   }
 
-  names <- resp |>
-    purrr::pluck("names") |>
-    tibble::enframe() |>
-    safe_hoist(value, Value = 1L) |>
-    group_by(Value) |>
-    mutate(row_name = row_number(), row_count = n()) |>
-    mutate(
-      Value = case_when(
-        row_count > 1 ~ paste0(Value, "-", row_name),
-        .default = Value
-      )
-    ) |>
-    select(-c(row_name, row_count)) |>
-    tibble::deframe()
+  tryCatch(
+    {
+      names <- resp |>
+        purrr::pluck("names") |>
+        tibble::enframe() |>
+        safe_hoist(value, Value = 1L) |>
+        group_by(Value) |>
+        mutate(row_name = row_number(), row_count = n()) |>
+        mutate(
+          Value = case_when(
+            row_count > 1 ~ paste0(Value, "-", row_name),
+            .default = Value
+          )
+        ) |>
+        select(-c(row_name, row_count)) |>
+        tibble::deframe()
 
-  issues <- resp |>
-    purrr::pluck("issues") |>
-    tibble::enframe() |>
-    tidyr::unnest_wider(value) |>
-    tidyr::unnest_wider(fields) |>
-    plyr::rename(names) |>
-    rename_with(~ gsub(" ", "", .)) |>
-    # Parent column is sometimes missing as sparsely populated
-    mutate(
-      Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
-    ) |>
-    # Select fields of interest
-    select(
-      IssueKey = key,
-      IssueType,
-      Address,
-      Assignee,
-      Created,
-      RequestedDueDate,
-      SpaceBookingAdmin = `NameofSpaceBookingAdmin`,
-      NumberOfSpaces = `NumberofSpacestoOnboard`,
-      FloorPlan = `Doyouhaveafloorplan?`,
-      FurniturePlan = `Doyouhaveafurnitureplan?`,
-      LastUpdatedStatus,
-      Department = `Department-1`,
-      DueDate = Duedate,
-      Organization = `Ministry/BPSOrganization`,
-      Priority,
-      Reporter,
-      RequestParticipants = Requestparticipants,
-      RequestType,
-      Resolved,
-      Status,
-      Summary,
-      Updated,
-      Parent,
-      changelog
-    ) |>
-    safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
-    safe_hoist(
-      Address,
-      Address = list("content", 1L, "content", 1L, "text"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    safe_hoist(RequestedDueDate, RequestedDueDate = "value", .remove = FALSE) |>
-    safe_hoist(FloorPlan, FloorPlan = "value", .remove = FALSE) |>
-    safe_hoist(FurniturePlan, FurniturePlan = "value", .remove = FALSE) |>
-    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-    safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
-    safe_hoist_all(
-      RequestParticipants,
-      RequestParticipants = list("displayName"),
-      .remove = FALSE
-    ) |>
-    # mutate(
-    #   RequestParticipants = RequestParticipants_displayName,
-    #   .keep = "unused"
-    # ) |>
-    safe_hoist(
-      RequestType,
-      RequestType = list("requestType", "name"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(Parent, Parent = "key", .remove = FALSE)
+      issues <- resp |>
+        purrr::pluck("issues") |>
+        tibble::enframe() |>
+        tidyr::unnest_wider(value) |>
+        tidyr::unnest_wider(fields) |>
+        plyr::rename(names) |>
+        rename_with(~ gsub(" ", "", .)) |>
+        # Parent column is sometimes missing as sparsely populated
+        mutate(
+          Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
+        ) |>
+        # Select fields of interest
+        select(
+          IssueKey = key,
+          IssueType,
+          Address,
+          Assignee,
+          Created,
+          RequestedDueDate,
+          SpaceBookingAdmin = `NameofSpaceBookingAdmin`,
+          NumberOfSpaces = `NumberofSpacestoOnboard`,
+          FloorPlan = `Doyouhaveafloorplan?`,
+          FurniturePlan = `Doyouhaveafurnitureplan?`,
+          LastUpdatedStatus,
+          Department = `Department-1`,
+          DueDate = Duedate,
+          Organization = `Ministry/BPSOrganization`,
+          Priority,
+          Reporter,
+          RequestParticipants = Requestparticipants,
+          RequestType,
+          Resolved,
+          Status,
+          Summary,
+          Updated,
+          Parent,
+          changelog
+        ) |>
+        safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
+        safe_hoist(
+          Address,
+          Address = list("content", 1L, "content", 1L, "text"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+        safe_hoist(
+          RequestedDueDate,
+          RequestedDueDate = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(FloorPlan, FloorPlan = "value", .remove = FALSE) |>
+        safe_hoist(FurniturePlan, FurniturePlan = "value", .remove = FALSE) |>
+        safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+        safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+        safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+        safe_hoist_all(
+          RequestParticipants,
+          RequestParticipants = list("displayName"),
+          .remove = FALSE
+        ) |>
+        # mutate(
+        #   RequestParticipants = RequestParticipants_displayName,
+        #   .keep = "unused"
+        # ) |>
+        safe_hoist(
+          RequestType,
+          RequestType = list("requestType", "name"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(Status, Status = "name", .remove = FALSE) |>
+        safe_hoist(Parent, Parent = "key", .remove = FALSE)
+    },
+    error = function(e) {
+      log_daily_etl_run(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = DASHBOARD_ID,
+        status = "FAILURE",
+        message = paste0(
+          "Data wrangling failure: ",
+          substr(conditionMessage(e), 1, 500)
+        )
+      )
+      stop(e) # rethrow so Task Scheduler/Nagios still flags it
+    }
+  )
 
   if (round == 1) {
     Issues <- issues

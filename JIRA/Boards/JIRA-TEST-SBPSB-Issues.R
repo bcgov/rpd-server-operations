@@ -126,84 +126,100 @@ while (progress < 2) {
     progress <- 2
   }
 
-  names <- resp |>
-    purrr::pluck("names") |>
-    tibble::enframe() |>
-    safe_hoist(value, Value = 1L) |>
-    group_by(Value) |>
-    mutate(row_name = row_number(), row_count = n()) |>
-    mutate(
-      Value = case_when(
-        row_count > 1 ~ paste0(Value, "-", row_name),
-        .default = Value
+  tryCatch(
+    {
+      names <- resp |>
+        purrr::pluck("names") |>
+        tibble::enframe() |>
+        safe_hoist(value, Value = 1L) |>
+        group_by(Value) |>
+        mutate(row_name = row_number(), row_count = n()) |>
+        mutate(
+          Value = case_when(
+            row_count > 1 ~ paste0(Value, "-", row_name),
+            .default = Value
+          )
+        ) |>
+        select(-c(row_name, row_count)) |>
+        tibble::deframe()
+
+      issues <- resp |>
+        purrr::pluck("issues") |>
+        tibble::enframe() |>
+        tidyr::unnest_wider(value) |>
+        tidyr::unnest_wider(fields) |>
+        plyr::rename(names) |>
+        rename_with(~ gsub(" ", "", .)) |>
+        # Parent column is sometimes missing as sparsely populated
+        mutate(
+          Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
+        ) |>
+        # Select fields of interest
+        select(
+          IssueKey = key,
+          IssueType = `IssueType-2`,
+          Assignee,
+          Created,
+          Labels,
+          OriginalEstimate = Originalestimate,
+          ApprovedByExecutive = ApprovedbyExecutives,
+          MoSoCOW,
+          ImpactToUser = ImpacttoUser,
+          LinkedIssues,
+          Priority,
+          Reporter,
+          RequestType,
+          Status,
+          Parent,
+          Project,
+          Summary
+        ) |>
+        safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
+        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+        # Labels will need some concatenation
+        tidyr::unnest_wider(Labels, names_sep = "_") |>
+        rowwise() |>
+        mutate(
+          Labels = stringr::str_flatten_comma(
+            c(across(starts_with("Labels_"))),
+            na.rm = TRUE
+          ),
+          .after = Created,
+          .keep = "unused"
+        ) |>
+        ungroup() |>
+        safe_hoist(
+          ApprovedByExecutive,
+          ApprovedByExecutive = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(MoSoCOW, MoSoCOW = "value", .remove = FALSE) |>
+        safe_hoist(ImpactToUser, ImpactToUser = "value", .remove = FALSE) |>
+        safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+        safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+        safe_hoist(
+          RequestType,
+          RequestType = list("requestType", "name"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(Status, Status = "name", .remove = FALSE) |>
+        safe_hoist(Project, Project = "key", .remove = FALSE) |>
+        safe_hoist(Parent, Parent = "key", .remove = FALSE)
+    },
+    error = function(e) {
+      log_daily_etl_run(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = DASHBOARD_ID,
+        status = "FAILURE",
+        message = paste0(
+          "Data wrangling failure: ",
+          substr(conditionMessage(e), 1, 500)
+        )
       )
-    ) |>
-    select(-c(row_name, row_count)) |>
-    tibble::deframe()
-
-  issues <- resp |>
-    purrr::pluck("issues") |>
-    tibble::enframe() |>
-    tidyr::unnest_wider(value) |>
-    tidyr::unnest_wider(fields) |>
-    plyr::rename(names) |>
-    rename_with(~ gsub(" ", "", .)) |>
-    # Parent column is sometimes missing as sparsely populated
-    mutate(
-      Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
-    ) |>
-    # Select fields of interest
-    select(
-      IssueKey = key,
-      IssueType = `IssueType-2`,
-      Assignee,
-      Created,
-      Labels,
-      OriginalEstimate = Originalestimate,
-      ApprovedByExecutive = ApprovedbyExecutives,
-      MoSoCOW,
-      ImpactToUser = ImpacttoUser,
-      LinkedIssues,
-      Priority,
-      Reporter,
-      RequestType,
-      Status,
-      Parent,
-      Project,
-      Summary
-    ) |>
-    safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    # Labels will need some concatenation
-    tidyr::unnest_wider(Labels, names_sep = "_") |>
-    rowwise() |>
-    mutate(
-      Labels = stringr::str_flatten_comma(
-        c(across(starts_with("Labels_"))),
-        na.rm = TRUE
-      ),
-      .after = Created,
-      .keep = "unused"
-    ) |>
-    ungroup() |>
-    safe_hoist(
-      ApprovedByExecutive,
-      ApprovedByExecutive = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(MoSoCOW, MoSoCOW = "value", .remove = FALSE) |>
-    safe_hoist(ImpactToUser, ImpactToUser = "value", .remove = FALSE) |>
-    safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
-    safe_hoist(
-      RequestType,
-      RequestType = list("requestType", "name"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(Project, Project = "key", .remove = FALSE) |>
-    safe_hoist(Parent, Parent = "key", .remove = FALSE)
-
+      stop(e) # rethrow so Task Scheduler/Nagios still flags it
+    }
+  )
   if (round == 1) {
     Issues <- issues
   } else {

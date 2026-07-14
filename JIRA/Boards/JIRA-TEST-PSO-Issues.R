@@ -120,254 +120,285 @@ while (progress < 2) {
     progress <- 2
   }
 
-  names <- resp |>
-    purrr::pluck("names") |>
-    tibble::enframe() |>
-    safe_hoist(value, Value = 1L) |>
-    group_by(Value) |>
-    mutate(row_name = row_number(), row_count = n()) |>
-    mutate(
-      Value = case_when(
-        row_count > 1 ~ paste0(Value, "-", row_name),
-        .default = Value
-      )
-    ) |>
-    select(-c(row_name, row_count)) |>
-    tibble::deframe()
-
-  issues <- resp |>
-    purrr::pluck("issues") |>
-    tibble::enframe() |>
-    tidyr::unnest_wider(value) |>
-    tidyr::unnest_wider(fields) |>
-    plyr::rename(names) |>
-    # select_if(~ !all(is.na(.))) |>
-    rename_with(~ gsub(" ", "", .)) |>
-    select(
-      ArchibusPinNumber = ArchibusPINNumber,
-      AccuracyCompletenessConcerns = `Arethereknowndataaccuracy,completeness,orsystemsconcernscausingafinancialdiscrepancy?`,
-      Assignee,
-      BranchBusinessArea = `BusinessArea/BranchSubmittingRequest`,
-      BranchBusinessAreaImpacted = `Businessarea/branchesimpactedbythisrequest`,
-      Created,
-      GPOPackageApprover,
-      HelpTopic,
-      ComplexBeliefs = `Howcomplexdoyoubelievethisrequestis?`,
-      DeadlineFinancialDriver = `Isthereadeadlineorfinancialcycle/processdrivingthisrequest?`,
-      RequestRelatedProject = `Isthisrequestrelatedtoaspecificproject/agreement/PIN#`,
-      IssueKey = key,
-      IssueType,
-      KahuaNumber,
-      PerceivedImpact,
-      Priority,
-      ProjectDeliveryMethod,
-      ProjectPartition,
-      PurchaseOrder = `PurchaseOrder(PO)Number`,
-      Reporter,
-      Resolution,
-      Resolved,
-      Requestparticipants,
-      RequestSubmittedBy,
-      RequestType,
-      Status,
-      Summary,
-      Timetofirstresponse,
-      Timetoresolution,
-      Updated,
-      WhatRequest = `Whatareyourequesting?`,
-      DecisionSubmissionSupport = `Whatdecision,submission,orfinancialactionsdoesthissupport?`,
-      ChangeRequired = `Whattypeofchangeisrequired?`,
-      FinancialSupportRequested = `WhattypeofFinancialSupportareyourequesting?`,
-      ProcessImprovement = `WhattypeofProcessImprovementorPerformanceEnhancementareyourequesting?`,
-      WhoImpactedOpportunity = `Whoisimpactedbythisissueorimprovementopportunity?`,
-      WhoImpactedRequest = `Whoisimpactedbythisissueorrequest?`
-    ) |>
-    safe_hoist(
-      AccuracyCompletenessConcerns,
-      AccuracyCompletenessConcerns = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    safe_hoist(
-      BranchBusinessArea,
-      BranchBusinessArea = list(1L, "value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      BranchBusinessAreaImpacted,
-      BranchBusinessAreaImpacted = list(1L, "value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      GPOPackageApprover,
-      GPOPackageApprover = "displayName",
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      HelpTopic,
-      HelpTopicDetail = list("child", "value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(HelpTopic, HelpTopic = "value", .remove = FALSE) |>
-    safe_hoist(ComplexBeliefs, ComplexBeliefs = "value", .remove = FALSE) |>
-    safe_hoist(
-      DeadlineFinancialDriver,
-      DeadlineFinancialDriver = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      RequestRelatedProject,
-      RequestRelatedProject = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
-    safe_hoist(PerceivedImpact, PerceivedImpact = "value", .remove = FALSE) |>
-    safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(
-      ProjectDeliveryMethod,
-      ProjectDeliveryMethod = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(ProjectPartition, ProjectPartition = "value", .remove = FALSE) |>
-    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
-    tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-    tidyr::unnest_wider(starts_with("Requestparticipants"), names_sep = "-") |>
-    rowwise() |>
-    mutate(
-      RequestParticipants = stringr::str_c(
-        c_across(
-          matches(
-            "Requestparticipants-[0-9]+-displayName"
+  tryCatch(
+    {
+      names <- resp |>
+        purrr::pluck("names") |>
+        tibble::enframe() |>
+        safe_hoist(value, Value = 1L) |>
+        group_by(Value) |>
+        mutate(row_name = row_number(), row_count = n()) |>
+        mutate(
+          Value = case_when(
+            row_count > 1 ~ paste0(Value, "-", row_name),
+            .default = Value
           )
-        ),
-        collapse = ";"
-      ),
-      .after = Resolved
-    ) |>
-    ungroup() |>
-    safe_hoist(
-      RequestSubmittedBy,
-      RequestSubmittedBy = "displayName",
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      RequestType,
-      RequestType = list("requestType", "name"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
-    safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(
-      Timetofirstresponse,
-      Timetofirstresponse = list(
-        "completedCycles",
-        1L,
-        "elapsedTime",
-        "millis"
-      ),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      Timetoresolution,
-      Timetoresolution = list("ongoingCycle", "elapsedTime", "millis"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(WhatRequest, WhatRequest = "value", .remove = FALSE) |>
-    safe_hoist(
-      DecisionSubmissionSupport,
-      DecisionSubmissionSupport = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      ChangeRequired,
-      ChangeRequired = list(1L, "value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      FinancialSupportRequested,
-      FinancialSupportRequested = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      ProcessImprovement,
-      ProcessImprovement = list(1L, "value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      WhoImpactedOpportunity,
-      WhoImpactedOpportunity = list(1L, "value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      WhoImpactedRequest,
-      WhoImpactedRequest = list(1L, "value"),
-      .remove = FALSE
-    ) |>
-    mutate(
-      across(
-        c(Created, Updated, Resolved),
-        ~ as.Date(.x, format = "%Y-%m-%d")
+        ) |>
+        select(-c(row_name, row_count)) |>
+        tibble::deframe()
+
+      issues <- resp |>
+        purrr::pluck("issues") |>
+        tibble::enframe() |>
+        tidyr::unnest_wider(value) |>
+        tidyr::unnest_wider(fields) |>
+        plyr::rename(names) |>
+        # select_if(~ !all(is.na(.))) |>
+        rename_with(~ gsub(" ", "", .)) |>
+        select(
+          ArchibusPinNumber = ArchibusPINNumber,
+          AccuracyCompletenessConcerns = `Arethereknowndataaccuracy,completeness,orsystemsconcernscausingafinancialdiscrepancy?`,
+          Assignee,
+          BranchBusinessArea = `BusinessArea/BranchSubmittingRequest`,
+          BranchBusinessAreaImpacted = `Businessarea/branchesimpactedbythisrequest`,
+          Created,
+          GPOPackageApprover,
+          HelpTopic,
+          ComplexBeliefs = `Howcomplexdoyoubelievethisrequestis?`,
+          DeadlineFinancialDriver = `Isthereadeadlineorfinancialcycle/processdrivingthisrequest?`,
+          RequestRelatedProject = `Isthisrequestrelatedtoaspecificproject/agreement/PIN#`,
+          IssueKey = key,
+          IssueType,
+          KahuaNumber,
+          PerceivedImpact,
+          Priority,
+          ProjectDeliveryMethod,
+          ProjectPartition,
+          PurchaseOrder = `PurchaseOrder(PO)Number`,
+          Reporter,
+          Resolution,
+          Resolved,
+          Requestparticipants,
+          RequestSubmittedBy,
+          RequestType,
+          Status,
+          Summary,
+          Timetofirstresponse,
+          Timetoresolution,
+          Updated,
+          WhatRequest = `Whatareyourequesting?`,
+          DecisionSubmissionSupport = `Whatdecision,submission,orfinancialactionsdoesthissupport?`,
+          ChangeRequired = `Whattypeofchangeisrequired?`,
+          FinancialSupportRequested = `WhattypeofFinancialSupportareyourequesting?`,
+          ProcessImprovement = `WhattypeofProcessImprovementorPerformanceEnhancementareyourequesting?`,
+          WhoImpactedOpportunity = `Whoisimpactedbythisissueorimprovementopportunity?`,
+          WhoImpactedRequest = `Whoisimpactedbythisissueorrequest?`
+        ) |>
+        safe_hoist(
+          AccuracyCompletenessConcerns,
+          AccuracyCompletenessConcerns = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+        safe_hoist(
+          BranchBusinessArea,
+          BranchBusinessArea = list(1L, "value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          BranchBusinessAreaImpacted,
+          BranchBusinessAreaImpacted = list(1L, "value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          GPOPackageApprover,
+          GPOPackageApprover = "displayName",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          HelpTopic,
+          HelpTopicDetail = list("child", "value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(HelpTopic, HelpTopic = "value", .remove = FALSE) |>
+        safe_hoist(ComplexBeliefs, ComplexBeliefs = "value", .remove = FALSE) |>
+        safe_hoist(
+          DeadlineFinancialDriver,
+          DeadlineFinancialDriver = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          RequestRelatedProject,
+          RequestRelatedProject = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
+        safe_hoist(
+          PerceivedImpact,
+          PerceivedImpact = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+        safe_hoist(
+          ProjectDeliveryMethod,
+          ProjectDeliveryMethod = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          ProjectPartition,
+          ProjectPartition = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+        tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
+        tidyr::unnest_wider(
+          starts_with("Requestparticipants"),
+          names_sep = "-"
+        ) |>
+        rowwise() |>
+        mutate(
+          RequestParticipants = stringr::str_c(
+            c_across(
+              matches(
+                "Requestparticipants-[0-9]+-displayName"
+              )
+            ),
+            collapse = ";"
+          ),
+          .after = Resolved
+        ) |>
+        ungroup() |>
+        safe_hoist(
+          RequestSubmittedBy,
+          RequestSubmittedBy = "displayName",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          RequestType,
+          RequestType = list("requestType", "name"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
+        safe_hoist(Status, Status = "name", .remove = FALSE) |>
+        safe_hoist(
+          Timetofirstresponse,
+          Timetofirstresponse = list(
+            "completedCycles",
+            1L,
+            "elapsedTime",
+            "millis"
+          ),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          Timetoresolution,
+          Timetoresolution = list("ongoingCycle", "elapsedTime", "millis"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(WhatRequest, WhatRequest = "value", .remove = FALSE) |>
+        safe_hoist(
+          DecisionSubmissionSupport,
+          DecisionSubmissionSupport = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          ChangeRequired,
+          ChangeRequired = list(1L, "value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          FinancialSupportRequested,
+          FinancialSupportRequested = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          ProcessImprovement,
+          ProcessImprovement = list(1L, "value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          WhoImpactedOpportunity,
+          WhoImpactedOpportunity = list(1L, "value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          WhoImpactedRequest,
+          WhoImpactedRequest = list(1L, "value"),
+          .remove = FALSE
+        ) |>
+        mutate(
+          across(
+            c(Created, Updated, Resolved),
+            ~ as.Date(.x, format = "%Y-%m-%d")
+          )
+        ) |>
+        mutate(
+          MinutesToFirstResponse = round(
+            (Timetofirstresponse / 1000 / 60),
+            digits = 1
+          ),
+          MinutesToResolution = round(
+            (Timetoresolution / 1000 / 60),
+            digits = 1
+          )
+        ) |>
+        mutate(
+          across(
+            where(is.character),
+            trimws
+          )
+        ) |>
+        mutate(
+          across(
+            where(is.character),
+            ~ replace_values(.x, "n/a" ~ NA_character_, "N/A" ~ NA_character_)
+          )
+        ) |>
+        select(
+          ArchibusPinNumber,
+          AccuracyCompletenessConcerns,
+          Assignee,
+          BranchBusinessArea,
+          BranchBusinessAreaImpacted,
+          Created,
+          GPOPackageApprover,
+          HelpTopic,
+          HelpTopicDetail,
+          ComplexBeliefs,
+          DeadlineFinancialDriver,
+          RequestRelatedProject,
+          IssueKey,
+          IssueType,
+          KahuaNumber,
+          PerceivedImpact,
+          Priority,
+          ProjectDeliveryMethod,
+          ProjectPartition,
+          PurchaseOrder,
+          Reporter,
+          Resolution,
+          Resolved,
+          RequestParticipants,
+          RequestSubmittedBy,
+          RequestType,
+          Status,
+          Summary,
+          MinutesToFirstResponse,
+          MinutesToResolution,
+          Updated,
+          WhatRequest,
+          DecisionSubmissionSupport,
+          ChangeRequired,
+          FinancialSupportRequested,
+          ProcessImprovement,
+          WhoImpactedOpportunity,
+          WhoImpactedRequest
+        )
+    },
+    error = function(e) {
+      log_daily_etl_run(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = DASHBOARD_ID,
+        status = "FAILURE",
+        message = paste0(
+          "Data wrangling failure: ",
+          substr(conditionMessage(e), 1, 500)
+        )
       )
-    ) |>
-    mutate(
-      MinutesToFirstResponse = round(
-        (Timetofirstresponse / 1000 / 60),
-        digits = 1
-      ),
-      MinutesToResolution = round((Timetoresolution / 1000 / 60), digits = 1)
-    ) |>
-    mutate(
-      across(
-        where(is.character),
-        trimws
-      )
-    ) |>
-    mutate(
-      across(
-        where(is.character),
-        ~ replace_values(.x, "n/a" ~ NA_character_, "N/A" ~ NA_character_)
-      )
-    ) |>
-    select(
-      ArchibusPinNumber,
-      AccuracyCompletenessConcerns,
-      Assignee,
-      BranchBusinessArea,
-      BranchBusinessAreaImpacted,
-      Created,
-      GPOPackageApprover,
-      HelpTopic,
-      HelpTopicDetail,
-      ComplexBeliefs,
-      DeadlineFinancialDriver,
-      RequestRelatedProject,
-      IssueKey,
-      IssueType,
-      KahuaNumber,
-      PerceivedImpact,
-      Priority,
-      ProjectDeliveryMethod,
-      ProjectPartition,
-      PurchaseOrder,
-      Reporter,
-      Resolution,
-      Resolved,
-      RequestParticipants,
-      RequestSubmittedBy,
-      RequestType,
-      Status,
-      Summary,
-      MinutesToFirstResponse,
-      MinutesToResolution,
-      Updated,
-      WhatRequest,
-      DecisionSubmissionSupport,
-      ChangeRequired,
-      FinancialSupportRequested,
-      ProcessImprovement,
-      WhoImpactedOpportunity,
-      WhoImpactedRequest
-    )
+      stop(e) # rethrow so Task Scheduler/Nagios still flags it
+    }
+  )
 
   if (round == 1) {
     Issues <- issues

@@ -120,110 +120,127 @@ while (progress < 2) {
     progress <- 2
   }
 
-  names <- resp |>
-    purrr::pluck("names") |>
-    tibble::enframe() |>
-    safe_hoist(value, Value = 1L) |>
-    group_by(Value) |>
-    mutate(row_name = row_number(), row_count = n()) |>
-    mutate(
-      Value = case_when(
-        row_count > 1 ~ paste0(Value, "-", row_name),
-        .default = Value
-      )
-    ) |>
-    select(-c(row_name, row_count)) |>
-    tibble::deframe()
+  tryCatch(
+    {
+      names <- resp |>
+        purrr::pluck("names") |>
+        tibble::enframe() |>
+        safe_hoist(value, Value = 1L) |>
+        group_by(Value) |>
+        mutate(row_name = row_number(), row_count = n()) |>
+        mutate(
+          Value = case_when(
+            row_count > 1 ~ paste0(Value, "-", row_name),
+            .default = Value
+          )
+        ) |>
+        select(-c(row_name, row_count)) |>
+        tibble::deframe()
 
-  issues <- resp |>
-    purrr::pluck("issues") |>
-    tibble::enframe() |>
-    tidyr::unnest_wider(value) |>
-    tidyr::unnest_wider(fields) |>
-    plyr::rename(names) |>
-    # select_if(~ !all(is.na(.))) |>
-    rename_with(~ gsub(" ", "", .)) |>
-    select(
-      IssueKey = key,
-      IssueType,
-      Status,
-      Created,
-      Updated,
-      # Enddate,
-      Resolved,
-      # Resolution,
-      Duedate,
-      DueDateflexibility,
-      Timetofirstresponse,
-      Timetoresolution,
-      Assignee,
-      # Audience1 = `Audience-1`, # Possible source of issues here, right now all NA
-      Audience = `Audience-2`,
-      Frequency = `Frequency-RPR`,
-      Priority,
-      ReportName = Reportname,
-      Reporter,
-      RequestParticipants = Requestparticipants, # evaluate that the code dropped in still works
-      RequestType,
-      Summary,
-      # Team = `Team-2`,# Possible source of issues here, right now all NA
-      Team = `Team-RPR`,
-      Branch = `Branch-RPR`
-    ) |>
-    safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
-    safe_hoist(Status, Status = "name", .remove = FALSE) |>
-    safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-    safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-    safe_hoist(
-      DueDateflexibility,
-      DueDateflexibility = "value",
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      Timetofirstresponse,
-      Timetofirstresponse = list(
-        "completedCycles",
-        1L,
-        "elapsedTime",
-        "millis"
-      ),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      Timetoresolution,
-      Timetoresolution = list("ongoingCycle", "elapsedTime", "millis"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(Audience, Audience = list("value"), .remove = FALSE) |>
-    safe_hoist(Frequency, Frequency = list("value"), .remove = FALSE) |>
-    safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
-    safe_hoist(
-      RequestType,
-      RequestType = list("requestType", "name"),
-      .remove = FALSE
-    ) |>
-    safe_hoist(
-      Branch,
-      Branch = list("value"),
-      .remove = FALSE
-    ) |>
-    safe_hoist_all(
-      RequestParticipants,
-      RequestParticipants = list("displayName")
-    ) |>
-    ungroup() |>
-    mutate(
-      across(
-        c(Created, Updated, Resolved),
-        ~ as.Date(.x, format = "%Y-%m-%d")
+      issues <- resp |>
+        purrr::pluck("issues") |>
+        tibble::enframe() |>
+        tidyr::unnest_wider(value) |>
+        tidyr::unnest_wider(fields) |>
+        plyr::rename(names) |>
+        # select_if(~ !all(is.na(.))) |>
+        rename_with(~ gsub(" ", "", .)) |>
+        select(
+          IssueKey = key,
+          IssueType,
+          Status,
+          Created,
+          Updated,
+          # Enddate,
+          Resolved,
+          # Resolution,
+          Duedate,
+          DueDateflexibility,
+          Timetofirstresponse,
+          Timetoresolution,
+          Assignee,
+          # Audience1 = `Audience-1`, # Possible source of issues here, right now all NA
+          Audience = `Audience-2`,
+          Frequency = `Frequency-RPR`,
+          Priority,
+          ReportName = Reportname,
+          Reporter,
+          RequestParticipants = Requestparticipants, # evaluate that the code dropped in still works
+          RequestType,
+          Summary,
+          # Team = `Team-2`,# Possible source of issues here, right now all NA
+          Team = `Team-RPR`,
+          Branch = `Branch-RPR`
+        ) |>
+        safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
+        safe_hoist(Status, Status = "name", .remove = FALSE) |>
+        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+        safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+        safe_hoist(
+          DueDateflexibility,
+          DueDateflexibility = "value",
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          Timetofirstresponse,
+          Timetofirstresponse = list(
+            "completedCycles",
+            1L,
+            "elapsedTime",
+            "millis"
+          ),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          Timetoresolution,
+          Timetoresolution = list("ongoingCycle", "elapsedTime", "millis"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(Audience, Audience = list("value"), .remove = FALSE) |>
+        safe_hoist(Frequency, Frequency = list("value"), .remove = FALSE) |>
+        safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+        safe_hoist(
+          RequestType,
+          RequestType = list("requestType", "name"),
+          .remove = FALSE
+        ) |>
+        safe_hoist(
+          Branch,
+          Branch = list("value"),
+          .remove = FALSE
+        ) |>
+        safe_hoist_all(
+          RequestParticipants,
+          RequestParticipants = list("displayName")
+        ) |>
+        ungroup() |>
+        mutate(
+          across(
+            c(Created, Updated, Resolved),
+            ~ as.Date(.x, format = "%Y-%m-%d")
+          )
+        ) |>
+        mutate(
+          DaysToResolution = Timetoresolution / (1000 * 60 * 60 * 24),
+          MinutesToFirstResponse = Timetofirstresponse / (1000 * 60),
+          .keep = "unused",
+          .after = DueDateflexibility
+        )
+    },
+    error = function(e) {
+      log_daily_etl_run(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = DASHBOARD_ID,
+        status = "FAILURE",
+        message = paste0(
+          "Data wrangling failure: ",
+          substr(conditionMessage(e), 1, 500)
+        )
       )
-    ) |>
-    mutate(
-      DaysToResolution = Timetoresolution / (1000 * 60 * 60 * 24),
-      MinutesToFirstResponse = Timetofirstresponse / (1000 * 60),
-      .keep = "unused",
-      .after = DueDateflexibility
-    )
+      stop(e) # rethrow so Task Scheduler/Nagios still flags it
+    }
+  )
 
   if (round == 1) {
     Issues <- issues
