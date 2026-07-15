@@ -162,6 +162,7 @@ Property <- PropertyData |>
   ) |>
   filter(is.na(BuildingId)) |>
   select(
+    PobcStatus,
     BuildingId,
     PropertyId,
     SiteId,
@@ -344,7 +345,13 @@ Building_Final <- Building_Start |>
       .default = TotalRentableLand
     )
   ) |>
-  ungroup()
+  ungroup() |>
+  mutate(
+    PropertyId = case_when(
+      is.na(PropertyId) & startsWith(BuildingId, "N") ~ BuildingId,
+      .default = PropertyId
+    )
+  )
 
 Property_Start <- Property |>
   filter(!PropertyId %in% Building_Start$rm_bl_id) |>
@@ -419,8 +426,6 @@ Property_Final <- Property_Start |>
 
 SpaceAllocation <- Building_Final |>
   union(Property_Final) |>
-  group_by(PropertyId) |>
-  tidyr::fill(TotalRentableLand, .direction = "updown") |>
   mutate(
     BCPNumber = case_when(
       Tenure == "MANAGED" & Source == "Building" ~ BuildingId,

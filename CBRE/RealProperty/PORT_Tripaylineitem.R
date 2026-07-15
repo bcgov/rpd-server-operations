@@ -1,3 +1,8 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
@@ -6,9 +11,14 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "Tripayment"
-STAGE_TABLE <- paste0(TABLE_NAME, "_Stage")
+TABLE_NAME <- "PORT_Tripayment"
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+SCRIPT_NAME <- "PORT_Tripayment"
+API_NAME <- "None"
+
+options(scipen = 999)
+options(digits = 7)
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
@@ -30,20 +40,6 @@ options(digits = 7)
 
 # Load helper functions
 source(here::here("utilities/R/utilities.R"))
-
-
-# Connect to SQL Server database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
-
-query <- dbSendQuery(con, "SELECT * FROM RealProperty.FacilityDetail")
-FacilityDetail <- dbFetch(query, n = -1)
-dbClearResult(query)
 
 # Connect to Oracle database
 password <- keyring::key_get(service = "IWP", username = "DRATTRAY")
@@ -103,19 +99,7 @@ ORDER BY T1.areActualDueDateDA DESC, UPPER(T1.triPaymentTypeCL)"
 TripayData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-
-tripayFile <- list.files(
-  here::here("input"),
-  pattern = "tripay"
-) |>
-  sort(decreasing = TRUE)
-
-tripaymentlineitem <- readr::read_csv(here(
-  "input/",
-  tripayFile[1]
-))
-
-tripay <- tripaymentlineitem |>
+tripay <- TripayData |>
   select(
     -c(
       TRIIDTX,
@@ -131,7 +115,7 @@ tripay <- tripaymentlineitem |>
       AREPAYMENTSCHEDULETYPE
     )
   ) |>
-  rename_with(~ toTitleCase(tolower(.)), .cols = everything()) |>
+  rename_with(~ stringr::str_to_title(tolower(.)), .cols = everything()) |>
   filter(Trinametx != "*NONPROP") |>
   mutate(
     PaidDate = as.Date(Areactualduedate, format = "%d-%b-%Y"),
@@ -158,12 +142,136 @@ tripay <- tripaymentlineitem |>
   summarise(TotalPaid = sum(AmountPaid)) |>
   ungroup() |>
   filter(PaymentType %in% c("O&M Total", "Utilities")) |>
-  pivot_wider(names_from = PaymentType, values_from = TotalPaid)
+  pivot_wider(names_from = PaymentType, values_from = TotalPaid) |>
+  rename(OnMTotal = `O&M Total`) |>
+  mutate(RefreshDate = as.POSIXct(Sys.Date()), .before = everything())
 
-dbWriteTable(
-  con,
-  name = Id(SCHEMA_NAME, TABLE_NAME),
-  value = tripay,
-  append = FALSE,
-  overwrite = TRUE
+# dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
+if (!dbExistsTable(con, TARGET_TABLE)) {
+  sql <- paste0(
+    " CREATE TABLE ",
+    SCHEMA_NAME,
+    ".",
+    TABLE_NAME,
+    " (
+    RefreshDate             DATETIME2(3)    NOT NULL,
+    Identifier              NVARCHAR(20)    NOT NULL,
+    FiscalYear              NVARCHAR(10)    NOT NULL,
+    OnMTotal                INT             NULL,
+    Utilities               INT             NULL
+  );
+  "
+  )
+
+  dbExecute(con, sql)
+}
+
+# Database Transaction ####
+etl_error <- NULL
+
+# Control database transaction to ensure all steps done together or not at all
+dbBegin(con)
+
+tryCatch(
+  {
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
+    }
+
+    # Create temp table to hold new data
+    dbExecute(
+      con,
+      paste0(
+        "
+    CREATE TABLE  ",
+        SCHEMA_NAME,
+        ".",
+        TEMP_TABLE,
+        " (
+          RefreshDate             DATETIME2(3)    NOT NULL,
+          Identifier              NVARCHAR(50)    NOT NULL,
+          FiscalYear              NVARCHAR(10)    NOT NULL,
+          OnMTotal                INT             NULL,
+          Utilities               INT             NULL
+          );
+  "
+      )
+    )
+
+    dbWriteTable(
+      con,
+      name = TEMP_TABLE,
+      value = tripay,
+      append = TRUE,
+      overwrite = FALSE
+    )
+
+    dbExecute(
+      con,
+      paste0(
+        "DELETE FROM ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        ";"
+      )
+    )
+
+    n_inserted <- dbExecute(
+      con,
+      paste0(
+        "INSERT INTO ",
+        SCHEMA_NAME,
+        ".",
+        TABLE_NAME,
+        "(
+        RefreshDate,
+        Identifier,
+        FiscalYear,
+        OnMTotal,
+        Utilities
+      )
+      SELECT * FROM ",
+        TEMP_TABLE,
+        ";"
+      )
+    )
+
+    # Complete the transaction
+    dbCommit(con)
+    #     n_deleted <<- n_deleted
+    n_inserted <<- n_inserted
+    #     n_updated <<- n_updated
+    # rollback transaction on fail, completion of error handling
+  },
+  error = function(e) {
+    dbRollback(con)
+    stop(e)
+  }
 )
+
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    duration = task_duration,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = NA,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}
