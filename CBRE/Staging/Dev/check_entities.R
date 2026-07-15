@@ -34,3 +34,6 @@ entities <- resp |>
 
 result <- entities |>
   filter(if_any(-1, ~ . == "client_property_id"))
+
+result <- entities |>
+  filter(if_any(-1, ~ str_detect(., "gl")))

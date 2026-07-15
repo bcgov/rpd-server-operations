@@ -66,7 +66,7 @@ if (is.null(raw_data$data) || nrow(raw_data$data) == 0) {
 }
 
 clean_data <- raw_data |>
-  purrr::pluck("data") |>
+  # purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
   select_if(~ !all(is.na(.))) |>
@@ -76,3 +76,13 @@ clean_data <- raw_data |>
   select_if(~ !all(. == "NA")) |>
   select_if(~ !all(. == "-")) #|>
 mutate(RefreshDate = as.POSIXct(Sys.time()))
+
+dbWriteTable(con, TARGET_TABLE, clean_data)
+
+query <- dbSendQuery(
+  con,
+  "SELECT *
+  FROM CbreStaging.fin_dim_general_ledger"
+)
+TestData <- dbFetch(query, n = -1)
+dbClearResult(query)

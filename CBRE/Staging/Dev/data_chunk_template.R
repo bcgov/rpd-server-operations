@@ -94,13 +94,35 @@ source(here::here("utilities/R/utilities.R"))
 #   273 pages -- first 5k rows have mainly missing data columns??
 # com_fact_property_reporting_group_vw
 
-CBRE_TABLE_NAME <- "pjm_kahua_h1_3_fullsnapshot"
+# es_dim_program_vw
+# es_fact_accrual_vw
+# es_fact_financial_planning_vw
+# es_fact_property_rating_vw
+# es_fact_property_rating_vw_23apr_pobc
+# es_report_program_vw
+# fact_cost_saving_vw
+# fact_project_cash_flow_vw
+# fin_dim_cost_center_hierarchy_vw
+# fin_fact_financial_planning_vw
+# fin_general_ledger_cost_center_hierarchy_link_vw
+# fin_jde_master_vendors_vw
+# fin_jde_vendor_master_map_vw
+# fin_mapping_contract_vw
+# fin_mapping_general_ledger_vw
+# fin_mapping_gl_account_vw
+# fin_mapping_vendor_vw
+# fm_dim_invoice_vw
+# fm_dim_purchase_order_vw
+# pjm_fact_cost_saving_vw
+# pjm_fact_project_cash_flow_vw
+# archibus_pr
 
+CBRE_TABLE_NAME <- "fin_dim_contract_work_item_detail_vw"
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-15T00:00:00Z"
+  end_time = "2026-07-16T00:00:00Z"
 )
 
 # only 273 pages...

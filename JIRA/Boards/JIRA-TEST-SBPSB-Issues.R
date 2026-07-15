@@ -157,7 +157,7 @@ while (progress < 2) {
         # Select fields of interest
         select(
           IssueKey = key,
-          IssueType = `IssueType-2`,
+          IssueType,
           Assignee,
           Created,
           Labels,
