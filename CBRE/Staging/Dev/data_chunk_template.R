@@ -117,12 +117,49 @@ source(here::here("utilities/R/utilities.R"))
 # pjm_fact_project_cash_flow_vw
 # archibus_pr
 
-CBRE_TABLE_NAME <- "fin_dim_contract_work_item_detail_vw"
+# Second list
+# com_dim_client_vw
+# com_dim_country_vw
+# com_dim_site_vw
+# com_edp_currency_translation_rate_vw
+# com_fact_property_hierarchy_extended_attribute_vw
+# com_fact_property_region_hierarchy_vw
+# dim_client_vw
+# es_dim_program_action_plan_vw
+# es_dim_program_action_plan_vw_23apr_pobc
+# es_dim_program_vw_23apr_pobc
+# es_fact_accrual_allocated_vw
+# es_fact_accrual_allocated_vw_23apr_pobc
+# es_fact_accrual_vw_23apr_pobc
+# es_fact_financial_planning_vw_23apr_pobc
+# es_fact_program_action_vw
+# es_fact_program_action_vw_23apr_pobc
+# es_fact_service_account_allocation_vw
+# fin_dim_invoice_line_vw
+# fin_my_finance_reporting_alias_vw
+# fin_my_finance_reporting_months_alias_vw
+# fin_mybuy_po_detail_reporting_vw
+# fin_ref_lookup_vw
+# fin_si7_otsr_h1_3
+# fin_vt_accountsummary_charts
+# fin_vt_accountsummary_details
+# fin_vt_client_initiatives
+# fin_vt_clientsavings_target
+# fin_vt_savingsoverview_charts
+# fin_vt_savingsoverview_details
+# fin_vt_serviceline_management_fee
+# fin_vt_serviceline_savings_target
+# fm_dim_business_unit_vw
+# fm_dim_equipment_extended_attribute_vw
+# fm_dim_invoice_line_vw
+
+CBRE_TABLE_NAME <- "fm_dim_maintenance_plan_vw"
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-16T00:00:00Z"
+  end_time = "2026-07-16T00:00:00Z",
+  max_pages = 5
 )
 
 # only 273 pages...
