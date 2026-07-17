@@ -45,7 +45,7 @@ token <- base64encode(charToRaw(paste0(email, ":", api_key)))
 token_string <- paste("Basic", token)
 
 # Setup API parameters ####
-query_url = "https://citz-rpd.atlassian.net/rest/api/3/search/jql"
+query_url = "https://citz-inf.atlassian.net/rest/api/3/search/jql"
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
 # https://developer.atlassian.com/changelog/#CHANGE-2046
 expand_opts = c("names", "fields")

@@ -38,7 +38,7 @@ token <- base64encode(charToRaw(paste0(email, ":", api_key)))
 token_string <- paste("Basic", token)
 
 # Setup API parameters ####
-query_url = "https://citz-rpd.atlassian.net/rest/api/3/search/jql"
+query_url = "https://citz-inf.atlassian.net/rest/api/3/search/jql"
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
 # https://developer.atlassian.com/changelog/#CHANGE-2046
 expand_opts = c("names", "fields")
@@ -137,15 +137,16 @@ while (progress < 2) {
     # API succeeded, nothing to load
     no_data_msg <- paste0(
       "No data returned from API for window ",
-      etl_window$start_time,
+      etl_window$jira_start_time,
       " to ",
-      etl_window$end_time
+      format(Sys.time(), tz = "UTC"),
+      "UTC"
     )
     cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
     log_daily_etl_run(
       api_name = API_NAME,
       script_name = SCRIPT_NAME,
-      table_name = TABLE_NAME,
+      table_name = DASHBOARD_ID,
       duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
       status = "NO_DATA",
       message = no_data_msg
