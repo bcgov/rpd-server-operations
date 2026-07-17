@@ -3,14 +3,6 @@
 task_start <- Sys.time()
 
 # Set necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "Jira"
 DASHBOARD_ID <- "SBPSB"
 EXTENSION <- "_LinkedIssues"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
@@ -24,30 +16,7 @@ API_NAME <- "Jira"
 SCRIPT_NAME <- "Jira_SBPSB"
 SCRIPT_NAME2 <- paste0("Jira_SBPSB", EXTENSION)
 
-# Connect to SQL database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
-
-email <- "rpd.spbooking@gov.bc.ca"
-api_key <- keyring::key_get(
-  service = "JIRA_API",
-  username = email,
-  keyring = NULL
-)
-
-# Encode token
-token <- base64encode(charToRaw(paste0(email, ":", api_key)))
-token_string <- paste("Basic", token)
-
 # Setup API parameters ####
-query_url = "https://citz-inf.atlassian.net/rest/api/3/search/jql"
-# https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
-# https://developer.atlassian.com/changelog/#CHANGE-2046
 expand_opts = c("names", "fields")
 max_results = 100
 nextPageToken = NULL
@@ -60,7 +29,19 @@ while (progress < 2) {
     req_headers_redacted(Authorization = token_string) |>
     # configure project, max_results, and start_at
     req_url_query(
-      jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
+      jql = I(
+        # I wrapper skips auto-formatting of the extra "=" sign
+        utils::URLencode(
+          paste0(
+            "project=",
+            DASHBOARD_ID,
+            " AND updated >= \"",
+            etl_window$jira_start_time,
+            "\""
+          ),
+          repeated = TRUE
+        )
+      ),
       expand = expand_opts,
       maxResults = max_results,
       fields = "*all",
@@ -117,13 +98,32 @@ while (progress < 2) {
   # Used to update total_results in while loop
   nextPageToken <- resp["nextPageToken"][[1]]
 
-  # total results isn't always accurate, check that response has issues
-  if (length(resp$issues) == 0) {
-    break
-  }
-
   if (is.null(nextPageToken)) {
     progress <- 2
+  }
+
+  if (length(resp$issues) == 0) {
+    # API succeeded, nothing to load
+    no_data_msg <- paste0(
+      "No data returned from API for window ",
+      etl_window$start_time,
+      " to ",
+      etl_window$end_time
+    )
+    cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = TABLE_NAME,
+      duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+      status = "NO_DATA",
+      message = no_data_msg
+    )
+    cond <- structure(
+      class = c("no_data_condition", "condition"),
+      list(message = no_data_msg)
+    )
+    stop(cond)
   }
 
   tryCatch(
@@ -230,90 +230,130 @@ while (progress < 2) {
 }
 
 # Linked Issues
-LinkedIssues <- Issues |>
-  select(IssueKey, LinkedIssues) |>
-  tidyr::unnest_wider(LinkedIssues, names_sep = "_") |>
-  tidyr::unnest_wider(starts_with("LinkedIssues"), names_sep = "_") |>
-  tidyr::unnest_wider(where(is.list), names_sep = "_") |>
-  # select(IssueKey, matches("(\\d+)_id"), ends_with("type_name"), , ends_with("type_outward"), ends_with("outwardIssue_key")) |>
-  select(
-    IssueKey,
-    matches("(\\d+)_id"),
-    ends_with("type_name"),
-    ends_with("type_inward"),
-    ends_with("type_outward"),
-    ends_with("Issue_key")
-  ) |>
-  pivot_longer(
-    cols = matches("LinkedIssues_(\\d+)_id"),
-    names_to = "link_name",
-    values_to = "link_value"
-  ) |>
-  filter(!is.na(link_value)) |>
-  relocate(link_value, .after = IssueKey) |>
-  pivot_longer(
-    cols = matches("(\\d+)"),
-    names_to = "col_name",
-    values_to = "col_value"
-  ) |>
-  mutate(
-    link_name_num = stringr::str_extract(link_name, "(\\d+)"),
-    col_name_num = stringr::str_extract(col_name, "(\\d+)")
-  ) |>
-  filter(link_name_num == col_name_num) |>
-  select(-c(link_name, link_name_num, col_name_num)) |>
-  mutate(
-    col_name = stringr::str_replace(col_name, "LinkedIssues_(\\d+)_", "")
-  ) |>
-  pivot_wider(
-    id_cols = c(IssueKey, link_value),
-    names_from = col_name,
-    values_from = col_value
-  ) |>
-  mutate(
-    TypeFlag = case_when(
-      is.na(inwardIssue_key) ~ "Outward",
-      is.na(outwardIssue_key) ~ "Inward",
-      .default = "Error"
+tryCatch(
+  {
+    LinkedIssues <- Issues |>
+      select(IssueKey, LinkedIssues) |>
+      tidyr::unnest_wider(LinkedIssues, names_sep = "_") |>
+      tidyr::unnest_wider(starts_with("LinkedIssues"), names_sep = "_") |>
+      tidyr::unnest_wider(where(is.list), names_sep = "_") |>
+      # select(IssueKey, matches("(\\d+)_id"), ends_with("type_name"), , ends_with("type_outward"), ends_with("outwardIssue_key")) |>
+      select(
+        IssueKey,
+        matches("(\\d+)_id"),
+        ends_with("type_name"),
+        ends_with("type_inward"),
+        ends_with("type_outward"),
+        ends_with("Issue_key")
+      ) |>
+      pivot_longer(
+        cols = matches("LinkedIssues_(\\d+)_id"),
+        names_to = "link_name",
+        values_to = "link_value"
+      ) |>
+      filter(!is.na(link_value)) |>
+      relocate(link_value, .after = IssueKey) |>
+      pivot_longer(
+        cols = matches("(\\d+)"),
+        names_to = "col_name",
+        values_to = "col_value"
+      ) |>
+      mutate(
+        link_name_num = stringr::str_extract(link_name, "(\\d+)"),
+        col_name_num = stringr::str_extract(col_name, "(\\d+)")
+      ) |>
+      filter(link_name_num == col_name_num) |>
+      select(-c(link_name, link_name_num, col_name_num)) |>
+      mutate(
+        col_name = stringr::str_replace(col_name, "LinkedIssues_(\\d+)_", "")
+      ) |>
+      pivot_wider(
+        id_cols = c(IssueKey, link_value),
+        names_from = col_name,
+        values_from = col_value
+      ) |>
+      mutate(
+        TypeFlag = case_when(
+          is.na(inwardIssue_key) ~ "Outward",
+          is.na(outwardIssue_key) ~ "Inward",
+          .default = "Error"
+        )
+      ) |>
+      mutate(
+        RelationDesc = case_when(
+          TypeFlag == "Outward" ~ type_outward,
+          TypeFlag == "Inward" ~ type_inward,
+          .default = "Error"
+        )
+      ) |>
+      mutate(
+        RelationIssueKey = case_when(
+          TypeFlag == "Outward" ~ outwardIssue_key,
+          TypeFlag == "Inward" ~ inwardIssue_key,
+          .default = "Error"
+        )
+      ) |>
+      rename(
+        RelationId = link_value,
+        RelationCategory = type_name,
+      ) |>
+      select(
+        -c(
+          type_outward,
+          type_inward,
+          TypeFlag,
+          outwardIssue_key,
+          inwardIssue_key
+        )
+      ) |>
+      mutate(RefreshDate = Sys.time(), .before = everything())
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = DASHBOARD_ID,
+      status = "FAILURE",
+      message = paste0(
+        "LinkedIssues failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
     )
-  ) |>
-  mutate(
-    RelationDesc = case_when(
-      TypeFlag == "Outward" ~ type_outward,
-      TypeFlag == "Inward" ~ type_inward,
-      .default = "Error"
-    )
-  ) |>
-  mutate(
-    RelationIssueKey = case_when(
-      TypeFlag == "Outward" ~ outwardIssue_key,
-      TypeFlag == "Inward" ~ inwardIssue_key,
-      .default = "Error"
-    )
-  ) |>
-  rename(
-    RelationId = link_value,
-    RelationCategory = type_name,
-  ) |>
-  select(
-    -c(type_outward, type_inward, TypeFlag, outwardIssue_key, inwardIssue_key)
-  ) |>
-  mutate(RefreshDate = Sys.time(), .before = everything())
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
 
 # Deal with issues where extra newline characters screwed up the read in of data to power bi
-Issues <- Issues |>
-  select(-LinkedIssues) |>
-  mutate(across(where(is.character), ~ gsub(",", "", .x))) |>
-  mutate(across(where(is.character), ~ trimws(.x))) |>
-  mutate(
-    across(
-      c(
-        Created
-      ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
+tryCatch(
+  {
+    Issues <- Issues |>
+      select(-LinkedIssues) |>
+      mutate(across(where(is.character), ~ gsub(",", "", .x))) |>
+      mutate(across(where(is.character), ~ trimws(.x))) |>
+      mutate(
+        across(
+          c(
+            Created
+          ),
+          ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
+        )
+      ) |>
+      mutate(RefreshDate = Sys.time(), .before = everything())
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = DASHBOARD_ID,
+      status = "FAILURE",
+      message = paste0(
+        "Issues assignment failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
     )
-  ) |>
-  mutate(RefreshDate = Sys.time(), .before = everything())
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
 
 # Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)

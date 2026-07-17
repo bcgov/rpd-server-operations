@@ -25,6 +25,58 @@ ORCHESTRATOR_NAME <- "jira_boards"
 
 etl_window <- get_etl_window()
 
+ETL_STATUS <- "DEV"
+SQL_SERVER <- if (ETL_STATUS == "PROD") {
+  "dynamo.idir.bcgov\\CA_PRD"
+} else {
+  "windfarm.idir.bcgov\\CA_TST"
+}
+DB_NAME <- "BuildingIntelligence"
+SCHEMA_NAME <- "Jira"
+
+# Connect to SQL database
+con <- dbConnect(
+  odbc(),
+  driver = "ODBC Driver 17 for SQL Server",
+  server = SQL_SERVER,
+  database = DB_NAME,
+  Trusted_Connection = "Yes"
+)
+
+email <- "rpd.spbooking@gov.bc.ca"
+api_key <- keyring::key_get(
+  service = "JIRA_API",
+  username = email,
+  keyring = NULL
+)
+
+# Encode token
+token <- base64encode(charToRaw(paste0(email, ":", api_key)))
+token_string <- paste("Basic", token)
+
+base_url <- "https://citz-rpd.atlassian.net/rest/api/3/"
+
+req <- request(base_url) |>
+  req_headers(Authorization = token_string) |>
+  req_url_path_append("dashboard") |>
+  req_perform()
+
+# Catch changes in Jira URL
+if (base_url != stringr::str_extract(req$url, ".+3/")) {
+  desc <- "Query URL does not match returned URL"
+
+  log_daily_etl_run(
+    api_name = ORCHESTRATOR_NAME,
+    script_name = ORCHESTRATOR_NAME,
+    status = "WARNING",
+    message = substr(desc, 1, 500)
+  )
+
+  base_url <- stringr::str_extract(req$url, ".+3/")
+}
+
+query_url <- paste0(base_url, "search/jql")
+
 scripts <- c(
   "JIRA/Boards/JIRA-TEST-CSR-Issues.R",
   "JIRA/Boards/JIRA-TEST-GPOPR-Issues.R",

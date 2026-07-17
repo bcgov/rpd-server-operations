@@ -3,44 +3,13 @@
 task_start <- Sys.time()
 
 # Set necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "Jira"
 DASHBOARD_ID <- "GPOPR"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
 TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
 API_NAME <- "Jira"
 SCRIPT_NAME <- "Jira_GPOPR"
 
-# Connect to SQL database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
-
-email <- "rpd.spbooking@gov.bc.ca"
-api_key <- keyring::key_get(
-  service = "JIRA_API",
-  username = email,
-  keyring = NULL
-)
-
-# Encode token
-token <- base64encode(charToRaw(paste0(email, ":", api_key)))
-token_string <- paste("Basic", token)
-
 # Setup API parameters ####
-query_url = "https://citz-inf.atlassian.net/rest/api/3/search/jql"
-# https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
-# https://developer.atlassian.com/changelog/#CHANGE-2046
 expand_opts = c("names", "fields")
 max_results = 100
 nextPageToken = NULL
@@ -53,7 +22,19 @@ while (progress < 2) {
     req_headers(Authorization = token_string) |>
     # configure project, max_results, and start_at
     req_url_query(
-      jql = I(paste0("project=", DASHBOARD_ID)), # I wrapper skips auto-formatting of the extra "=" sign
+      jql = I(
+        # I wrapper skips auto-formatting of the extra "=" sign
+        utils::URLencode(
+          paste0(
+            "project=",
+            DASHBOARD_ID,
+            " AND updated >= \"",
+            etl_window$jira_start_time,
+            "\""
+          ),
+          repeated = TRUE
+        )
+      ),
       expand = expand_opts,
       maxResults = max_results,
       fields = "*all",
@@ -111,13 +92,33 @@ while (progress < 2) {
   # Used to update total_results in while loop
   nextPageToken <- resp["nextPageToken"][[1]]
 
-  # total results isn't always accurate, check that response has issues
-  if (length(resp$issues) == 0) {
-    break
-  }
-
   if (is.null(nextPageToken)) {
     progress <- 2
+  }
+
+  if (length(resp$issues) == 0) {
+    # API succeeded, nothing to load
+    no_data_msg <- paste0(
+      "No data returned from API for window ",
+      etl_window$jira_start_time,
+      " to ",
+      format(Sys.time(), tz = "UTC"),
+      "UTC"
+    )
+    cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = DASHBOARD_ID,
+      duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+      status = "NO_DATA",
+      message = no_data_msg
+    )
+    cond <- structure(
+      class = c("no_data_condition", "condition"),
+      list(message = no_data_msg)
+    )
+    stop(cond)
   }
 
   tryCatch(
@@ -244,7 +245,24 @@ while (progress < 2) {
   round <- 2
 }
 
-Issues <- Issues |> mutate(RefreshDate = Sys.time(), .before = everything())
+tryCatch(
+  {
+    Issues <- Issues |> mutate(RefreshDate = Sys.time(), .before = everything())
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = DASHBOARD_ID,
+      status = "FAILURE",
+      message = paste0(
+        "Issues assignment failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
 
 # Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)
@@ -482,4 +500,12 @@ if (is.null(etl_error)) {
   stop(etl_error)
 }
 
-write.csv(Issues, "E:/Projects/PBI-Gateway/GPOPR_Issues.csv", row.names = FALSE)
+if (Sys.getenv("ETL_ENV") == "Muon") {
+  write.csv(
+    Issues,
+    "E:/Projects/PBI-Gateway/GPOPR_Issues.csv",
+    row.names = FALSE
+  )
+} else {
+  cat("NO CSV FOR YOU!!!", "\n")
+}

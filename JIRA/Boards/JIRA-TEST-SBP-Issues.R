@@ -3,44 +3,13 @@
 task_start <- Sys.time()
 
 # Set necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "Jira"
 DASHBOARD_ID <- "SBP"
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
 TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
 API_NAME <- "Jira"
 SCRIPT_NAME <- "Jira_SBP"
 
-# Connect to SQL database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
-
-email <- "rpd.spbooking@gov.bc.ca"
-api_key <- keyring::key_get(
-  service = "JIRA_API",
-  username = email,
-  keyring = NULL
-)
-
-# Encode token
-token <- base64encode(charToRaw(paste0(email, ":", api_key)))
-token_string <- paste("Basic", token)
-
 # Setup API parameters ####
-query_url = "https://citz-inf.atlassian.net/rest/api/3/search/jql"
-# https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
-# https://developer.atlassian.com/changelog/#CHANGE-2046
 expand_opts = c("changelog", "names", "fields")
 max_results = 100
 nextPageToken = NULL
@@ -122,11 +91,6 @@ while (progress < 2) {
 
   # Used to update total_results in while loop
   nextPageToken <- resp["nextPageToken"][[1]]
-
-  # total results isn't always accurate, check that response has issues
-  if (length(resp$issues) == 0) {
-    break
-  }
 
   if (is.null(nextPageToken)) {
     progress <- 2
@@ -273,77 +237,105 @@ while (progress < 2) {
 # timestamp is used for tickets that have only been open, calc time from creation to sys.time for total elapsed time.
 timestamp <- format(Sys.time(), format = "%Y-%m-%dT%H:%M:%OS3%z")
 
-StatusChange <- Issues |>
-  select(IssueKey, Status, TicketCreated = Created, changelog) |>
-  safe_hoist(changelog, histories = list("histories"), .remove = FALSE) |>
-  select(-c(changelog)) |>
-  unnest_longer(col = histories, values_to = "values") |>
-  unnest_longer(col = values, values_to = "values", indices_to = "column") |>
-  filter(column %in% c("created", "items")) |>
-  pivot_wider(names_from = column, values_from = values, values_fn = list) |>
-  unnest_longer(col = created:items) |>
-  select(-c(created_id, items_id)) |>
-  unnest_longer(items) |>
-  safe_hoist(
-    items,
-    item_field = list("field"),
-    .remove = FALSE
-  ) |>
-  safe_hoist(
-    items,
-    item_fromString = list("fromString"),
-    .remove = FALSE
-  ) |>
-  safe_hoist(
-    items,
-    item_toString = list("toString"),
-    .remove = FALSE
-  ) |>
-  group_by(IssueKey) |>
-  mutate(rowNum = row_number()) |>
-  mutate(
-    created = case_when(
-      !any(item_field == "status") & rowNum == 1 ~ timestamp,
-      .default = created
-    ),
-    item_toString = case_when(
-      !any(item_field == "status") & rowNum == 1 ~ "No-Change",
-      .default = item_toString
-    ),
-    item_fromString = case_when(
-      !any(item_field == "status") & rowNum == 1 ~ "Open",
-      .default = item_fromString
-    ),
-    item_field = case_when(
-      !any(item_field == "status") & rowNum == 1 ~ "status",
-      .default = item_field
+tryCatch(
+  {
+    StatusChange <- Issues |>
+      select(IssueKey, Status, TicketCreated = Created, changelog) |>
+      safe_hoist(changelog, histories = list("histories"), .remove = FALSE) |>
+      select(-c(changelog)) |>
+      unnest_longer(col = histories, values_to = "values") |>
+      unnest_longer(
+        col = values,
+        values_to = "values",
+        indices_to = "column"
+      ) |>
+      filter(column %in% c("created", "items")) |>
+      pivot_wider(
+        names_from = column,
+        values_from = values,
+        values_fn = list
+      ) |>
+      unnest_longer(col = created:items) |>
+      select(-c(created_id, items_id)) |>
+      unnest_longer(items) |>
+      safe_hoist(
+        items,
+        item_field = list("field"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(
+        items,
+        item_fromString = list("fromString"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(
+        items,
+        item_toString = list("toString"),
+        .remove = FALSE
+      ) |>
+      group_by(IssueKey) |>
+      mutate(rowNum = row_number()) |>
+      mutate(
+        created = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ timestamp,
+          .default = created
+        ),
+        item_toString = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ "No-Change",
+          .default = item_toString
+        ),
+        item_fromString = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ "Open",
+          .default = item_fromString
+        ),
+        item_field = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ "status",
+          .default = item_field
+        )
+      ) |>
+      ungroup() |>
+      filter(item_field == "status") |>
+      select(-c(items, rowNum)) |>
+      mutate(
+        TicketCreated = ymd_hms(TicketCreated),
+        created = ymd_hms(created)
+      ) |>
+      arrange(IssueKey, created) |>
+      group_by(IssueKey) |>
+      mutate(
+        TimeElapsed = as.numeric(difftime(
+          created,
+          lag(created, n = 1, default = first(TicketCreated)),
+          units = "days"
+        ))
+      ) |>
+      ungroup() |>
+      select(-c(item_toString, item_field, created, Status, TicketCreated)) |>
+      mutate(
+        item_fromString = gsub(" ", "", tools::toTitleCase(item_fromString))
+      ) |> # deal with variable capitalization
+      group_by(IssueKey, item_fromString) |>
+      summarise(
+        TimeElapsed = sum(TimeElapsed, na.rm = TRUE),
+        .groups = "drop_last"
+      ) |>
+      pivot_wider(names_from = item_fromString, values_from = TimeElapsed) |>
+      ungroup()
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = DASHBOARD_ID,
+      status = "FAILURE",
+      message = paste0(
+        "Status Change failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
     )
-  ) |>
-  ungroup() |>
-  filter(item_field == "status") |>
-  select(-c(items, rowNum)) |>
-  mutate(
-    TicketCreated = ymd_hms(TicketCreated),
-    created = ymd_hms(created)
-  ) |>
-  arrange(IssueKey, created) |>
-  group_by(IssueKey) |>
-  mutate(
-    TimeElapsed = as.numeric(difftime(
-      created,
-      lag(created, n = 1, default = first(TicketCreated)),
-      units = "days"
-    ))
-  ) |>
-  ungroup() |>
-  select(-c(item_toString, item_field, created, Status, TicketCreated)) |>
-  mutate(
-    item_fromString = gsub(" ", "", tools::toTitleCase(item_fromString))
-  ) |> # deal with variable capitalization
-  group_by(IssueKey, item_fromString) |>
-  summarise(TimeElapsed = sum(TimeElapsed, na.rm = TRUE)) |>
-  pivot_wider(names_from = item_fromString, values_from = TimeElapsed) |>
-  ungroup()
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
 
 # With smaller datasets now that I filter on updated, need to make sure all status type columns exist
 status_cols <- c(
@@ -364,23 +356,41 @@ if (length(missing_cols) > 0) {
   )
 }
 
+
 # Deal with issues where extra newline characters screwed up the read in of data to power bi
-Issues <- Issues |>
-  mutate(across(where(is.character), ~ gsub(",", "", .x))) |>
-  mutate(across(where(is.character), ~ trimws(.x))) |>
-  left_join(StatusChange, by = join_by(IssueKey)) |>
-  select(-changelog) |>
-  mutate(across(
-    c(Created, Updated, Resolved),
-    ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
-  )) |>
-  mutate(DueDate = as.Date(DueDate, format = "%Y-%m-%d")) |>
-  mutate(NumberOfSpaces = as.integer(NumberOfSpaces)) |>
-  mutate(across(
-    c(Closed, InProgress, Open, Reopened, WaitingforCustomer, OnHold),
-    ~ ifelse(is.finite(.x), .x, NA_real_)
-  )) |>
-  mutate(RefreshDate = Sys.time(), .before = everything())
+tryCatch(
+  {
+    Issues <- Issues |>
+      mutate(across(where(is.character), ~ gsub(",", "", .x))) |>
+      mutate(across(where(is.character), ~ trimws(.x))) |>
+      left_join(StatusChange, by = join_by(IssueKey)) |>
+      select(-changelog) |>
+      mutate(across(
+        c(Created, Updated, Resolved),
+        ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
+      )) |>
+      mutate(DueDate = as.Date(DueDate, format = "%Y-%m-%d")) |>
+      mutate(NumberOfSpaces = as.integer(NumberOfSpaces)) |>
+      mutate(across(
+        c(Closed, InProgress, Open, Reopened, WaitingforCustomer, OnHold),
+        ~ ifelse(is.finite(.x), .x, NA_real_)
+      )) |>
+      mutate(RefreshDate = Sys.time(), .before = everything())
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = DASHBOARD_ID,
+      status = "FAILURE",
+      message = paste0(
+        "Issues Cleanup failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
 
 # Start database transaction ####
 # dbRemoveTable(con, TARGET_TABLE)
@@ -688,4 +698,8 @@ if (is.null(etl_error)) {
   stop(etl_error)
 }
 
-write.csv(Issues, "E:/Projects/PBI-Gateway/SBP_Issues.csv", row.names = FALSE)
+if (Sys.getenv("ETL_ENV") == "Muon") {
+  write.csv(Issues, "E:/Projects/PBI-Gateway/SBP_Issues.csv", row.names = FALSE)
+} else {
+  cat("NO CSV FOR YOU!!!", "\n")
+}
