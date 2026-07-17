@@ -47,7 +47,7 @@ query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_dp")
 DepartmentData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-Output <- BuildingData |>
+InitialData <- BuildingData |>
   left_join(LeasingData, by = join_by(BuildingId == ls_bl_id)) |>
   left_join(
     DepartmentData,
@@ -64,6 +64,7 @@ Output <- BuildingData |>
     ls_ls_id,
     ls_ls_parent_id,
     ls_option1,
+    ls_lease_sublease,
     Tenure,
     #ContractType
     ls_status,
@@ -75,92 +76,199 @@ Output <- BuildingData |>
     ls_date_terminated,
     FacilityType
   ) |>
+  # Select lease status' of interest
   filter(
     ls_status %in% c("Terminated", "Retired", "Active", "Holdover")
-  )
-
-test <- Output |> filter(!is.na(ls_option1))
-# have to sort out the Retired rows that are followed by an active row.
-#|>
-mutate(
-  LeaseLineage =
-)
-mutate(
-  LeaseGroup = case_when(
-    !is.na(ls_ls_parent_id) &
-      startsWith(ls_ls_id, "A") ~ stringr::str_extract(
-      ls_ls_parent_id,
-      "(L\\d+)",
-      group = 1
-    ),
-    startsWith(ls_ls_id, "A") &
-      startsWith(ls_ls_parent_id, "L") ~ stringr::str_extract(
-      ls_ls_id,
-      "-(L\\d+)",
-      group = 1
-    ),
-    startsWith(ls_ls_id, "A") &
-      startsWith(ls_ls_parent_id, "P") ~ stringr::str_extract(
-      ls_ls_id,
-      "-(P\\d+)",
-      group = 1
-    ),
-    startsWith(ls_ls_id, "A") & is.na(ls_ls_parent_id) ~ stringr::str_extract(
-      ls_ls_id,
-      "-(B\\d+)",
-      group = 1
-    ),
-    startsWith(ls_ls_id, "L") ~ stringr::str_extract(
-      ls_ls_id,
-      "(L\\d+)",
-      group = 1
-    ),
-    startsWith(ls_ls_id, "P") ~ stringr::str_extract(
-      ls_ls_id,
-      "(P\\d+)",
-      group = 1
-    ),
-    !(is.na(ls_option1)) ~ ls_option1,
-    .default = "Missing"
-  ),
-  .after = ls_option1
-)
-# B0092138 B0078239
-
-select(
-  linkAddress,
-  DivisionName = dv_dv_name,
-  DepartmentName = dp_dp_name,
-  linkCity,
-  BuildingId,
-  Lease = ls_ls_id,
-  ls_ls_parent_id,
-  Tenure,
-  #ContractType
-  LeaseStatus = ls_status,
-  #AgreementStatus,
-  LeaseVersion = ls_ls_version,
-  AgreementDateStart = ls_date_start,
-  AgreementDateEnd = ls_date_end,
-  LeaseDateEnd = FacilityType
-) |>
+  ) |>
+  # Remove weird TBD BuildingIds
+  filter(
+    BuildingId != "TBD"
+  ) |>
+  # Remove C agreements
+  filter(
+    ls_lease_sublease != "C"
+  ) |>
   mutate(
-    Region = case_when(
-      City %in%
-        c(
-          "Victoria",
-          "VICTORIA",
-          "View Royal",
-          "SAANICH",
-          "Saanich",
-          "Esquimalt"
-        ) ~ "Victoria",
-      City %in% c("Prince George", "PRINCE GEORGE") ~ "Prince George",
-      City %in% c("Kamloops", "KAMLOOPS") ~ "Kamloops",
-      City %in% c("Kelowna", "KELOWNA") ~ "Kelowna",
-      City %in% c("Surrey", "SURREY") ~ "Surrey",
-      City %in% c("Vancouver", "VANCOUVER") ~ "Vancouver",
-      City %in% c("West Kelowna", "WEST KELOWNA") ~ "West Kelowna",
-      .default = "None"
-    )
+    LeaseLineage = case_when(
+      !is.na(ls_option1) ~ ls_option1,
+      .default = paste0(BuildingId, "_", row_number())
+    ),
+    .after = ls_option1
+  ) |>
+  group_by(LeaseLineage) |>
+  filter(ls_version == max(ls_version)) |>
+  ungroup() |>
+  mutate(
+    LeaseGroup = case_when(
+      # When the row is the parent lease
+      Tenure == "LEASED" &
+        startsWith(ls_ls_id, "L") &
+        is.na(ls_ls_parent_id) ~ stringr::str_extract(
+        ls_ls_id,
+        "(L\\d+)",
+        group = 1
+      ),
+      # When the row is the parent parking lease
+      Tenure == "LEASED" &
+        startsWith(ls_ls_id, "P") &
+        is.na(ls_ls_parent_id) ~ stringr::str_extract(
+        ls_ls_id,
+        "(P\\d+)",
+        group = 1
+      ),
+      # When the row is a child agreement of a lease
+      Tenure == "LEASED" &
+        startsWith(ls_ls_parent_id, "L") &
+        startsWith(ls_ls_id, "A") ~ stringr::str_extract(
+        ls_ls_parent_id,
+        "(L\\d+)",
+        group = 1
+      ),
+      # When the row is a child agreement of a parking lease
+      Tenure == "LEASED" &
+        startsWith(ls_ls_parent_id, "P") &
+        startsWith(ls_ls_id, "A") ~ stringr::str_extract(
+        ls_ls_parent_id,
+        "(P\\d+)",
+        group = 1
+      ),
+      # When the row is an owned property but is a parent lease
+      Tenure == "OWNED" &
+        is.na(ls_ls_parent_id) &
+        startsWith(ls_ls_id, "L") ~ stringr::str_extract(
+        ls_ls_id,
+        "(L\\d+)",
+        group = 1
+      ),
+      # When the row is an owned property but is a parent parking lease
+      Tenure == "OWNED" &
+        is.na(ls_ls_parent_id) &
+        startsWith(ls_ls_id, "P") ~ stringr::str_extract(
+        ls_ls_id,
+        "(P\\d+)",
+        group = 1
+      ),
+      # When the row is an owned property but is a child agreement
+      Tenure == "OWNED" &
+        startsWith(ls_ls_parent_id, "L") ~ stringr::str_extract(
+        ls_ls_parent_id,
+        "(L\\d+)",
+        group = 1
+      ),
+      # When the row is an owned property but is a child parking agreement
+      Tenure == "OWNED" &
+        startsWith(ls_ls_parent_id, "P") ~ stringr::str_extract(
+        ls_ls_parent_id,
+        "(P\\d+)",
+        group = 1
+      ),
+      # When the row is an owned property and is not part of a lease
+      Tenure == "OWNED" &
+        is.na(ls_ls_parent_id) &
+        is.na(ls_option1) ~ BuildingId,
+      # When the row is an managed property and is not part of a lease
+      Tenure == "MANAGED" &
+        is.na(ls_ls_parent_id) &
+        is.na(ls_option1) ~ BuildingId,
+      .default = NA_character_
+    ),
+    .after = ls_option1
   )
+
+Agreements <- InitialData |>
+  filter(ls_lease_sublease == "A") |>
+  rename(
+    ContractCode = ls_ls_id,
+    AgreementStatus = ls_status,
+    LeaseVersion = ls_version,
+    AgreementDateStart = ls_date_start,
+    AgreementDateEnd = ls_date_end,
+    AgreementDateTerminated = ls_date_terminated,
+  ) |>
+  mutate(
+    Lease = NA_character_,
+    LeaseStatus = NA_character_,
+    LeaseDateStart = as.POSIXct(NA),
+    LeaseDateEnd = as.POSIXct(NA),
+    LeaseDateTerminated = as.POSIXct(NA)
+  )
+
+Leases <- InitialData |>
+  filter(ls_lease_sublease %in% c("L", "P")) |>
+  rename(
+    Lease = ls_ls_id,
+    LeaseStatus = ls_status,
+    LeaseVersion = ls_version,
+    LeaseDateStart = ls_date_start,
+    LeaseDateEnd = ls_date_end,
+    LeaseDateTerminated = ls_date_terminated
+  ) |>
+  mutate(
+    ContractCode = NA_character_,
+    AgreementStatus = NA_character_,
+    AgreementDateStart = as.POSIXct(NA),
+    AgreementDateEnd = as.POSIXct(NA),
+    AgreementDateTerminated = as.POSIXct(NA),
+  )
+
+Output <- Agreements |>
+  union(Leases) |>
+  group_by(LeaseGroup) |>
+  tidyr::fill(
+    Lease,
+    LeaseStatus,
+    LeaseVersion,
+    LeaseDateStart,
+    LeaseDateEnd,
+    LeaseDateTerminated,
+    .direction = "updown"
+  ) |>
+  ungroup() |>
+  filter(ls_lease_sublease == "A") |>
+  select(
+    Address = linkAddress,
+    DivisionName = dv_name,
+    DepartmentName = dp_name,
+    City = linkCity,
+    BuildingId,
+    Lease,
+    ContractCode,
+    Tenure,
+    AgreementStatus,
+    LeaseStatus,
+    LeaseVersion,
+    AgreementDateStart,
+    AgreementDateEnd,
+    AgreementDateTerminated,
+    LeaseDateStart,
+    LeaseDateEnd,
+    LeaseDateTerminated,
+    FacilityType
+  ) |>
+  arrange(
+    Address,
+    BuildingId,
+    ContractCode
+  )
+
+
+mutate(
+  Region = case_when(
+    City %in%
+      c(
+        "Victoria",
+        "VICTORIA",
+        "View Royal",
+        "SAANICH",
+        "Saanich",
+        "Esquimalt"
+      ) ~ "Victoria",
+    City %in% c("Prince George", "PRINCE GEORGE") ~ "Prince George",
+    City %in% c("Kamloops", "KAMLOOPS") ~ "Kamloops",
+    City %in% c("Kelowna", "KELOWNA") ~ "Kelowna",
+    City %in% c("Surrey", "SURREY") ~ "Surrey",
+    City %in% c("Vancouver", "VANCOUVER") ~ "Vancouver",
+    City %in% c("West Kelowna", "WEST KELOWNA") ~ "West Kelowna",
+    .default = "None"
+  )
+)
