@@ -54,11 +54,14 @@ api_key <- keyring::key_get(
 token <- base64encode(charToRaw(paste0(email, ":", api_key)))
 token_string <- paste("Basic", token)
 
-base_url <- "https://citz-rpd.atlassian.net/rest/api/3/"
+base_url <- "https://citz-inf.atlassian.net/rest/api/3/"
 
 req <- request(base_url) |>
-  req_headers(Authorization = token_string) |>
+  req_headers(
+    Authorization = token_string
+  ) |>
   req_url_path_append("dashboard") |>
+  apply_proxy_if_needed() |>
   req_perform()
 
 # Catch changes in Jira URL
