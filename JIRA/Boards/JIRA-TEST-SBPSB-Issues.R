@@ -119,7 +119,7 @@ while (progress < 2) {
     log_daily_etl_run(
       api_name = API_NAME,
       script_name = SCRIPT_NAME,
-      table_name = TABLE_NAME,
+      table_name = DASHBOARD_ID,
       duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
       status = "NO_DATA",
       message = no_data_msg
