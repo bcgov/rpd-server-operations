@@ -52,13 +52,13 @@ api_key <- keyring::key_get(
 
 # Encode token
 token <- base64encode(charToRaw(paste0(email, ":", api_key)))
-token_string <- paste("Basic", token)
+TOKEN_STRING <- paste("Basic", token)
 
 base_url <- "https://citz-inf.atlassian.net/rest/api/3/"
 
 req <- request(base_url) |>
   req_headers(
-    Authorization = token_string
+    Authorization = TOKEN_STRING
   ) |>
   req_url_path_append("dashboard") |>
   apply_proxy_if_needed() |>
