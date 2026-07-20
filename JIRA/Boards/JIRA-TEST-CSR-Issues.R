@@ -103,7 +103,7 @@ while (progress < 2) {
       etl_window$jira_start_time,
       " to ",
       format(Sys.time(), tz = "UTC"),
-      "UTC"
+      " UTC"
     )
     cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
     log_daily_etl_run(

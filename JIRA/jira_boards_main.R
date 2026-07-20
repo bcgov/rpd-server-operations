@@ -111,6 +111,17 @@ for (script in scripts) {
         ))
       )
     },
+    no_data_condition = function(e) {
+      results[[script]] <<- list(
+        status = "NO_DATA",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        )),
+        message = conditionMessage(e)
+      )
+    },
     error = function(e) {
       results[[script]] <<- list(
         status = "ERROR",

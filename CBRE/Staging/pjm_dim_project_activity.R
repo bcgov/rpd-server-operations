@@ -66,7 +66,9 @@ if (raw_data$status == "no_data") {
     " to ",
     etl_window$end_time
   )
+
   cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+
   log_daily_etl_run(
     api_name = API_NAME,
     script_name = SCRIPT_NAME,
@@ -75,10 +77,12 @@ if (raw_data$status == "no_data") {
     status = "NO_DATA",
     message = no_data_msg
   )
+
   cond <- structure(
     class = c("no_data_condition", "condition"),
     list(message = no_data_msg)
   )
+
   stop(cond)
 }
 

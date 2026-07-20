@@ -108,9 +108,14 @@ while (progress < 2) {
       "No data returned from API for window ",
       etl_window$start_time,
       " to ",
-      etl_window$end_time
+      etl_window$jira_start_time,
+      " to ",
+      format(Sys.time(), tz = "UTC"),
+      " UTC"
     )
+
     cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+
     log_daily_etl_run(
       api_name = API_NAME,
       script_name = SCRIPT_NAME,
@@ -119,10 +124,12 @@ while (progress < 2) {
       status = "NO_DATA",
       message = no_data_msg
     )
+
     cond <- structure(
       class = c("no_data_condition", "condition"),
       list(message = no_data_msg)
     )
+
     stop(cond)
   }
 

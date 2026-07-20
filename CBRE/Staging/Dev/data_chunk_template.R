@@ -153,12 +153,12 @@ source(here::here("utilities/R/utilities.R"))
 # fm_dim_equipment_extended_attribute_vw
 # fm_dim_invoice_line_vw
 
-CBRE_TABLE_NAME <- "fm_dim_maintenance_plan_vw"
+CBRE_TABLE_NAME <- "archibus_cost_tran_recur"
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-16T00:00:00Z",
+  end_time = "2026-07-18T00:00:00Z",
   max_pages = 5
 )
 
