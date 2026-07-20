@@ -45,7 +45,6 @@ while (progress < 2) {
       expand = expand_opts,
       maxResults = max_results,
       fields = "*all",
-      # startAt = start_at, #deprecated for nextPageToken
       nextPageToken = nextPageToken,
       .multi = "comma" # control how vectors are appended, for expand_opts
     ) |>
@@ -62,7 +61,7 @@ while (progress < 2) {
       body = function(resp) {
         paste0(
           "Auth Failure for ",
-          api_id,
+          SCRIPT_NAME,
           " reason: ",
           resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
           " traceid: ",
@@ -106,8 +105,6 @@ while (progress < 2) {
     # API succeeded, nothing to load
     no_data_msg <- paste0(
       "No data returned from API for window ",
-      etl_window$start_time,
-      " to ",
       etl_window$jira_start_time,
       " to ",
       format(Sys.time(), tz = "UTC"),
@@ -318,7 +315,7 @@ tryCatch(
   error = function(e) {
     log_daily_etl_run(
       api_name = API_NAME,
-      script_name = SCRIPT_NAME,
+      script_name = SCRIPT_NAME2,
       table_name = DASHBOARD_ID,
       status = "FAILURE",
       message = paste0(
@@ -379,7 +376,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       Labels               NVARCHAR(100)    NULL,
       OriginalEstimate     NVARCHAR(20)     NULL,
       ApprovedByExecutive  NVARCHAR(20)     NULL,
-      MoSoCow              NVARCHAR(20)     NULL,
+      MoSoCOW              NVARCHAR(20)     NULL,
       ImpactToUser         NVARCHAR(100)    NULL,
       Priority             NVARCHAR(20)     NULL,
       Reporter             NVARCHAR(100)    NULL,
@@ -422,7 +419,7 @@ tryCatch(
         Labels               NVARCHAR(100)    NULL,
         OriginalEstimate     NVARCHAR(20)     NULL,
         ApprovedByExecutive  NVARCHAR(20)     NULL,
-        MoSoCow              NVARCHAR(20)     NULL,
+        MoSoCOW              NVARCHAR(20)     NULL,
         ImpactToUser         NVARCHAR(100)    NULL,
         Priority             NVARCHAR(20)     NULL,
         Reporter             NVARCHAR(100)    NULL,
@@ -482,7 +479,7 @@ tryCatch(
         tgt.Labels              = src.Labels,
         tgt.OriginalEstimate    = src.OriginalEstimate,
         tgt.ApprovedByExecutive = src.ApprovedByExecutive,
-        tgt.MoSoCow             = src.MoSoCow,
+        tgt.MoSoCOW             = src.MoSoCOW,
         tgt.ImpactToUser        = src.ImpactToUser,
         tgt.Priority            = src.Priority,
         tgt.Reporter            = src.Reporter,
@@ -520,7 +517,7 @@ tryCatch(
           Labels,
           OriginalEstimate,
           ApprovedByExecutive,
-          MoSoCow,
+          MoSoCOW,
           ImpactToUser,
           Priority,
           Reporter,
@@ -539,7 +536,7 @@ tryCatch(
           src.Labels,
           src.OriginalEstimate,
           src.ApprovedByExecutive,
-          src.MoSoCow,
+          src.MoSoCOW,
           src.ImpactToUser,
           src.Priority,
           src.Reporter,

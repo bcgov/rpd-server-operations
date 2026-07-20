@@ -56,7 +56,7 @@ while (progress < 2) {
       body = function(resp) {
         paste0(
           "Auth Failure for ",
-          api_id,
+          SCRIPT_NAME,
           " reason: ",
           resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
           " traceid: ",
@@ -398,7 +398,7 @@ tryCatch(
       ))
     }
 
-    # Update the GPOPR table with new data for existing rows
+    # Update the RPR table with new data for existing rows
     n_updated <- dbExecute(
       con,
       paste0(
@@ -438,7 +438,7 @@ tryCatch(
       )
     )
 
-    # Insert new rows into the GPOPR table
+    # Insert new rows into the RPR table
     n_inserted <- dbExecute(
       con,
       paste0(

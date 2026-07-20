@@ -152,14 +152,17 @@ source(here::here("utilities/R/utilities.R"))
 # fm_dim_business_unit_vw
 # fm_dim_equipment_extended_attribute_vw
 # fm_dim_invoice_line_vw
+# fm_dim_purchase_order_line_vw
+# fm_dim_workorder_extended_attribute_vw
+# fm_fact_purchase_order_workorder_invoice_vw
 
-CBRE_TABLE_NAME <- "archibus_cost_tran_recur"
+CBRE_TABLE_NAME <- "fm_fact_workorder_log_history_vw"
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-18T00:00:00Z",
-  max_pages = 5
+  end_time = "2026-07-21T00:00:00Z",
+  max_pages = 3
 )
 
 # only 273 pages...

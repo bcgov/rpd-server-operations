@@ -10,7 +10,7 @@ API_NAME <- "Jira"
 SCRIPT_NAME <- "Jira_RBAS"
 
 # Setup API parameters ####
-expand_opts = c("changelog", "names", "fields")
+expand_opts = c("names", "fields")
 max_results = 100
 nextPageToken = NULL
 progress = 0
@@ -55,7 +55,7 @@ while (progress < 2) {
       body = function(resp) {
         paste0(
           "Auth Failure for ",
-          api_id,
+          SCRIPT_NAME,
           " reason: ",
           resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
           " traceid: ",
@@ -76,13 +76,13 @@ while (progress < 2) {
       } else {
         e$message
       }
-
-      # Log the error to daily CSV
-      event_logger(
-        api = api_id,
-        subset = project_id, # PAR / SBP / RBAS
-        event_type = "error",
-        description = desc
+      # Log error to daily run file
+      log_daily_etl_run(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = DASHBOARD_ID,
+        status = "FAILURE",
+        message = substr(desc, 1, 500)
       )
       stop(e) # rethrow so task scheduler flags a failure (current monitoring is by Nagios)
     }
@@ -233,7 +233,7 @@ while (progress < 2) {
 
 tryCatch(
   {
-    Issues <- Issues %>%
+    Issues <- Issues |>
       # Add a filter step to remove all the test tickets prior to launch on Aug 18th 2025
       filter(
         !IssueKey %in%
@@ -367,7 +367,7 @@ tryCatch(
       ))
     }
 
-    # Update the GPOPR table with new data for existing rows
+    # Update the RBAS table with new data for existing rows
     n_updated <- dbExecute(
       con,
       paste0(
@@ -404,7 +404,7 @@ tryCatch(
       )
     )
 
-    # Insert new rows into the GPOPR table
+    # Insert new rows into the RBAS table
     n_inserted <- dbExecute(
       con,
       paste0(

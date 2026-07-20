@@ -56,7 +56,7 @@ while (progress < 2) {
       body = function(resp) {
         paste0(
           "Auth Failure for ",
-          api_id,
+          SCRIPT_NAME,
           " reason: ",
           resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
           " traceid: ",
@@ -100,8 +100,6 @@ while (progress < 2) {
     # API succeeded, nothing to load
     no_data_msg <- paste0(
       "No data returned from API for window ",
-      etl_window$start_time,
-      " to ",
       etl_window$jira_start_time,
       " to ",
       format(Sys.time(), tz = "UTC"),
@@ -113,7 +111,7 @@ while (progress < 2) {
     log_daily_etl_run(
       api_name = API_NAME,
       script_name = SCRIPT_NAME,
-      table_name = TABLE_NAME,
+      table_name = DASHBOARD_ID,
       duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
       status = "NO_DATA",
       message = no_data_msg
@@ -530,7 +528,7 @@ tryCatch(
       ))
     }
 
-    # Update the GPOPR table with new data for existing rows
+    # Update the SBP table with new data for existing rows
     n_updated <- dbExecute(
       con,
       paste0(

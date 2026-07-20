@@ -620,6 +620,19 @@ safe_hoist_all <- function(.data, .col, ..., sep = ";", .remove = FALSE) {
   result
 }
 
+etl_stage <- function(stage_name, expr) {
+  withCallingHandlers(
+    expr,
+    error = function(e) {
+      rlang::abort(
+        conditionMessage(e),
+        class = "etl_stage_error",
+        stage = stage_name,
+        parent = e
+      )
+    }
+  )
+}
 
 log_daily_etl_run <- function(
   api_name,
@@ -647,7 +660,10 @@ log_daily_etl_run <- function(
 
   # Construct log row
   log_row <- tibble::tibble(
-    run_timestamp = format(lubridate::with_tz(Sys.time(), tzone = "America/Vancouver"), "%Y-%m-%d %H:%M:%S"),
+    run_timestamp = format(
+      lubridate::with_tz(Sys.time(), tzone = "America/Vancouver"),
+      "%Y-%m-%d %H:%M:%S"
+    ),
     etl_env = etl_env,
     host = Sys.info()[["nodename"]],
     api_name = api_name,

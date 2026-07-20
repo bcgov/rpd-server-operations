@@ -19,7 +19,7 @@ round = 1
 # Issues Loop ####
 while (progress < 2) {
   req <- request(query_url) |>
-    req_headers(Authorization = token_string) |>
+    req_headers_redacted(Authorization = token_string) |>
     # configure project, max_results, and start_at
     req_url_query(
       jql = I(
@@ -56,7 +56,7 @@ while (progress < 2) {
       body = function(resp) {
         paste0(
           "Auth Failure for ",
-          api_id,
+          SCRIPT_NAME,
           " reason: ",
           resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
           " traceid: ",
