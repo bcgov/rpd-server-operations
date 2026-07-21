@@ -295,7 +295,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     " (
       RefreshDate             DATETIME2(3)    NOT NULL,
       IssueKey                NVARCHAR(10)    NOT NULL,
-      IssueType               NVARCHAR(10)    NULL,
+      IssueType               NVARCHAR(50)    NULL,
       Status                  NVARCHAR(20)    NULL,
       Created                 DATE            NULL,
       Updated                 DATE            NULL,
@@ -341,7 +341,7 @@ tryCatch(
         " (
           RefreshDate             DATETIME2(3)    NOT NULL,
           IssueKey                NVARCHAR(10)    NOT NULL,
-          IssueType               NVARCHAR(10)    NULL,
+          IssueType               NVARCHAR(50)    NULL,
           Status                  NVARCHAR(20)    NULL,
           Created                 DATE            NULL,
           Updated                 DATE            NULL,
