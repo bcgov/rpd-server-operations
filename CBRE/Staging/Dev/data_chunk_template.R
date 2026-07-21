@@ -155,14 +155,27 @@ source(here::here("utilities/R/utilities.R"))
 # fm_dim_purchase_order_line_vw
 # fm_dim_workorder_extended_attribute_vw
 # fm_fact_purchase_order_workorder_invoice_vw
+# fm_fact_workorder_log_history_vw HTTP 504
+# fm_fact_workorder_po_invoice_vw
+# fm_si7_pm_schedule_report
+# pobc_estimatedbudget_region
+# vt_accountsummary_charts
+# vt_accountsummary_details
+# vt_client_initiatives
+# vt_clientsavings_target
+# vt_fx_reports
+# vt_savingsoverview_charts
+# vt_savingsoverview_details
+# vt_serviceline_management_fee
+# vt_serviceline_savings_target
 
-CBRE_TABLE_NAME <- "fm_fact_workorder_log_history_vw"
+CBRE_TABLE_NAME <- "wo_dashboard_com_dim_property_vw"
+
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-21T00:00:00Z",
-  max_pages = 3
+  end_time = "2026-07-21T00:00:00Z"
 )
 
 # only 273 pages...
