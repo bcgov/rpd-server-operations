@@ -13,6 +13,10 @@ DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "CbreStaging"
 TABLE_NAME <- "pjm_fact_milestone"
 CBRE_TABLE_NAME <- "pjm_fact_milestone_vw"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+API_NAME <- "CBRE"
+SCRIPT_NAME <- "pjm_fact_milestone"
 
 # Connect to SQL database
 con <- dbConnect(
@@ -23,9 +27,7 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-target_table <- Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-temp_table <- paste0("#", TABLE_NAME, "Temp")
-
+# Query API
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = etl_window$cbre_start_time,
@@ -64,7 +66,9 @@ if (raw_data$status == "no_data") {
     " to ",
     etl_window$end_time
   )
+
   cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+
   log_daily_etl_run(
     api_name = API_NAME,
     script_name = SCRIPT_NAME,
@@ -73,10 +77,12 @@ if (raw_data$status == "no_data") {
     status = "NO_DATA",
     message = no_data_msg
   )
+
   cond <- structure(
     class = c("no_data_condition", "condition"),
     list(message = no_data_msg)
   )
+
   stop(cond)
 }
 
@@ -130,43 +136,8 @@ cleaned_data <- raw_data |>
     edp_update_ts
   )
 
-
-assert_that(
-  nrow(cleaned_data) ==
-    nrow(
-      dplyr::distinct(
-        cleaned_data,
-        project_skey,
-        milestone_skey
-      )
-    ),
-  msg = paste(
-    "Primary key violation detected:",
-    "(project_skey, contract_skey, change_order_skey) is not unique in cleaned_data"
-  )
-)
-
-# future debugging option
-# pk_dupes <- cleaned_data |>
-#   dplyr::count(
-#     project_skey,
-#     contract_skey,
-#     change_order_skey,
-#     name = "row_count"
-#   ) |>
-#   dplyr::filter(row_count > 1)
-#
-# assert_that(
-#   nrow(pk_dupes) == 0,
-#   msg = paste0(
-#     "Duplicate primary keys found. Example rows:\n",
-#     paste(capture.output(utils::head(pk_dupes, 10)), collapse = "\n")
-#   )
-# )
-
-# dbRemoveTable(con, target_table)
-
-if (!dbExistsTable(con, target_table)) {
+# dbRemoveTable(con, TARGET_TABLE)
+if (!dbExistsTable(con, TARGET_TABLE)) {
   sql <- paste0(
     "CREATE TABLE ",
     SCHEMA_NAME,
@@ -195,14 +166,7 @@ if (!dbExistsTable(con, target_table)) {
       source_partition_id       INT            NOT NULL,
       source_modified_ts        DATETIME2(3)   NULL,
       source_created_ts         DATETIME2(3)   NULL,
-      edp_update_ts             DATETIME2(3)   NULL,
-
-      CONSTRAINT PK_",
-    TABLE_NAME,
-    " PRIMARY KEY (
-        project_skey,
-        milestone_skey
-      )
+      edp_update_ts             DATETIME2(3)   NULL
     );"
   )
 
@@ -211,45 +175,41 @@ if (!dbExistsTable(con, target_table)) {
 
 # Database Transaction ####
 # Control database transaction to ensure all steps done together or not at all
+etl_error <- NULL
+
 dbBegin(con)
 
 tryCatch(
   {
-    if (dbExistsTable(con, temp_table)) {
-      dbRemoveTable(con, temp_table)
+    if (dbExistsTable(con, TEMP_TABLE)) {
+      dbRemoveTable(con, TEMP_TABLE)
     }
 
     dbExecute(
       con,
       paste0(
         "CREATE TABLE ",
-        temp_table,
+        TEMP_TABLE,
         " (
         RefreshDate               DATETIME2(3)  NOT NULL,
-
         project_skey              INT           NOT NULL,
         milestone_skey            INT           NOT NULL,
-
         milestone_id              INT           NOT NULL,
         parent_milestone_id       INT           NULL,
         milestone_desc            NVARCHAR(500) NULL,
         milestone_notes           NVARCHAR(2000) NULL,
-
         estimated_start_date      DATETIME2(3)  NULL,
         revised_start_date        DATETIME2(3)  NULL,
         actual_start_date         DATETIME2(3)  NULL,
         estimated_end_date        DATETIME2(3)  NULL,
         revised_end_date          DATETIME2(3)  NULL,
         actual_end_date           DATETIME2(3)  NULL,
-
         project_start_milestone_f CHAR(1)        NULL,
         project_end_milestone_f   CHAR(1)        NULL,
         is_na_f                   CHAR(1)        NULL,
         show_on_dashboard_f       CHAR(1)        NULL,
-
         responsible_contact_skey  INT            NULL,
         serial_number             NVARCHAR(10)   NULL,
-
         source_partition_id       INT            NOT NULL,
         source_modified_ts        DATETIME2(3)   NULL,
         source_created_ts         DATETIME2(3)   NULL,
@@ -260,14 +220,37 @@ tryCatch(
 
     dbWriteTable(
       con,
-      name = temp_table,
+      name = TEMP_TABLE,
       value = cleaned_data,
       append = TRUE,
       overwrite = FALSE
     )
 
-    # Update existing rows in the target table
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT project__skey, milestone_skey
+           FROM ",
+        TEMP_TABLE,
+        "
+           GROUP BY project_skey, milestone_skey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
 
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate project_skey, milestone_skey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    # -- Update matched rows --
     n_updated <- dbExecute(
       con,
       paste0(
@@ -301,7 +284,7 @@ tryCatch(
         TABLE_NAME,
         " tgt
       JOIN ",
-        temp_table,
+        TEMP_TABLE,
         " src
         ON  tgt.project_skey   = src.project_skey
         AND tgt.milestone_skey = src.milestone_skey;
@@ -309,6 +292,7 @@ tryCatch(
       )
     )
 
+    # -- Insert new rows --
     n_inserted <- dbExecute(
       con,
       paste0(
@@ -367,7 +351,7 @@ tryCatch(
         src.source_created_ts,
         src.edp_update_ts
       FROM ",
-        temp_table,
+        TEMP_TABLE,
         " src
       LEFT JOIN ",
         SCHEMA_NAME,
@@ -384,12 +368,40 @@ tryCatch(
     # Complete the transaction
     dbCommit(con)
 
-    n_inserted <<- n_inserted
+    # Hoist counts to outer scope for logging
     n_updated <<- n_updated
-    # Rollback transaction on failure
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
-    stop(e)
+    etl_error <<- e
   }
 )
+
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    duration = task_duration,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

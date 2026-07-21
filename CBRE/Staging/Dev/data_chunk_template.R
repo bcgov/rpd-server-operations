@@ -169,7 +169,7 @@ source(here::here("utilities/R/utilities.R"))
 # vt_serviceline_management_fee
 # vt_serviceline_savings_target
 
-CBRE_TABLE_NAME <- "wo_dashboard_com_dim_property_vw"
+CBRE_TABLE_NAME <- "pjm_fact_milestone_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(

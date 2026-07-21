@@ -152,8 +152,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
   dbExecute(con, sql)
 }
 
-etl_start_time <- Sys.time()
-
+# Database Transaction ####
+# Control database transaction to ensure all steps done together or not at all
 etl_error <- NULL
 
 dbBegin(con)
@@ -293,6 +293,7 @@ tryCatch(
       )
     )
 
+    # Complete the transaction
     dbCommit(con)
 
     # Hoist counts to outer scope for logging
