@@ -86,13 +86,26 @@ if (raw_data$status == "no_data") {
   stop(cond)
 }
 
-cleaned_data <- raw_data |>
+clean_data <- raw_data |>
   purrr::pluck("data") |>
   # select_if(~ !all(is.na(.))) |>
   # select_if(~ !all(. == 0)) |>
   # select_if(~ !all(. == '-1')) |>
   # select_if(~ !all(. == "N/A")) |>
   # select_if(~ !all(. == "-")) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything()) |>
+  mutate(
+    across(
+      c(
+        project_skey,
+        milestone_skey,
+        milestone_id,
+        parent_milestone_id,
+        responsible_contact_skey
+      ),
+      as.character
+    )
+  ) |>
   mutate(
     across(
       c(
@@ -106,10 +119,9 @@ cleaned_data <- raw_data |>
         revised_end_date,
         actual_end_date
       ),
-      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ")
+      ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")
     )
   ) |>
-  mutate(RefreshDate = as.POSIXct(Sys.Date())) |>
   select(
     RefreshDate,
     project_skey,
@@ -145,10 +157,10 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     TABLE_NAME,
     " (
       RefreshDate               DATETIME2(3)   NOT NULL,
-      project_skey              INT            NOT NULL,
-      milestone_skey            INT            NOT NULL,
-      milestone_id              INT            NOT NULL,
-      parent_milestone_id       INT            NULL,
+      project_skey              NVARCHAR(20)   NOT NULL,
+      milestone_skey            NVARCHAR(20)   NOT NULL,
+      milestone_id              NVARCHAR(20)   NOT NULL,
+      parent_milestone_id       NVARCHAR(20)   NULL,
       milestone_desc            NVARCHAR(500)  NULL,
       milestone_notes           NVARCHAR(1000) NULL,
       estimated_start_date      DATETIME2(3)   NULL,
@@ -157,11 +169,11 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       estimated_end_date        DATETIME2(3)   NULL,
       revised_end_date          DATETIME2(3)   NULL,
       actual_end_date           DATETIME2(3)   NULL,
-      project_start_milestone_f CHAR(1)        NULL,
-      project_end_milestone_f   CHAR(1)        NULL,
-      is_na_f                   CHAR(1)        NULL,
-      show_on_dashboard_f       CHAR(1)        NULL,
-      responsible_contact_skey  INT            NULL,
+      project_start_milestone_f NVARCHAR(1)    NULL,
+      project_end_milestone_f   NVARCHAR(1)    NULL,
+      is_na_f                   NVARCHAR(1)    NULL,
+      show_on_dashboard_f       NVARCHAR(1)    NULL,
+      responsible_contact_skey  NVARCHAR(20)   NULL,
       serial_number             NVARCHAR(10)   NULL,
       source_partition_id       INT            NOT NULL,
       source_modified_ts        DATETIME2(3)   NULL,
@@ -191,24 +203,24 @@ tryCatch(
         "CREATE TABLE ",
         TEMP_TABLE,
         " (
-        RefreshDate               DATETIME2(3)  NOT NULL,
-        project_skey              INT           NOT NULL,
-        milestone_skey            INT           NOT NULL,
-        milestone_id              INT           NOT NULL,
-        parent_milestone_id       INT           NULL,
-        milestone_desc            NVARCHAR(500) NULL,
-        milestone_notes           NVARCHAR(2000) NULL,
-        estimated_start_date      DATETIME2(3)  NULL,
-        revised_start_date        DATETIME2(3)  NULL,
-        actual_start_date         DATETIME2(3)  NULL,
-        estimated_end_date        DATETIME2(3)  NULL,
-        revised_end_date          DATETIME2(3)  NULL,
-        actual_end_date           DATETIME2(3)  NULL,
-        project_start_milestone_f CHAR(1)        NULL,
-        project_end_milestone_f   CHAR(1)        NULL,
-        is_na_f                   CHAR(1)        NULL,
-        show_on_dashboard_f       CHAR(1)        NULL,
-        responsible_contact_skey  INT            NULL,
+        RefreshDate               DATETIME2(3)   NOT NULL,
+        project_skey              NVARCHAR(20)   NOT NULL,
+        milestone_skey            NVARCHAR(20)   NOT NULL,
+        milestone_id              NVARCHAR(20)   NOT NULL,
+        parent_milestone_id       NVARCHAR(20)   NULL,
+        milestone_desc            NVARCHAR(500)  NULL,
+        milestone_notes           NVARCHAR(1000) NULL,
+        estimated_start_date      DATETIME2(3)   NULL,
+        revised_start_date        DATETIME2(3)   NULL,
+        actual_start_date         DATETIME2(3)   NULL,
+        estimated_end_date        DATETIME2(3)   NULL,
+        revised_end_date          DATETIME2(3)   NULL,
+        actual_end_date           DATETIME2(3)   NULL,
+        project_start_milestone_f NVARCHAR(1)    NULL,
+        project_end_milestone_f   NVARCHAR(1)    NULL,
+        is_na_f                   NVARCHAR(1)    NULL,
+        show_on_dashboard_f       NVARCHAR(1)    NULL,
+        responsible_contact_skey  NVARCHAR(20)   NULL,
         serial_number             NVARCHAR(10)   NULL,
         source_partition_id       INT            NOT NULL,
         source_modified_ts        DATETIME2(3)   NULL,
@@ -221,7 +233,7 @@ tryCatch(
     dbWriteTable(
       con,
       name = TEMP_TABLE,
-      value = cleaned_data,
+      value = clean_data,
       append = TRUE,
       overwrite = FALSE
     )
@@ -232,7 +244,7 @@ tryCatch(
       paste0(
         "SELECT COUNT(*) AS n
          FROM (
-           SELECT project__skey, milestone_skey
+           SELECT project_skey, milestone_skey
            FROM ",
         TEMP_TABLE,
         "
@@ -360,7 +372,8 @@ tryCatch(
         " tgt
         ON  tgt.project_skey   = src.project_skey
         AND tgt.milestone_skey = src.milestone_skey
-      WHERE tgt.project_skey IS NULL;
+      WHERE tgt.project_skey IS NULL
+      AND tgt.milestone_skey IS NULL;
       "
       )
     )

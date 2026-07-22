@@ -169,13 +169,13 @@ source(here::here("utilities/R/utilities.R"))
 # vt_serviceline_management_fee
 # vt_serviceline_savings_target
 
-CBRE_TABLE_NAME <- "pjm_fact_milestone_vw"
+CBRE_TABLE_NAME <- "pjm_dim_project_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-21T00:00:00Z"
+  end_time = "2026-07-23T00:00:00Z"
 )
 
 # only 273 pages...
