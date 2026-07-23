@@ -61,13 +61,16 @@ clean_data <- resp |>
   safe_hoist(
     form,
     SubmissionId = list("submissionId"),
-    # SubmissionTime = list("submittedAt"),
     .remove = FALSE
   ) |>
   safe_hoist(
     form,
-    # SubmissionId = list("submissionId"),
     SubmissionTime = list("submittedAt"),
+    .remove = FALSE
+  ) |>
+  safe_hoist(
+    form,
+    Status = list("status"),
     .remove = FALSE
   ) |>
   safe_hoist(
@@ -135,6 +138,7 @@ clean_data <- resp |>
   select(
     SubmissionId,
     SubmissionTime,
+    Status,
     ProjectName,
     ProjectNumberOrWorkOrder,
     Building,
@@ -179,6 +183,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         RefreshDate                    DATETIME2(3)     NOT NULL,
         SubmissionId                   NVARCHAR(36)     NOT NULL,
         SubmissionTime                 DATETIME2(3)     NOT NULL,
+        Status                         NVARCHAR(30)     NULL,
         ProjectName                    NVARCHAR(1500)   NULL,
         ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
         Building                       NVARCHAR(250)    NULL,
@@ -230,6 +235,7 @@ tryCatch(
           RefreshDate                    DATETIME2(3)     NOT NULL,
           SubmissionId                   NVARCHAR(36)     NOT NULL,
           SubmissionTime                 DATETIME2(3)     NOT NULL,
+          Status                         NVARCHAR(30)     NULL,
           ProjectName                    NVARCHAR(1500)   NULL,
           ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
           Building                       NVARCHAR(250)    NULL,
@@ -317,6 +323,7 @@ tryCatch(
         SET
           tgt.RefreshDate                    = src.RefreshDate,
           tgt.SubmissionTime                 = src.SubmissionTime,
+          tgt.Status                         = src.Status,
           tgt.ProjectName                    = src.ProjectName,
           tgt.ProjectNumberOrWorkOrder       = src.ProjectNumberOrWorkOrder,
           tgt.Building                       = src.Building,
@@ -367,6 +374,7 @@ tryCatch(
           RefreshDate,
           SubmissionId,
           SubmissionTime,
+          Status,
           ProjectName,
           ProjectNumberOrWorkOrder,
           Building,
@@ -397,6 +405,7 @@ tryCatch(
           src.RefreshDate,
           src.SubmissionId,
           src.SubmissionTime,
+          src.Status,
           src.ProjectName,
           src.ProjectNumberOrWorkOrder,
           src.Building,
