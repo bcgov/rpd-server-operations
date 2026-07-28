@@ -29,6 +29,8 @@ etl_window <- get_etl_window()
 scripts <- c(
   # Drop and refresh
   "CBRE/Staging/archibus_bl.R",
+  "CBRE/Staging/archibus_company.R",
+  "CBRE/Staging/archibus_cost_tran_recur.R",
   "CBRE/Staging/archibus_property.R",
   "CBRE/Staging/archibus_rm.R",
   "CBRE/Staging/archibus_rmpct.R",

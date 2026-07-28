@@ -14,19 +14,31 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Load helper functions
 source(here::here("utilities/R/utilities.R"))
+# archibus_cost_tran_recur
+# archibus_company
+# archibus_budget_asset
+# archibus_budget_asset_ar
 
-CBRE_TABLE_NAME <- "kahua_cashflow"
+CBRE_TABLE_NAME <- "pjm_fact_project_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = "2026-07-24T00:00:00Z"
+  end_time = paste0(Sys.Date() + 1, "T00:00:00Z")
 )
 
 # only 273 pages...
 
 raw_data <- chunk_1$data
+
+clean_pjm <- raw_data |>
+  # purrr::pluck("data") |>
+  select_if(~ !all(is.na(.))) |>
+  select_if(~ !all(. == 0)) |>
+  select_if(~ !all(. == '-1')) |>
+  select_if(~ !all(. == "N/A")) |>
+  select_if(~ !all(. == "-"))
 
 chunk_2 <- call_cbre_api(
   CBRE_TABLE_NAME,

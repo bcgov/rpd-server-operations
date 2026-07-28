@@ -263,8 +263,8 @@ tryCatch(
          INNER JOIN ",
         TEMP_TABLE,
         " src
-           ON tgt.ProjectNumber    = src.ProjectNumber
-           AND tgt.AllocationDate  = src.AllocationDate
+           ON tgt.ProjectNumber     = src.ProjectNumber
+           AND tgt.AllocationDate   = src.AllocationDate
            AND tgt.AllocationItemId = src.AllocationItemId;"
       )
     )
