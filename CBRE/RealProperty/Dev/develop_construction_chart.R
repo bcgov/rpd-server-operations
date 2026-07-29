@@ -132,7 +132,7 @@ milestones <- PjmMilestoneData |>
         "Tender Award ",
         "Tender Awards",
         "Commence Construction",
-        "Substantial Completion",
+        # "Substantial Completion",
         "Project Substantial Completion",
         "Facility Open for Business",
         "Deficiencies List Complete",
@@ -181,13 +181,12 @@ milestones <- PjmMilestoneData |>
         ) ~ "Commence Construction",
       milestone_desc %in%
         c(
-          "Substantial Completion",
-          "Project Substantial Completion"
-        ) ~ "Substantial Completion",
-      milestone_desc %in%
-        c(
           "Project Closeout - Project Cancelled",
-          "Project Closeout"
+          "Project Closeout",
+          "Technical Closeout",
+          "Technical closeout",
+          "Closeout Complete",
+          "Closeout Summary Submitted to Client"
         ) ~ "Project Closeout"
     ),
     .default = milestone_desc
@@ -214,7 +213,7 @@ milestones <- PjmMilestoneData |>
       CBRE_Proj_Milestone == "Design Development Complete" ~ "Design",
       CBRE_Proj_Milestone == "Construction Documents Complete" ~ "Pre-Tender",
       CBRE_Proj_Milestone == "Tender Award" ~ "Tender",
-      CBRE_Proj_Milestone == "Substantial Completion" ~ "Construction",
+      CBRE_Proj_Milestone == "Commence Construction" ~ "Construction",
       CBRE_Proj_Milestone == "Facility Open for Business" ~ "Closeout",
       CBRE_Proj_Milestone == "Deficiencies List Complete" ~ "Closeout",
       CBRE_Proj_Milestone == "Project Closeout" ~ "Warranty Period"
@@ -222,27 +221,34 @@ milestones <- PjmMilestoneData |>
   ) |>
   select(
     project_skey,
+    milestone_desc,
     CBRE_Proj_Milestone,
     CBRE_Proj_Phase,
     estimated_start_date,
-    actual_start_date,
-    estimated_end_date,
-    actual_end_date
+    actual_start_date
   ) |>
   mutate(
     PhaseStartDate = case_when(
       is.na(actual_start_date) ~ estimated_start_date,
       .default = actual_start_date
     ),
-    PhaseEndDate = case_when(
-      is.na(actual_end_date) ~ estimated_end_date,
-      .default = actual_end_date
-    ),
     .keep = "unused"
   )
 
-check <- milestones |> filter(CBRE_Proj_Milestone == "Commence Construction")
-#|>
+test_multiple_dates <- milestones %>%
+  filter(!is.na(PhaseStartDate)) %>%
+  group_by(project_skey, CBRE_Proj_Phase) |>
+  mutate(count = n()) |>
+  filter(count >= 2)
+
+milestone_phases <- milestones |>
+  group_by(project_skey, CBRE_Proj_Phase) |>
+  arrange(is.na(PhaseStartDate), PhaseStartDate, .by_group = TRUE) |>
+  slice(1) |>
+  ungroup()
+
+sum(is.na(milestone_phases$PhaseStartDate))
+
 pivot_wider(
   id_cols = project_skey,
   names_from = CBRE_Proj_Phase,
@@ -264,7 +270,7 @@ pivot_wider(
 
 
 OutputTable <- Output |>
-  filter(project_skey %in% milestones$project_skey) |>
+  filter(project_skey %in% milestone_phases$project_skey) |>
   select(
     project_skey,
     project_status,
