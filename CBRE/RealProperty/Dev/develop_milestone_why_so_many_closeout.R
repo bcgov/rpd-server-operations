@@ -198,10 +198,13 @@ milestones <- PjmMilestoneData |>
     )
   ) |>
   mutate(CBRE_Proj_Phase = factor(CBRE_Proj_Phase, levels = phase_order)) |>
+  left_join(FactProjData, by = join_by(project_skey)) |>
   select(
     project_skey,
-    CBRE_Proj_Milestone,
+    project_phase,
     CBRE_Proj_Phase,
+    milestone_desc,
+    CBRE_Proj_Milestone,
     estimated_end_date,
     revised_end_date,
     actual_end_date
@@ -215,9 +218,9 @@ milestones <- PjmMilestoneData |>
     .keep = "unused"
   ) |>
   filter(!is.na(PhaseEndDate)) |>
-  group_by(project_skey, CBRE_Proj_Phase) |>
+  group_by(project_skey, CBRE_Proj_Milestone, CBRE_Proj_Phase) |>
   summarise(
-    PhaseEndDate = max(PhaseEndDate),
+    PhaseEndDate = min(PhaseEndDate),
     .groups = "drop"
   )
 
@@ -258,47 +261,6 @@ ProjMilestonePhase <- ProjData |>
   ) |>
   left_join(milestone_phase_lookup, by = c("project_skey", "AllocationDate")) |>
   relocate(Milestone_Phase, .after = project_phase) |>
-  arrange(project_skey, AllocationDate) |>
-  mutate(
-    project_phase = case_when(
-      project_phase == "Project Close Out" ~ "Warranty Period",
-      .default = project_phase
-    ),
-    csf_pmosource = case_when(
-      csf_pmosource == "ARES" ~ "CBRE",
-      csf_pmosource %in%
-        c("Forum/Honeywell", "Plenary/Honeywell", "Plenary/JCI") ~ "P3",
-      csf_pmosource == "Non-Project Contracts" ~ "NPC",
-      .default = csf_pmosource
-    )
-  ) |>
-  # not sure where to bin this one so out it goes.
-  filter(!project_phase %in% c("Implementation", "Procurement"))
+  arrange(project_skey, AllocationDate)
 
-# reviewing missing milestone_phase
-# test <- ProjMilestonePhase |> filter(is.na(Milestone_Phase))
-# 9157245 - no data in cashflow report
-# 9157374 - budget runs past the milestones recorded by a day or two but its in to a new month
-# 9157850 - budget runs past the milestones recorded by a day or two but its in to a new month
-# 9158122 - substantial budget lines past the milestones recorded end date
-
-# dbRemoveTable(con, Id(schema = "RealProperty", name = "PjmMilestonePhase"))
-# dbWriteTable(
-#   con,
-#   Id(schema = "RealProperty", name = "PjmMilestonePhase"),
-#   ProjMilestonePhase
-# )
-
-# Test Zone ####
-
-CBRE <- ProjMilestonePhase |>
-  filter(csf_pmosource == "CBRE") |>
-  filter(AllocationDate >= as.Date("2026-04-01")) |>
-  filter(LineCategory == "Actuals") |>
-  # 655 rows of Actuals since 2026-04-01
-  # only 314 rows have the same milestone and project phase
-  filter(project_phase != Milestone_Phase)
-
-# start vetting
-# 9158691 - Closeout v Warranty Period - My milestone phase inference seems correct, as the project itself stays in closeout, despite milestones.
-# 9159633 - Closeout v Construction -
+# 9157206
