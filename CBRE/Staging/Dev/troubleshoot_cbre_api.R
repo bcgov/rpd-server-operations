@@ -38,23 +38,6 @@ req <- httr2::request(base_url) |>
 bearer_token <- req |> resp_body_json() |> purrr::pluck("access_token")
 
 endpoint_url <- "t/digitaltech_us_edp/vantageanalytics/prod/v1/data/"
-edp_table <- "kahua_cashflow"
-
-req <- httr2::request(base_url) |>
-  httr2::req_url_path_append(endpoint_url) |>
-  httr2::req_auth_bearer_token(bearer_token) |>
-  httr2::req_method("POST") |>
-  httr2::req_body_json(list(
-    entity = edp_table,
-    page = 1,
-    startTime = "2025-01-01T00:00:00Z",
-    endTime = "2026-07-14T00:00:00Z",
-    format = "json"
-  )) |>
-  httr2::req_perform()
-
-resp <- req |> resp_body_json()
-
 edp_table <- "archibus_bl"
 
 req <- httr2::request(base_url) |>
@@ -65,13 +48,34 @@ req <- httr2::request(base_url) |>
     entity = edp_table,
     page = 1,
     startTime = "2025-01-01T00:00:00Z",
-    endTime = "2026-07-04T00:00:00Z",
+    # endTime = "2026-07-31T15:39:42Z"
+    endTime = paste0(Sys.Date() + 1, "T00:00:00Z"),
     format = "json"
   )) |>
-  # apply_proxy_if_needed() |>
   httr2::req_perform()
 
-output <- req |> resp_body_json() |> purrr::pluck("data")
+resp <- req |> resp_body_json()
+
+column_names <- resp |>
+  purrr::pluck("data") |>
+  purrr::pluck("columns") |>
+  tibble::enframe() |>
+  dplyr::mutate(name = paste0("value_", name)) |>
+  tibble::deframe()
+
+data <- resp |>
+  purrr::pluck("data") |>
+  purrr::pluck("rows") |>
+  tibble::enframe() |>
+  tidyr::unnest_wider(value, names_sep = "_") |>
+  dplyr::select(-name) |>
+  plyr::rename(column_names)
+
+paste0(Sys.Date() + 1, "T00:00:00Z")
+unique(data$edp_update_ts)
+etl_window$cbre_end_time
+etl_window$cbre_start_time
+
 
 # Test Args for Envizi ####
 base_url = "https://api.cbre.com:443/"
