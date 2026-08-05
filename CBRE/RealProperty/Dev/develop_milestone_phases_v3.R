@@ -116,7 +116,13 @@ ProjData <- FactProjData |>
 ProjMilestoneData <- ProjData |>
   left_join(PjmMilestoneData, by = join_by(project_skey))
 
-milestone_order <- c(
+# milestone_summary <- ProjMilestoneData |>  group_by(milestone_desc) |>
+#   summarise(count = n()) |>
+#   arrange(desc(count))
+#
+# openxlsx2:: write_xlsx(milestone_summary, here::here("output/ProjectForecast/Full_Milestone_Summary.xlsx"))
+
+milestone_order_1 <- c(
   "Authorization to Proceed",
   "Feasibility Complete",
   "Design Development Complete",
@@ -131,7 +137,24 @@ milestone_order <- c(
   "Warranty"
 )
 
+milestone_order_2 <- c(
+  "AuthorizationtoProceed",
+  "FeasibilityComplete",
+  "DesignDevelopmentComplete",
+  "ConstructionDocumentsComplete",
+  "TenderAward",
+  "CommenceConstruction",
+  "SubstantialCompletion",
+  "FacilityOpenforBusiness",
+  "DeficienciesListComplete",
+  "TechnicalCloseout",
+  "ProjectCloseout",
+  "Warranty"
+)
+
 # CBRE Data ####
+# Take project and milestone data table and filter for CBRE+Ares
+# Organize a specific milestone date from the available start and end dates
 CbreMilestoneData <- ProjMilestoneData |>
   filter(csf_pmosource == "CBRE") |>
   mutate(
@@ -147,7 +170,8 @@ CbreMilestoneData <- ProjMilestoneData |>
     ),
     .keep = "unused"
   ) |>
-  filter(!is.na(milestone_end_date) | !is.na(milestone_start_date)) |>
+  #    should I be filtering these out?
+  # filter(!is.na(milestone_end_date) | !is.na(milestone_start_date)) |>
   mutate(
     milestone_date = case_when(
       !is.na(milestone_end_date) ~ milestone_end_date,
@@ -157,19 +181,6 @@ CbreMilestoneData <- ProjMilestoneData |>
     .keep = "unused",
     .after = milestone_desc
   )
-
-CbreProjectCount <- ProjMilestoneData |>
-  filter(csf_pmosource == "CBRE") |>
-  group_by(project_number) |>
-  n_distinct()
-
-CbreMilestoneCount <- CbreMilestoneData |>
-  group_by(milestone_desc) |>
-  summarise(count = n())
-
-CbreMilestoneProjCount <- CbreMilestoneData |>
-  group_by(project_number) |>
-  n_distinct()
 
 CbreMilestones <- CbreMilestoneData |>
   mutate(
@@ -227,31 +238,35 @@ CbreMilestones <- CbreMilestoneData |>
         ) ~ "Technical Closeout",
       milestone_desc %in%
         c(
-          "Project Closeout",
-          "Warranty" # 10 instances
+          "Project Closeout"
         ) ~ "Project Closeout",
+      milestone_desc %in%
+        c(
+          "Warranty" # 10 instances
+        ) ~ "Warranty",
       .default = NA
     ),
     .after = milestone_desc
   ) |>
-  # 189 milestones do not fit into the above and are set to NA to be filtered out
   filter(
-    milestone %in%
-      c(
-        "Authorization to Proceed",
-        "Feasibility Complete",
-        "Design Development Complete",
-        "Construction Documents Complete",
-        "Tender Award",
-        "Commence Construction",
-        "Substantial Completion",
-        "Facility Open for Business",
-        "Deficiencies List Complete",
-        "Technical Closeout",
-        "Project Closeout"
-      )
+    milestone %in% milestone_order_1
   ) |>
-  mutate(milestone = factor(milestone, levels = milestone_order)) |>
+  mutate(milestone = factor(milestone, levels = milestone_order_1)) |>
+  # remove duplicated/doubled up combinations
+  # 6 instances that we need only one row from
+  group_by(
+    project_skey,
+    project_number,
+    project_status,
+    project_phase,
+    csf_pmosource,
+    csf_fundingsource,
+    csf_fundingtype,
+    milestone
+  ) |>
+  arrange(desc(milestone_date)) |>
+  slice(1) |>
+  ungroup() |>
   pivot_wider(
     id_cols = c(
       project_skey,
@@ -268,8 +283,19 @@ CbreMilestones <- CbreMilestoneData |>
     names_sort = TRUE
   )
 
+# CBRE Datapoints ####
+CbreProjectCount <- ProjMilestoneData |>
+  filter(csf_pmosource == "CBRE") |>
+  group_by(project_skey) |>
+  summarise(count = n_distinct(project_skey)) |>
+  nrow()
+
+CbreMilestoneCount <- CbreMilestoneData |>
+  group_by(milestone_desc) |>
+  summarise(count = n())
+
 cbre_na_milestone_summary <- CbreMilestones |>
-  select(AuthorizationtoProceedDate:ProjectCloseoutDate) |>
+  select(ends_with("Date")) |>
   summarise(across(everything(), ~ sum(is.na(.)))) |>
   pivot_longer(
     everything(),
@@ -277,9 +303,20 @@ cbre_na_milestone_summary <- CbreMilestones |>
     values_to = "Count_Missing"
   ) |>
   mutate(
-    Percent_Missing = round(100 * Count_Missing / nrow(CbreMilestoneData), 1)
+    Percent_Missing = round((Count_Missing / nrow(CbreMilestones)) * 100, 1),
+    Milestone = stringr::str_remove(Milestone, "Date"),
+    Milestone = factor(Milestone, levels = milestone_order_2)
   ) |>
-  arrange(desc(Count_Missing))
+  mutate(
+    Total_Rows = nrow(CbreMilestones),
+    .after = Milestone
+  ) |>
+  arrange(Milestone)
+
+openxlsx2::write_xlsx(
+  cbre_na_milestone_summary,
+  here::here("output/ProjectForecast/CBRE_Milestone_Summary.xlsx")
+)
 
 # RPD Data ####
 RpdMilestoneData <- ProjMilestoneData |>
@@ -297,7 +334,6 @@ RpdMilestoneData <- ProjMilestoneData |>
     ),
     .keep = "unused"
   ) |>
-  filter(!is.na(milestone_end_date) | !is.na(milestone_start_date)) |>
   mutate(
     milestone_date = case_when(
       !is.na(milestone_end_date) ~ milestone_end_date,
@@ -307,19 +343,6 @@ RpdMilestoneData <- ProjMilestoneData |>
     .keep = "unused",
     .after = milestone_desc
   )
-
-RpdProjectCount <- ProjMilestoneData |>
-  filter(csf_pmosource == "RPD WDS") |>
-  group_by(project_number) |>
-  n_distinct()
-
-RpdMilestoneCount <- RpdMilestoneData |>
-  group_by(milestone_desc) |>
-  summarise(count = n())
-
-RpdMilestoneProjCount <- RpdMilestoneData |>
-  group_by(project_number) |>
-  n_distinct()
 
 RpdMilestones <- RpdMilestoneData |>
   mutate(
@@ -337,11 +360,11 @@ RpdMilestones <- RpdMilestoneData |>
           "Design Complete"
         ) ~ "Design Development Complete",
       #       Completely missing
-      # milestone_desc %in%
-      #   c(
-      #     "Construction Documents Complete",
-      #     "Construction Documents Complete"
-      #   ) ~ "Construction Documents Complete",
+      milestone_desc %in%
+        c(
+          "Construction Documents Complete",
+          "Construction Documents Complete"
+        ) ~ "Construction Documents Complete",
       milestone_desc %in%
         c(
           "Out to Tender", # 39 instances
@@ -384,28 +407,23 @@ RpdMilestones <- RpdMilestoneData |>
     .after = milestone_desc
   ) |>
   filter(
-    milestone %in%
-      c(
-        "Authorization to Proceed",
-        "Feasibility Complete",
-        "Design Development Complete",
-        "Construction Documents Complete",
-        "Tender Award",
-        "Commence Construction",
-        "Substantial Completion",
-        "Facility Open for Business",
-        "Deficiencies List Complete",
-        "Technical Closeout",
-        "Project Closeout",
-        "Warranty"
-      )
+    milestone %in% milestone_order_1
   ) |>
   # Couple weird milestones, especially Tender Award for project_skey 9459766
-  group_by(project_skey, milestone) |>
+  group_by(
+    project_skey,
+    project_number,
+    project_status,
+    project_phase,
+    csf_pmosource,
+    csf_fundingsource,
+    csf_fundingtype,
+    milestone
+  ) |>
   arrange(desc(milestone_date)) |>
   slice(1) |>
   ungroup() |>
-  mutate(milestone = factor(milestone, levels = milestone_order)) |>
+  mutate(milestone = factor(milestone, levels = milestone_order_1)) |>
   pivot_wider(
     id_cols = c(
       project_skey,
@@ -422,8 +440,19 @@ RpdMilestones <- RpdMilestoneData |>
     names_sort = TRUE
   )
 
+# RPD Datapoints ####
+RpdProjectCount <- ProjMilestoneData |>
+  filter(csf_pmosource == "RPD WDS") |>
+  group_by(project_skey) |>
+  summarise(count = n_distinct(project_skey)) |>
+  nrow()
+
+RpdMilestoneCount <- RpdMilestoneData |>
+  group_by(milestone_desc) |>
+  summarise(count = n())
+
 rpd_na_milestone_summary <- RpdMilestones |>
-  select(AuthorizationtoProceedDate:ProjectCloseoutDate) |>
+  select(ends_with("Date")) |>
   summarise(across(everything(), ~ sum(is.na(.)))) |>
   pivot_longer(
     everything(),
@@ -431,6 +460,11 @@ rpd_na_milestone_summary <- RpdMilestones |>
     values_to = "Count_Missing"
   ) |>
   mutate(
-    Percent_Missing = round(100 * Count_Missing / nrow(CbreMilestoneData), 1)
+    Percent_Missing = round((Count_Missing / nrow(RpdMilestones)) * 100, 1),
+    Milestone = stringr::str_remove(Milestone, "Date"),
+    Milestone = factor(Milestone, levels = milestone_order_2)
   ) |>
-  arrange(desc(Count_Missing))
+  mutate(Total_Rows = nrow(RpdMilestones), .after = Milestone) |>
+  arrange(Milestone)
+
+# openxlsx2::write_xlsx(rpd_na_milestone_summary, here::here("output/ProjectForecast/RPD_Milestone_Summary.xlsx"))
