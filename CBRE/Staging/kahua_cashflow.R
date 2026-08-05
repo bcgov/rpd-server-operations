@@ -83,7 +83,7 @@ if (raw_data$status == "no_data") {
 }
 
 clean_data <- raw_data |>
-  # purrr::pluck("data") |>
+  purrr::pluck("data") |>
   # # comment out these after initial data analysis as risk of
   # # losing columns in small data loads
   # select_if(~ !all(is.na(.))) |>
@@ -213,71 +213,25 @@ tryCatch(
       overwrite = FALSE
     )
 
-    # -- Guard: catch duplicate keys in source data before touching target --
-    dup_count <- dbGetQuery(
+    dbExecute(
       con,
       paste0(
-        "SELECT COUNT(*) AS n
-         FROM (
-           SELECT ProjectNumber, AllocationDate, AllocationItemId
-           FROM ",
-        TEMP_TABLE,
-        "
-           GROUP BY ProjectNumber, AllocationDate, AllocationItemId
-           HAVING COUNT(*) > 1
-         ) dupes;"
-      )
-    )$n
-
-    if (dup_count > 0) {
-      stop(paste0(
-        "Duplicate ProjectNumber & AllocationDate & AllocationItemId values detected in source data (",
-        dup_count,
-        " keys affected). Rolling back."
-      ))
-    }
-
-    # -- Update matched rows --
-    n_updated <- dbExecute(
-      con,
-      paste0(
-        "UPDATE tgt
-         SET
-           tgt.RefreshDate         = src.RefreshDate,
-           tgt.ClientProjectNumber = src.ClientProjectNumber,
-           tgt.ProjectId           = src.ProjectId,
-           tgt.CashflowId          = src.CashflowId,
-           tgt.CashflowParentId    = src.CashflowParentId,
-           tgt.Period              = src.Period,
-           tgt.LineCategory        = src.LineCategory,
-           tgt.ActivityCode        = src.ActivityCode,
-           tgt.ActivityCodeDesc    = src.ActivityCodeDesc,
-           tgt.ItemAmount          = src.ItemAmount,
-           tgt.AllocationAmount    = src.AllocationAmount,
-           tgt.edp_update_ts       = src.edp_update_ts
-         FROM ",
+        "DELETE FROM ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        " tgt
-         INNER JOIN ",
-        TEMP_TABLE,
-        " src
-           ON tgt.ProjectNumber     = src.ProjectNumber
-           AND tgt.AllocationDate   = src.AllocationDate
-           AND tgt.AllocationItemId = src.AllocationItemId;"
+        ";"
       )
     )
 
     n_inserted <- dbExecute(
       con,
       paste0(
-        "
-      INSERT INTO ",
+        "INSERT INTO ",
         SCHEMA_NAME,
         ".",
         TABLE_NAME,
-        " (
+        "(
         RefreshDate,
         ProjectNumber,
         ClientProjectNumber,
@@ -294,47 +248,17 @@ tryCatch(
         AllocationDate,
         edp_update_ts
       )
-      SELECT
-        src.RefreshDate,
-        src.ProjectNumber,
-        src.ClientProjectNumber,
-        src.ProjectId,
-        src.CashflowId,
-        src.CashflowParentId,
-        src.Period,
-        src.LineCategory,
-        src.ActivityCode,
-        src.ActivityCodeDesc,
-        src.ItemAmount,
-        src.AllocationItemId,
-        src.AllocationAmount,
-        src.AllocationDate,
-        src.edp_update_ts
-      FROM ",
+       SELECT * FROM ",
         TEMP_TABLE,
-        " src
-      LEFT JOIN ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        " tgt
-        ON  tgt.ProjectNumber     = src.ProjectNumber
-        AND tgt.AllocationDate    = src.AllocationDate
-        AND tgt.AllocationItemId  = src.AllocationItemId
-      WHERE tgt.ProjectNumber IS NULL
-        AND tgt.AllocationDate IS NULL
-        AND tgt.AllocationItemId IS NULL;
-      "
+        ";"
       )
     )
 
     dbCommit(con)
 
     # Hoist counts to outer scope for logging
-    n_updated <<- n_updated
     n_inserted <<- n_inserted
-
-    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
+    cat("ETL complete — inserted:", n_inserted, "\n")
   },
   error = function(e) {
     dbRollback(con)
@@ -353,7 +277,7 @@ if (is.null(etl_error)) {
     duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
-    n_updated = n_updated,
+    n_updated = NA,
     n_deleted = NA,
     message = "ETL completed successfully"
   )

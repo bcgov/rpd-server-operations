@@ -29,6 +29,8 @@ etl_window <- get_etl_window()
 scripts <- c(
   # Drop and refresh
   "CBRE/Staging/archibus_bl.R",
+  "CBRE/Staging/archibus_budget_asset.R",
+  "CBRE/Staging/archibus_budget_asset_ar.R",
   "CBRE/Staging/archibus_company.R",
   "CBRE/Staging/archibus_cost_tran_recur.R",
   "CBRE/Staging/archibus_property.R",
@@ -53,6 +55,7 @@ scripts <- c(
   "CBRE/Staging/fm_benchmark_property_asset_link.R",
   "CBRE/Staging/fm_dim_property_extended_attribute.R",
   "CBRE/Staging/fm_fact_workorder.R",
+  "CBRE/Staging/kahua_cashflow.R",
   "CBRE/Staging/kahua_milestones.R",
   "CBRE/Staging/kahua_project_role.R",
   "CBRE/Staging/pjm_dim_budget.R",
