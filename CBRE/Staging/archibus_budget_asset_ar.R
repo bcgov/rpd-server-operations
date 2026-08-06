@@ -84,7 +84,7 @@ if (raw_data$status == "no_data") {
 }
 
 clean_data <- raw_data |>
-  # purrr::pluck("data") |>
+  purrr::pluck("data") |>
   # select_if(~ !all(is.na(.))) |>
   # select_if(~ !all(. == 0)) |>
   # select_if(~ !all(. == '-1')) |>
