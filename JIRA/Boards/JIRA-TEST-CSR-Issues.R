@@ -149,6 +149,7 @@ while (progress < 2) {
         select(
           IssueKey = key,
           Status,
+          RequestType,
           Created,
           Updated,
           Resolved,
@@ -163,6 +164,11 @@ while (progress < 2) {
           Workstream
         ) |>
         safe_hoist(Status, Status = "name", .remove = FALSE) |>
+        safe_hoist(
+          RequestType,
+          RequestType = list("requestType", "name"),
+          .remove = FALSE
+        ) |>
         safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
         safe_hoist(CSM, CSM = "displayName", .remove = FALSE) |>
         safe_hoist(
@@ -246,6 +252,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       RefreshDate          DATETIME2(3)  NOT NULL,
       IssueKey             NVARCHAR(100) NOT NULL,
       Status               NVARCHAR(100) NULL,
+      RequestType          NVARCHAR(100) NULL,
       Created              DATE          NULL,
       Updated              DATE          NULL,
       Resolved             DATE          NULL,
@@ -287,6 +294,7 @@ tryCatch(
           RefreshDate          DATETIME2(3)  NOT NULL,
           IssueKey             NVARCHAR(100) NOT NULL,
           Status               NVARCHAR(100) NULL,
+          RequestType          NVARCHAR(100) NULL,
           Created              DATE          NULL,
           Updated              DATE          NULL,
           Resolved             DATE          NULL,
@@ -346,6 +354,7 @@ tryCatch(
       SET
         tgt.[RefreshDate]          = src.[RefreshDate],
         tgt.[Status]               = src.[Status],
+        tgt.[RequestType]          = src.[RequestType],
         tgt.[Created]              = src.[Created],
         tgt.[Updated]              = src.[Updated],
         tgt.[Resolved]             = src.[Resolved],
@@ -382,6 +391,7 @@ tryCatch(
           [RefreshDate],
           [IssueKey],
           [Status],
+          [RequestType],
           [Created],
           [Updated],
           [Resolved],
@@ -399,6 +409,7 @@ tryCatch(
           src.[RefreshDate],
           src.[IssueKey],
           src.[Status],
+          src.[RequestType],
           src.[Created],
           src.[Updated],
           src.[Resolved],

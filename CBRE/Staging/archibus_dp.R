@@ -145,7 +145,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         dp_dp_id               NVARCHAR(50)   NOT NULL,
         dp_dv_id               NVARCHAR(10)   NULL,
         dp_customer_category   NVARCHAR(25)   NULL,
-        dp_customer_segment    NVARCHAR(25)   NULL,
+        dp_customer_segment    NVARCHAR(90)   NULL,
         dp_gl_code             NVARCHAR(50)   NULL,
         dp_hpattern_acad       NVARCHAR(50)   NULL,
         dp_status              NVARCHAR(10)   NULL,
@@ -189,7 +189,7 @@ tryCatch(
         dp_dp_id               NVARCHAR(50)   NOT NULL,
         dp_dv_id               NVARCHAR(10)   NULL,
         dp_customer_category   NVARCHAR(25)   NULL,
-        dp_customer_segment    NVARCHAR(25)   NULL,
+        dp_customer_segment    NVARCHAR(90)   NULL,
         dp_gl_code             NVARCHAR(50)   NULL,
         dp_hpattern_acad       NVARCHAR(50)   NULL,
         dp_status              NVARCHAR(10)   NULL,
@@ -260,7 +260,7 @@ tryCatch(
     dbCommit(con)
 
     n_inserted <<- n_inserted
-
+    cat("ETL complete — inserted:", n_inserted, "\n")
     # Rollback transaction on failure
   },
   error = function(e) {

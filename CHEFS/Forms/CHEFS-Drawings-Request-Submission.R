@@ -57,6 +57,21 @@ clean_data <- resp |>
   tidyr::unnest_wider(
     doTheseFilesContainInformationThatIfCompromisedCouldCauseExtremelyGraveInjuryToAnIndividualOrganizationOrGovernment
   ) |>
+  # safe_hoist(
+  #   form,
+  #   Assignee = list("assignee"),
+  #   .remove = FALSE
+  # )
+  # safe_hoist(
+  #   iWouldLikeTo,
+  #   FormA = list("requestDrawingsFromYourInventoryPleaseCompleteSectionA"),
+  #   .remove = FALSE
+  # ) |>
+  # safe_hoist(
+  #   iWouldLikeTo,
+  #   FormB = list("submitDrawingsToYouInventoryPleaseCompleteSectionB"),
+  #   .remove = FALSE
+  # )
   # can we get these two into a safe_hoist_all() single call?
   safe_hoist(
     form,

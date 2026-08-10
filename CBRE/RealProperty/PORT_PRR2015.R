@@ -113,29 +113,31 @@ BudgetAssetAr <- BudgetAssetArData |>
       LandLordOperationsMaintenance +
       PropertyTax +
       Parking
+  ) |>
+  mutate(
+    ContractName = case_when(
+      # logic states if only one exists use that, however if both building and lease exist use lease.
+      # seems to hold when spot checking
+      !is.na(BuildingId) & is.na(PropertyId) & is.na(LeaseId) ~ BuildingId,
+      !is.na(PropertyId) & is.na(BuildingId) & is.na(LeaseId) ~ PropertyId,
+      !is.na(LeaseId) & is.na(PropertyId) & is.na(BuildingId) ~ LeaseId,
+      !is.na(LeaseId) & !is.na(BuildingId) & is.na(PropertyId) ~ LeaseId,
+      .default = "weird"
+    ),
+    .before = everything()
   )
 
-
-ArTest <- BudgetAssetAr |>
-  # filter(BuildingId == "B0010231") |>
-  filter(LeaseId == "L1023") |>
-  filter(FiscalYear %in% c("2526", "2627"))
+assertthat::assert_that(
+  sum(BudgetAssetAr$ContractName == "weird") == 0
+)
 
 # Budget Asset ####
-test1 <- BudgetAssetData |>
-  filter(budget_asset_bl_id == "B0010223") |>
-  filter(budget_asset_budget_id %in% c("2526", "2627"))
-
-test2 <- BudgetAssetArData |>
-  filter(budget_asset_ar_bl_id == "B0010223") |>
-  filter(budget_asset_ar_budget_id %in% c("2526", "2627"))
-
-Start <- BudgetAssetData |>
+BudgetAsset <- BudgetAssetData |>
   select(
+    ContractName = budget_asset_asset_id,
     FiscalYear = budget_asset_budget_id,
     BuildingId = budget_asset_bl_id,
     RentableArea = budget_asset_area_space,
-    ParkingAmount = budget_asset_amt_parking_no_admin,
     ParkingStalls = budget_asset_parking_stalls
   )
 
@@ -172,25 +174,6 @@ Building <- BuildingData |>
     linkCity
   )
 
-
-BudgetBuilding <- BudgetAssetAr |>
-  filter(!is.na(BuildingId)) |>
-  select(BuildingId, PropertyId, LeaseId, FiscalYear) |>
-  filter(FiscalYear == "2425") |>
-  left_join(Building, by = join_by(BuildingId))
-
-sum(!is.na(BudgetBuilding$PropertyId))
-sum(!is.na(BudgetBuilding$LeaseId)) # different fiscal years will have or not have leaseids for a handful
-sum(BudgetBuilding$Tenure == "LEASED") # but it seems to match to leased buildings, except for one 2425 year record
-
-test <- BudgetBuilding |>
-  filter(Tenure == "LEASED" & is.na(LeaseId))
-
-test <- BudgetBuilding |>
-  group_by(BuildingId) |>
-  mutate(count = n()) |>
-  filter(count > 1)
-
 assertthat::assert_that(
   length(setdiff(
     BudgetAssetAr |> filter(!is.na(BuildingId)) |> pull(BuildingId),
@@ -198,7 +181,6 @@ assertthat::assert_that(
   )) ==
     0
 )
-
 
 # Property ####
 Property <- PropertyData |>
@@ -214,28 +196,48 @@ Property <- PropertyData |>
 # Create Report ####
 
 PRR2015 <- BudgetAssetAr |>
-  left_join(Building, by = join_by(BuildingId))
+  full_join(BudgetAsset, by = join_by(ContractName, FiscalYear)) |>
+  mutate(
+    BuildingId = case_when(
+      is.na(BuildingId.x) & !is.na(BuildingId.y) ~ BuildingId.y,
+      is.na(BuildingId.y) & !is.na(BuildingId.x) ~ BuildingId.x,
+      BuildingId.x == BuildingId.y ~ BuildingId.x,
+      is.na(BuildingId.x) & is.na(BuildingId.y) ~ NA_character_,
+      .default = "weird"
+    ),
+    .keep = "unused",
+    .after = FiscalYear
+  ) |>
+  relocate(
+    RentableArea,
+    ParkingStalls,
+    .before = BaseRent
+  ) |>
+  arrange(ContractName, FiscalYear)
 
-test <- BudgetAssetAr |>
-  filter(!is.na(LeaseId))
+assertthat::assert_that(
+  sum(PRR2015$BuildingId == "weird", na.rm = TRUE) == 0
+)
 
+review <- PRR2015 |>
+  filter(FiscalYear %in% c("2526", "2627"))
 # Column mapping ####
 # Contract Name
 # Primary Location
 # Pricing Method
 # City
 # Rentable Area
-# Parking Stalls
-# Base Rent - Budget_asset
-# Operations and Maintenance - Budget_asset
-# Utilities - Budget_asset
-# Landlord Operations and Maintenance - Budget_asset
-# Property Tax - Budget_asset
-# Parking - Budget_asset
-# Landlord Admin fee - Budget_asset
-# Tax Admin - Budget_asset
-# Operations and Maintenance Admin - Budget_asset
-# Utilities Admin - Budget_asset
+# Parking Stalls - Budget_asset
+# Base Rent - Budget_asset_ar
+# Operations and Maintenance - Budget_asset_ar
+# Utilities - Budget_asset_ar
+# Landlord Operations and Maintenance - Budget_asset_ar
+# Property Tax - Budget_asset_ar
+# Parking - Budget_asset_ar
+# Landlord Admin fee - Budget_asset_ar
+# Tax Admin - Budget_asset_ar
+# Operations and Maintenance Admin - Budget_asset_ar
+# Utilities Admin - Budget_asset_ar
 # Total Admin - Calculated (Landlord Admin + Tax Admin + Operations Admin + Utilities Admin)
 # Total Cost - Calculated (Base Rent + OperationsMaintenance + Utilities + Parking)
 # Cost Rate - Calculated (Total Cost by Area)
