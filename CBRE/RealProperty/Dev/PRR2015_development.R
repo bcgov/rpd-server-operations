@@ -2,6 +2,26 @@
 # Begin timer
 task_start <- Sys.time()
 
+# Load helper functions
+source(here::here("utilities/R/utilities.R"))
+
+options(digits = 15)
+
+# Load libraries
+library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
+library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
+library(here, quietly = TRUE, warn.conflicts = FALSE)
+library(httr2, quietly = TRUE, warn.conflicts = FALSE)
+library(jsonlite, quietly = TRUE, warn.conflicts = FALSE)
+library(lubridate, quietly = TRUE, warn.conflicts = FALSE)
+library(purrr, quietly = TRUE, warn.conflicts = FALSE)
+library(tibble, quietly = TRUE, warn.conflicts = FALSE)
+library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
+library(stringr, quietly = TRUE, warn.conflicts = FALSE)
+library(openxlsx2, quietly = TRUE, warn.conflicts = FALSE)
+library(odbc, quietly = TRUE, warn.conflicts = FALSE)
+library(DBI, quietly = TRUE, warn.conflicts = FALSE)
+
 # Setup necessary variables
 ETL_STATUS <- "DEV"
 SQL_SERVER <- if (ETL_STATUS == "PROD") {
@@ -11,10 +31,10 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "PRR2015"
+TABLE_NAME <- "PORT_PRR2015"
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "PRR2015"
+SCRIPT_NAME <- "PORT_PRR2015"
 API_NAME <- "None"
 
 # Connect to SQL database
@@ -107,9 +127,9 @@ BudgetAssetAr <- BudgetAssetArData |>
     .before = everything()
   )
 
-# assertthat::assert_that(
-#   sum(BudgetAssetAr$ContractName == "weird") == 0
-# )
+assertthat::assert_that(
+  sum(BudgetAssetAr$ContractName == "weird") == 0
+)
 
 # Budget Asset ####
 BudgetAsset <- BudgetAssetData |>
@@ -133,13 +153,13 @@ Leasing <- LeasingData |>
   ) |>
   filter(ls_lease_sublease %in% c("L", "P"))
 
-# assertthat::assert_that(
-#   length(setdiff(
-#     BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
-#     Leasing$ls_ls_id
-#   )) ==
-#     0
-# )
+assertthat::assert_that(
+  length(setdiff(
+    BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
+    Leasing$ls_ls_id
+  )) ==
+    0
+)
 
 # Building ####
 Building <- BuildingData |>
@@ -151,13 +171,13 @@ Building <- BuildingData |>
     linkCity
   )
 
-# assertthat::assert_that(
-#   length(setdiff(
-#     BudgetAssetAr |> filter(!is.na(BuildingId)) |> pull(BuildingId),
-#     Building$BuildingId
-#   )) ==
-#     0
-# )
+assertthat::assert_that(
+  length(setdiff(
+    BudgetAssetAr |> filter(!is.na(BuildingId)) |> pull(BuildingId),
+    Building$BuildingId
+  )) ==
+    0
+)
 
 # Property ####
 Property <- PropertyData |>
@@ -228,13 +248,7 @@ PRR2015 <- BudgetAssetAr |>
     )
   ) |>
   mutate(
-    CostRate = case_when(
-      RentableArea != 0 & TotalCost != 0 ~ round(
-        TotalCost / RentableArea,
-        digits = 2
-      ),
-      .default = 0
-    )
+    CostRate = round(TotalCost / RentableArea, digits = 2)
   ) |>
   # PrimaryLocation edge cases
   # L5637 - somehow has a PrimaryLocation defined, seems its pulling via an option1 clause in a PreActive agreement
@@ -260,14 +274,28 @@ PRR2015 <- BudgetAssetAr |>
       ls_status
     )
   ) |>
-  mutate(
-    across(
-      where(is.numeric),
-      ~ round(.x, digits = 2)
-    )
-  ) |>
-  arrange(ContractName, desc(FiscalYear)) |>
-  mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything())
+  arrange(ContractName, desc(FiscalYear))
+
+# L5637
+# L5913
+# sum(PRR2015$ls_status == "Rejected", na.rm = TRUE)
+# sum(PRR2015$ls_status == "Terminated", na.rm = TRUE)
+# sum(PRR2015$ls_status == "Draft", na.rm = TRUE)
+#
+# ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
+#   "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
+# ))
+#
+# compare <- ExtractPRR2015 |>
+#   select(
+#     ContractName = `Contract Name`,
+#     PrimaryLocation = `Primary Location`
+#   )
+# compare_to <- PRR2015 |>
+#   filter(FiscalYear == "2526") |>
+#   select(ContractName, PrimaryLocation)
+#
+# outcome <- setdiff(compare, compare_to)
 
 # Column mapping ####
 # Contract Name - Calculated column
@@ -290,184 +318,3 @@ PRR2015 <- BudgetAssetAr |>
 # Total Cost - Calculated (Base Rent + OperationsMaintenance + Utilities + Parking)
 # Cost Rate - Calculated (Total Cost by Area)
 # Variance - Calculated (year over year comparison)
-
-# Database Transaction ####
-# dbRemoveTable(con, TARGET_TABLE)
-if (!dbExistsTable(con, TARGET_TABLE)) {
-  sql <- paste0(
-    "CREATE TABLE ",
-    SCHEMA_NAME,
-    ".",
-    TABLE_NAME,
-    " (
-        RefreshDate              DATETIME2(3)  NOT NULL,
-        ContractName             NVARCHAR(20)  NOT NULL,
-        PrimaryLocation          NVARCHAR(20)  NOT NULL,
-        FiscalYear               NVARCHAR(10)  NOT NULL,
-        PricingMethod            NVARCHAR(50)  NULL,
-        City                     NVARCHAR(50)  NULL,
-        RentableArea             DECIMAL(18,5) NULL,
-        ParkingStalls            INT           NULL,
-        BaseRent                 DECIMAL(18,2) NULL,
-        OperationsMaintenance    DECIMAL(18,2) NULL,
-        Utilities                DECIMAL(18,2) NULL,
-        LLOperationsMaintenance  DECIMAL(18,2) NULL,
-        PropertyTax              DECIMAL(18,2) NULL,
-        Parking                  DECIMAL(18,2) NULL,
-        AdminFee                 DECIMAL(18,2) NULL,
-        LLAdminFee               DECIMAL(18,2) NULL,
-        TaxAdmin                 DECIMAL(18,2) NULL,
-        OMAdmin                  DECIMAL(18,2) NULL,
-        UtilityAdmin             DECIMAL(18,2) NULL,
-        TotalAdmin               DECIMAL(18,2) NULL,
-        TotalCost                DECIMAL(18,2) NULL,
-        CostRate                 DECIMAL(18,4) NULL
-      );"
-  )
-  dbExecute(con, sql)
-}
-
-etl_error <- NULL
-
-# Control database transaction to ensure all steps done together or not at all
-dbBegin(con)
-
-# Begin error handling and roll back on transaction failure
-tryCatch(
-  {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
-    }
-
-    # Create temp table to hold new data
-    dbExecute(
-      con,
-      paste0(
-        "
-    CREATE TABLE ",
-        SCHEMA_NAME,
-        ".",
-        TEMP_TABLE,
-        " (
-      RefreshDate              DATETIME2(3)  NOT NULL,
-      ContractName             NVARCHAR(20)  NOT NULL,
-      PrimaryLocation          NVARCHAR(20)  NOT NULL,
-      FiscalYear               NVARCHAR(10)  NOT NULL,
-      PricingMethod            NVARCHAR(50)  NULL,
-      City                     NVARCHAR(50)  NULL,
-      RentableArea             DECIMAL(18,5) NULL,
-      ParkingStalls            INT           NULL,
-      BaseRent                 DECIMAL(18,2) NULL,
-      OperationsMaintenance    DECIMAL(18,2) NULL,
-      Utilities                DECIMAL(18,2) NULL,
-      LLOperationsMaintenance  DECIMAL(18,2) NULL,
-      PropertyTax              DECIMAL(18,2) NULL,
-      Parking                  DECIMAL(18,2) NULL,
-      AdminFee                 DECIMAL(18,2) NULL,
-      LLAdminFee               DECIMAL(18,2) NULL,
-      TaxAdmin                 DECIMAL(18,2) NULL,
-      OMAdmin                  DECIMAL(18,2) NULL,
-      UtilityAdmin             DECIMAL(18,2) NULL,
-      TotalAdmin               DECIMAL(18,2) NULL,
-      TotalCost                DECIMAL(18,2) NULL,
-      CostRate                 DECIMAL(18,4) NULL
-    );
-  "
-      )
-    )
-
-    dbWriteTable(
-      con,
-      name = TEMP_TABLE,
-      value = PRR2015,
-      append = TRUE,
-      overwrite = FALSE
-    )
-
-    dbExecute(
-      con,
-      paste0(
-        "DELETE FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        ";"
-      )
-    )
-
-    n_inserted <- dbExecute(
-      con,
-      paste0(
-        "INSERT INTO ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        "(
-        RefreshDate,
-        ContractName,
-        PrimaryLocation,
-        FiscalYear,
-        PricingMethod,
-        City,
-        RentableArea,
-        ParkingStalls,
-        BaseRent,
-        OperationsMaintenance,
-        Utilities,
-        LLOperationsMaintenance,
-        PropertyTax,
-        Parking,
-        AdminFee,
-        LLAdminFee,
-        TaxAdmin,
-        OMAdmin,
-        UtilityAdmin,
-        TotalAdmin,
-        TotalCost,
-        CostRate
-      )
-       SELECT * FROM ",
-        TEMP_TABLE,
-        ";"
-      )
-    )
-
-    # Complete the transaction
-    dbCommit(con)
-
-    # Hoist to main environment
-    n_inserted <<- n_inserted
-    cat("ETL complete — inserted:", n_inserted, "\n")
-    # Rollback transaction on failure
-  },
-  error = function(e) {
-    dbRollback(con)
-    etl_error <<- e
-  }
-)
-
-task_end <- Sys.time()
-task_duration <- interval(task_start, task_end) / dseconds()
-
-if (is.null(etl_error)) {
-  log_daily_etl_run(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = TABLE_NAME,
-    duration = task_duration,
-    status = "SUCCESS",
-    n_inserted = n_inserted,
-    n_updated = NA,
-    n_deleted = NA,
-    message = "ETL completed successfully"
-  )
-} else {
-  log_daily_etl_run(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = TABLE_NAME,
-    status = "FAILURE",
-    message = substr(etl_error$message, 1, 500)
-  )
-  stop(etl_error)
-}

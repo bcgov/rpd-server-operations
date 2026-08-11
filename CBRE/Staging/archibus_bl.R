@@ -405,7 +405,7 @@ tryCatch(
 
     # Hoist to main environment
     n_inserted <<- n_inserted
-
+    cat("ETL complete — inserted:", n_inserted, "\n")
     # Rollback transaction on failure
   },
   error = function(e) {

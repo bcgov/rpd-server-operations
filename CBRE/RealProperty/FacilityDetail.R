@@ -411,6 +411,7 @@ tryCatch(
     dbCommit(con)
     #     n_deleted <<- n_deleted
     n_inserted <<- n_inserted
+    cat("ETL complete — inserted:", n_inserted, "\n")
     #     n_updated <<- n_updated
     # rollback transaction on fail, completion of error handling
   },
