@@ -93,7 +93,7 @@ BudgetAssetAr <- BudgetAssetArData |>
     BaseRent,
     OperationsMaintenance,
     Utilities,
-    LandLordOperationsMaintenance = LandlordProvidedOM,
+    LLOperationsMaintenance = LandlordProvidedOM,
     PropertyTax,
     Parking,
     AdminFee = AdministrationFee,
@@ -110,7 +110,7 @@ BudgetAssetAr <- BudgetAssetArData |>
     TotalCost = BaseRent +
       OperationsMaintenance +
       Utilities +
-      LandLordOperationsMaintenance +
+      LLOperationsMaintenance +
       PropertyTax +
       Parking
   ) |>
@@ -145,16 +145,13 @@ BudgetAsset <- BudgetAssetData |>
 Leasing <- LeasingData |>
   select(
     ls_ls_id,
+    ls_status,
     ls_id_key,
     ls_bl_id,
     ls_pr_id,
     ls_lease_sublease
   ) |>
   filter(ls_lease_sublease %in% c("L", "P"))
-
-BudgetAssetLeases <- BudgetAssetAr |>
-  filter(!is.na(LeaseId)) |>
-  select(LeaseId)
 
 assertthat::assert_that(
   length(setdiff(
@@ -186,15 +183,14 @@ assertthat::assert_that(
 Property <- PropertyData |>
   select(
     PropertyId,
-    Tenure,
-    PricingMethod,
-    TotalRentableLand,
-    linkAddress,
-    linkCity
+    PR_Tenure = Tenure,
+    PR_PricingMethod = PricingMethod,
+    PR_TotalRentableLand = TotalRentableLand,
+    PR_linkAddress = linkAddress,
+    PR_linkCity = linkCity
   )
 
 # Create Report ####
-
 PRR2015 <- BudgetAssetAr |>
   full_join(BudgetAsset, by = join_by(ContractName, FiscalYear)) |>
   mutate(
@@ -213,20 +209,100 @@ PRR2015 <- BudgetAssetAr |>
     ParkingStalls,
     .before = BaseRent
   ) |>
-  arrange(ContractName, FiscalYear)
+  # If its a parking contractname the rentable area is the # of stalls, if its land the hectares, building sqm
+  # need to find the right join and setup conditions to get all the details in there
+  left_join(Leasing, by = join_by(ContractName == ls_ls_id)) |>
+  mutate(
+    PrimaryLocation = case_when(
+      (grepl("^P\\d+", ContractName) | startsWith(ContractName, "L")) &
+        !is.na(ls_bl_id) ~ ls_bl_id,
+      (grepl("^P\\d+", ContractName) | startsWith(ContractName, "L")) &
+        !is.na(ls_pr_id) ~ ls_pr_id,
+      startsWith(ContractName, "B") |
+        startsWith(ContractName, "N") ~ ContractName,
+      .default = "weird"
+    ),
+    .after = ContractName
+  ) |>
+  left_join(Building, by = join_by(PrimaryLocation == BuildingId)) |>
+  left_join(Property, by = join_by(PrimaryLocation == PropertyId)) |>
+  mutate(
+    PricingMethod = case_when(
+      !is.na(PricingMethod) ~ PricingMethod,
+      is.na(PricingMethod) & !is.na(PR_PricingMethod) ~ PR_PricingMethod
+    )
+  ) |>
+  relocate(PricingMethod, .after = FiscalYear) |>
+  mutate(
+    City = case_when(
+      !is.na(linkCity) ~ linkCity,
+      is.na(linkCity) & !is.na(PR_linkCity) ~ PR_linkCity
+    ),
+    .after = PricingMethod
+  ) |>
+  mutate(
+    RentableArea = case_when(
+      startsWith(ContractName, "P") ~ ParkingStalls,
+      startsWith(PrimaryLocation, "N") ~ PR_TotalRentableLand,
+      .default = RentableArea
+    )
+  ) |>
+  mutate(
+    CostRate = round(TotalCost / RentableArea, digits = 2)
+  ) |>
+  # PrimaryLocation edge cases
+  # L5637 - somehow has a PrimaryLocation defined, seems its pulling via an option1 clause in a PreActive agreement
+  # L5913 - doesn't exist in PRR2015 extract
+  filter(!ls_status %in% c("Rejected")) |> # deal with one edge case L5913
+  select(
+    -c(
+      BuildingId,
+      PropertyId,
+      LeaseId,
+      ls_id_key,
+      ls_bl_id,
+      ls_pr_id,
+      ls_lease_sublease,
+      Tenure,
+      bl_area_rentable,
+      linkCity,
+      PR_Tenure,
+      PR_PricingMethod,
+      PR_TotalRentableLand,
+      PR_linkAddress,
+      PR_linkCity,
+      ls_status
+    )
+  ) |>
+  arrange(ContractName, desc(FiscalYear))
 
-assertthat::assert_that(
-  sum(PRR2015$BuildingId == "weird", na.rm = TRUE) == 0
-)
+# L5637
+# L5913
+sum(PRR2015$ls_status == "Rejected", na.rm = TRUE)
+sum(PRR2015$ls_status == "Terminated", na.rm = TRUE)
+sum(PRR2015$ls_status == "Draft", na.rm = TRUE)
 
-review <- PRR2015 |>
-  filter(FiscalYear %in% c("2526", "2627"))
+ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
+  "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
+))
+
+compare <- ExtractPRR2015 |>
+  select(
+    ContractName = `Contract Name`,
+    PrimaryLocation = `Primary Location`
+  )
+compare_to <- PRR2015 |>
+  filter(FiscalYear == "2526") |>
+  select(ContractName, PrimaryLocation)
+
+outcome <- setdiff(compare, compare_to)
+
 # Column mapping ####
-# Contract Name
-# Primary Location
-# Pricing Method
-# City
-# Rentable Area
+# Contract Name - Calculated column
+# Primary Location - Calculated column
+# Pricing Method - Building or Property table
+# City - Building or Property table
+# Rentable Area - BudgetAsset or Property table
 # Parking Stalls - Budget_asset
 # Base Rent - Budget_asset_ar
 # Operations and Maintenance - Budget_asset_ar

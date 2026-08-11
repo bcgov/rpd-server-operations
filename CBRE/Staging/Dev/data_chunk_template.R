@@ -19,7 +19,7 @@ source(here::here("utilities/R/utilities.R"))
 # archibus_budget_asset
 # archibus_budget_asset_ar
 
-CBRE_TABLE_NAME <- "archibus_budget_asset_ar"
+CBRE_TABLE_NAME <- "archibus_ls"
 
 # Query API
 chunk_1 <- call_cbre_api(
@@ -32,7 +32,7 @@ chunk_1 <- call_cbre_api(
 
 raw_data <- chunk_1$data
 
-clean_pjm <- raw_data |>
+clean_data <- raw_data |>
   # purrr::pluck("data") |>
   select_if(~ !all(is.na(.))) |>
   select_if(~ !all(. == 0)) |>
