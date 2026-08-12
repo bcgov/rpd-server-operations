@@ -62,16 +62,16 @@ clean_data <- resp |>
   #   Assignee = list("assignee"),
   #   .remove = FALSE
   # )
-  # safe_hoist(
-  #   iWouldLikeTo,
-  #   FormA = list("requestDrawingsFromYourInventoryPleaseCompleteSectionA"),
-  #   .remove = FALSE
-  # ) |>
-  # safe_hoist(
-  #   iWouldLikeTo,
-  #   FormB = list("submitDrawingsToYouInventoryPleaseCompleteSectionB"),
-  #   .remove = FALSE
-  # )
+  safe_hoist(
+    iWouldLikeTo,
+    FormA = list("requestDrawingsFromYourInventoryPleaseCompleteSectionA"),
+    .remove = FALSE
+  ) |>
+  safe_hoist(
+    iWouldLikeTo,
+    FormB = list("submitDrawingsToYouInventoryPleaseCompleteSectionB"),
+    .remove = FALSE
+  ) |>
   # can we get these two into a safe_hoist_all() single call?
   safe_hoist(
     form,
@@ -102,6 +102,13 @@ clean_data <- resp |>
     bcaddress1,
     bcaddress1 = list("properties", "fullAddress"),
     .remove = FALSE
+  ) |>
+  mutate(
+    FormChoice = case_when(
+      FormA ~ "Request",
+      FormB ~ "Submit",
+      .default = NA_character_
+    )
   ) |>
   mutate(
     ProjectName = case_when(
@@ -154,6 +161,7 @@ clean_data <- resp |>
     SubmissionId,
     SubmissionTime,
     Status,
+    FormChoice,
     ProjectName,
     ProjectNumberOrWorkOrder,
     Building,
@@ -199,6 +207,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         SubmissionId                   NVARCHAR(36)     NOT NULL,
         SubmissionTime                 DATETIME2(3)     NOT NULL,
         Status                         NVARCHAR(30)     NULL,
+        FormChoice                     NVARCHAR(30)     NULL,
         ProjectName                    NVARCHAR(1500)   NULL,
         ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
         Building                       NVARCHAR(250)    NULL,
@@ -251,6 +260,7 @@ tryCatch(
           SubmissionId                   NVARCHAR(36)     NOT NULL,
           SubmissionTime                 DATETIME2(3)     NOT NULL,
           Status                         NVARCHAR(30)     NULL,
+          FormChoice                     NVARCHAR(30)     NULL,
           ProjectName                    NVARCHAR(1500)   NULL,
           ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
           Building                       NVARCHAR(250)    NULL,
@@ -339,6 +349,7 @@ tryCatch(
           tgt.RefreshDate                    = src.RefreshDate,
           tgt.SubmissionTime                 = src.SubmissionTime,
           tgt.Status                         = src.Status,
+          tgt.FormChoice                     = src.FormChoice,
           tgt.ProjectName                    = src.ProjectName,
           tgt.ProjectNumberOrWorkOrder       = src.ProjectNumberOrWorkOrder,
           tgt.Building                       = src.Building,
@@ -390,6 +401,7 @@ tryCatch(
           SubmissionId,
           SubmissionTime,
           Status,
+          FormChoice,
           ProjectName,
           ProjectNumberOrWorkOrder,
           Building,
@@ -421,6 +433,7 @@ tryCatch(
           src.SubmissionId,
           src.SubmissionTime,
           src.Status,
+          src.FormChoice,
           src.ProjectName,
           src.ProjectNumberOrWorkOrder,
           src.Building,

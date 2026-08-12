@@ -129,17 +129,41 @@ Leasing <- LeasingData |>
     ls_id_key,
     ls_bl_id,
     ls_pr_id,
-    ls_lease_sublease
+    ls_lease_sublease,
+    ls_ls_parent_id,
+    ls_option1,
+    ls_version,
+    ls_area_negotiated,
+    ls_date_start,
+    ls_date_end,
+    ls_date_terminated
   ) |>
-  filter(ls_lease_sublease %in% c("L", "P"))
+  # filter(ls_lease_sublease %in% c("L", "P"))
+  mutate(
+    LeaseGroup = case_when(
+      ls_lease_sublease %in% c("L", "P") ~ gsub("-V\\d+", "", ls_ls_id),
+      ls_lease_sublease %in% c("A") & !is.na(ls_ls_parent_id) ~ gsub(
+        "-V\\d+",
+        "",
+        ls_ls_parent_id
+      ),
+      .default = ls_ls_id
+    )
+  ) |>
+  group_by(LeaseGroup) |>
+  mutate(count = n()) |>
+  filter(count > 4)
+filter(ls_version == max(ls_version)) |>
+  ungroup() |>
+  mutate(ls_ls_id = gsub("-V//d+", "", ls_ls_id))
 
-# assertthat::assert_that(
-#   length(setdiff(
-#     BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
-#     Leasing$ls_ls_id
-#   )) ==
-#     0
-# )
+assertthat::assert_that(
+  length(setdiff(
+    BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
+    Leasing$ls_ls_id
+  )) ==
+    0
+)
 
 # Building ####
 Building <- BuildingData |>
@@ -223,7 +247,11 @@ PRR2015 <- BudgetAssetAr |>
   mutate(
     RentableArea = case_when(
       startsWith(ContractName, "P") ~ ParkingStalls,
-      startsWith(PrimaryLocation, "N") ~ PR_TotalRentableLand,
+      startsWith(ContractName, "L") &
+        PR_Tenure == "LEASED" &
+        ls_area_negotiated == 0 ~ PR_TotalRentableLand,
+      startsWith(ContractName, "L") ~ ls_area_negotiated,
+      startsWith(ContractName, "N") ~ PR_TotalRentableLand,
       .default = RentableArea
     )
   ) |>
@@ -257,7 +285,8 @@ PRR2015 <- BudgetAssetAr |>
       PR_TotalRentableLand,
       PR_linkAddress,
       PR_linkCity,
-      ls_status
+      ls_status,
+      ls_area_negotiated
     )
   ) |>
   mutate(

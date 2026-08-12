@@ -149,9 +149,31 @@ Leasing <- LeasingData |>
     ls_id_key,
     ls_bl_id,
     ls_pr_id,
-    ls_lease_sublease
+    ls_lease_sublease,
+    ls_ls_parent_id,
+    ls_option1,
+    ls_version,
+    ls_area_negotiated,
+    ls_date_start,
+    ls_date_end,
+    ls_date_terminated
   ) |>
-  filter(ls_lease_sublease %in% c("L", "P"))
+  # filter(ls_lease_sublease %in% c("L", "P"))
+  mutate(
+    LeaseGroup = case_when(
+      ls_lease_sublease %in% c("L", "P") ~ gsub("-V\\d+", "", ls_ls_id),
+      ls_lease_sublease %in% c("A") & !is.na(ls_ls_parent_id) ~ gsub(
+        "-V\\d+",
+        "",
+        ls_ls_parent_id
+      ),
+      .default = ls_ls_id
+    )
+  ) |>
+  group_by(LeaseGroup) |>
+  filter(ls_version == max(ls_version)) |>
+  relocate(LeaseGroup, .after = ls_ls_id)
+
 
 assertthat::assert_that(
   length(setdiff(
@@ -282,20 +304,33 @@ PRR2015 <- BudgetAssetAr |>
 # sum(PRR2015$ls_status == "Terminated", na.rm = TRUE)
 # sum(PRR2015$ls_status == "Draft", na.rm = TRUE)
 #
-# ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
-#   "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
-# ))
-#
-# compare <- ExtractPRR2015 |>
-#   select(
-#     ContractName = `Contract Name`,
-#     PrimaryLocation = `Primary Location`
-#   )
-# compare_to <- PRR2015 |>
-#   filter(FiscalYear == "2526") |>
-#   select(ContractName, PrimaryLocation)
-#
-# outcome <- setdiff(compare, compare_to)
+ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
+  "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
+))
+
+compare <- ExtractPRR2015 |>
+  select(
+    ContractName = `Contract Name`,
+    PrimaryLocation = `Primary Location`,
+    PricingMethod = `Pricing Method`,
+    City,
+    RentableArea = `2526 Year Rentable Area`
+  ) |>
+  mutate(
+    RentableArea = as.double(gsub(",", "", RentableArea))
+  )
+
+compare_to <- PRR2015 |>
+  filter(FiscalYear == "2526") |>
+  select(
+    ContractName,
+    PrimaryLocation,
+    PricingMethod,
+    City,
+    RentableArea
+  )
+
+outcome <- setdiff(compare, compare_to)
 
 # Column mapping ####
 # Contract Name - Calculated column
