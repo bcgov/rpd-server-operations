@@ -57,11 +57,11 @@ clean_data <- resp |>
   tidyr::unnest_wider(
     doTheseFilesContainInformationThatIfCompromisedCouldCauseExtremelyGraveInjuryToAnIndividualOrganizationOrGovernment
   ) |>
-  # safe_hoist(
-  #   form,
-  #   Assignee = list("assignee"),
-  #   .remove = FALSE
-  # )
+  safe_hoist(
+    form,
+    Assignee = list("assignee"),
+    .remove = FALSE
+  ) |>
   safe_hoist(
     iWouldLikeTo,
     FormA = list("requestDrawingsFromYourInventoryPleaseCompleteSectionA"),
@@ -161,6 +161,7 @@ clean_data <- resp |>
     SubmissionId,
     SubmissionTime,
     Status,
+    Assignee,
     FormChoice,
     ProjectName,
     ProjectNumberOrWorkOrder,
@@ -207,6 +208,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         SubmissionId                   NVARCHAR(36)     NOT NULL,
         SubmissionTime                 DATETIME2(3)     NOT NULL,
         Status                         NVARCHAR(30)     NULL,
+        Assignee                       NVARCHAR(50)     NULL,
         FormChoice                     NVARCHAR(30)     NULL,
         ProjectName                    NVARCHAR(1500)   NULL,
         ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
@@ -260,6 +262,7 @@ tryCatch(
           SubmissionId                   NVARCHAR(36)     NOT NULL,
           SubmissionTime                 DATETIME2(3)     NOT NULL,
           Status                         NVARCHAR(30)     NULL,
+          Assignee                       NVARCHAR(50)     NULL,
           FormChoice                     NVARCHAR(30)     NULL,
           ProjectName                    NVARCHAR(1500)   NULL,
           ProjectNumberOrWorkOrder       NVARCHAR(1500)   NULL,
@@ -349,6 +352,7 @@ tryCatch(
           tgt.RefreshDate                    = src.RefreshDate,
           tgt.SubmissionTime                 = src.SubmissionTime,
           tgt.Status                         = src.Status,
+          tgt.Assignee                       = src.Assignee,
           tgt.FormChoice                     = src.FormChoice,
           tgt.ProjectName                    = src.ProjectName,
           tgt.ProjectNumberOrWorkOrder       = src.ProjectNumberOrWorkOrder,
@@ -401,6 +405,7 @@ tryCatch(
           SubmissionId,
           SubmissionTime,
           Status,
+          Assignee,
           FormChoice,
           ProjectName,
           ProjectNumberOrWorkOrder,
@@ -433,6 +438,7 @@ tryCatch(
           src.SubmissionId,
           src.SubmissionTime,
           src.Status,
+          src.Assignee,
           src.FormChoice,
           src.ProjectName,
           src.ProjectNumberOrWorkOrder,

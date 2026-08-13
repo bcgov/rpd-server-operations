@@ -136,6 +136,7 @@ while (progress < 2) {
       IssueKey = key,
       Status,
       RequestType,
+      Summary,
       Created,
       Updated,
       Resolved,
