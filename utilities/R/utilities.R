@@ -734,3 +734,9 @@ get_etl_window <- function(today = Sys.Date()) {
     jira_start_time = paste(today - lookback_days, "00:00")
   )
 }
+
+ensure_columns <- function(df, cols) {
+  missing_cols <- setdiff(cols, names(df))
+  df[missing_cols] <- NA_character_
+  df
+}

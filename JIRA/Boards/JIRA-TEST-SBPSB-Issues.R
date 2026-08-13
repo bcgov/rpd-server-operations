@@ -276,6 +276,10 @@ tryCatch(
         names_from = col_name,
         values_from = col_value
       ) |>
+      # This step guarantees the dataframe shape after pivot
+      # variable API payload may result in missing columns
+      ensure_columns(c("type_name", "type_inward", "type_outward", "inwardIssue_key", "outwardIssue_key")) |>
+      # Next three steps have a .default = "Error", will need some kind of logging or check for this
       mutate(
         TypeFlag = case_when(
           is.na(inwardIssue_key) ~ "Outward",
@@ -326,6 +330,19 @@ tryCatch(
     stop(e) # rethrow so Task Scheduler/Nagios still flags it
   }
 )
+
+error_rows <- LinkedIssues |> filter(RelationDesc == "Error" | RelationIssueKey == "Error")
+
+if (nrow(error_rows) > 0) {
+  log_daily_etl_run(
+    status = "WARNING",  # or whatever your existing status vocabulary supports
+    message = sprintf(
+      "Relation Error in Desc or IssueKey for %d row(s). IssueKeys: %s",
+      nrow(error_rows),
+      paste(head(error_rows$IssueKey, 10), collapse = ", ")
+    )
+  )
+}
 
 # Deal with issues where extra newline characters screwed up the read in of data to power bi
 tryCatch(
