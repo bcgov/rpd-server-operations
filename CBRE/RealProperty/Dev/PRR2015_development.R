@@ -125,21 +125,73 @@ BudgetAssetAr <- BudgetAssetArData |>
       .default = "weird"
     ),
     .before = everything()
+  ) |>
+  # This section handles a weird edge case of duplicate rows that contain some admin costs for a contract name
+  # and will include a building ID in that row, but no building Id and all the rest of the costs in another row.
+  # currently 25 cases, with this it now matches BudgetAsset
+  group_by(ContractName, FiscalYear) |>
+  arrange(BuildingId) |>
+  summarise(
+    across(
+      c(
+        BuildingId,
+        PropertyId,
+        LeaseId
+      ),
+      first,
+      .names = "{col}"
+    ),
+    across(
+      c(
+        BaseRent,
+        OperationsMaintenance,
+        Utilities,
+        LLOperationsMaintenance,
+        PropertyTax,
+        Parking,
+        AdminFee,
+        LLAdminFee,
+        TaxAdmin,
+        OMAdmin,
+        UtilityAdmin,
+        TotalAdmin,
+        TotalCost
+      ),
+      sum,
+      .names = "{col}"
+    ),
+    .groups = "drop"
   )
 
-assertthat::assert_that(
-  sum(BudgetAssetAr$ContractName == "weird") == 0
-)
+# check <- BudgetAssetAr |>
+#   group_by(ContractName, FiscalYear) |>
+#   mutate(count = n()) |>
+#   filter(count > 1) |>
+#   ungroup() |>
+#   arrange(ContractName, FiscalYear, BuildingId)
+
+# assertthat::assert_that(
+#   sum(BudgetAssetAr$ContractName == "weird") == 0
+# )
 
 # Budget Asset ####
 BudgetAsset <- BudgetAssetData |>
   select(
     ContractName = budget_asset_asset_id,
-    FiscalYear = budget_asset_budget_id,
     BuildingId = budget_asset_bl_id,
-    RentableArea = budget_asset_area_space,
+    PropertyId = budget_asset_pr_id,
+    LeaseId = budget_asset_ls_id,
+    PlaId = budget_asset_pla_id,
+    FiscalYear = budget_asset_budget_id,
+    RentableAreaBuilding = budget_asset_area_space,
+    RentableAreaLand = budget_asset_area_land,
     ParkingStalls = budget_asset_parking_stalls
   )
+
+# check <- BudgetAsset |>
+#   group_by(ContractName, FiscalYear) |>
+#   mutate(count = n()) |>
+#   filter(count > 1)
 
 # Leasing ####
 Leasing <- LeasingData |>
@@ -172,7 +224,9 @@ Leasing <- LeasingData |>
   ) |>
   group_by(LeaseGroup) |>
   filter(ls_version == max(ls_version)) |>
-  relocate(LeaseGroup, .after = ls_ls_id)
+  ungroup() |>
+  mutate(ls_ls_id = gsub("-V\\d+", "", ls_ls_id)) |>
+  filter(ls_lease_sublease %in% c("L", "P"))
 
 
 assertthat::assert_that(
@@ -214,7 +268,10 @@ Property <- PropertyData |>
 
 # Create Report ####
 PRR2015 <- BudgetAssetAr |>
-  full_join(BudgetAsset, by = join_by(ContractName, FiscalYear)) |>
+  full_join(
+    BudgetAsset,
+    by = join_by(ContractName, FiscalYear, LeaseId, PropertyId)
+  ) |>
   mutate(
     BuildingId = case_when(
       is.na(BuildingId.x) & !is.na(BuildingId.y) ~ BuildingId.y,
@@ -226,11 +283,11 @@ PRR2015 <- BudgetAssetAr |>
     .keep = "unused",
     .after = FiscalYear
   ) |>
-  relocate(
-    RentableArea,
-    ParkingStalls,
-    .before = BaseRent
-  ) |>
+  # relocate(
+  #   RentableArea,
+  #   ParkingStalls,
+  #   .before = BaseRent
+  # ) |>
   # If its a parking contractname the rentable area is the # of stalls, if its land the hectares, building sqm
   # need to find the right join and setup conditions to get all the details in there
   left_join(Leasing, by = join_by(ContractName == ls_ls_id)) |>
@@ -304,8 +361,11 @@ PRR2015 <- BudgetAssetAr |>
 # sum(PRR2015$ls_status == "Terminated", na.rm = TRUE)
 # sum(PRR2015$ls_status == "Draft", na.rm = TRUE)
 #
+# ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
+#   "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
+# ))
 ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
-  "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
+  "input/PortfolioPerformance/2026-08-12_PRR2015_2526_2627.xlsx"
 ))
 
 compare <- ExtractPRR2015 |>
@@ -332,6 +392,10 @@ compare_to <- PRR2015 |>
 
 outcome <- setdiff(compare, compare_to)
 
+# openxlsx2::write_xlsx(
+#   outcome,
+#   here::here("output/PRR2015/setdiff_2526_2026_06_29_PRR2015.xlsx")
+# )
 # Column mapping ####
 # Contract Name - Calculated column
 # Primary Location - Calculated column

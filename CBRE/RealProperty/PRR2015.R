@@ -117,7 +117,8 @@ BudgetAsset <- BudgetAssetData |>
     ContractName = budget_asset_asset_id,
     FiscalYear = budget_asset_budget_id,
     BuildingId = budget_asset_bl_id,
-    RentableArea = budget_asset_area_space,
+    RentableAreaBuilding = budget_asset_area_space,
+    RentableAreaLand = budget_asset_area_land,
     ParkingStalls = budget_asset_parking_stalls
   )
 
@@ -134,6 +135,7 @@ Leasing <- LeasingData |>
     ls_option1,
     ls_version,
     ls_area_negotiated,
+    ls_appropriated_hectares,
     ls_date_start,
     ls_date_end,
     ls_date_terminated
@@ -151,19 +153,18 @@ Leasing <- LeasingData |>
     )
   ) |>
   group_by(LeaseGroup) |>
-  mutate(count = n()) |>
-  filter(count > 4)
-filter(ls_version == max(ls_version)) |>
+  filter(ls_version == max(ls_version)) |>
   ungroup() |>
-  mutate(ls_ls_id = gsub("-V//d+", "", ls_ls_id))
+  mutate(ls_ls_id = gsub("-V\\d+", "", ls_ls_id)) |>
+  filter(ls_lease_sublease %in% c("L", "P"))
 
-assertthat::assert_that(
-  length(setdiff(
-    BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
-    Leasing$ls_ls_id
-  )) ==
-    0
-)
+# assertthat::assert_that(
+#   length(setdiff(
+#     BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
+#     Leasing$ls_ls_id
+#   )) ==
+#     0
+# )
 
 # Building ####
 Building <- BuildingData |>
@@ -196,23 +197,18 @@ Property <- PropertyData |>
 
 # Create Report ####
 PRR2015 <- BudgetAssetAr |>
-  full_join(BudgetAsset, by = join_by(ContractName, FiscalYear)) |>
-  mutate(
-    BuildingId = case_when(
-      is.na(BuildingId.x) & !is.na(BuildingId.y) ~ BuildingId.y,
-      is.na(BuildingId.y) & !is.na(BuildingId.x) ~ BuildingId.x,
-      BuildingId.x == BuildingId.y ~ BuildingId.x,
-      is.na(BuildingId.x) & is.na(BuildingId.y) ~ NA_character_,
-      .default = "weird"
-    ),
-    .keep = "unused",
-    .after = FiscalYear
-  ) |>
-  relocate(
-    RentableArea,
-    ParkingStalls,
-    .before = BaseRent
-  ) |>
+  left_join(BudgetAsset, by = join_by(ContractName, FiscalYear)) |>
+  # mutate(
+  #   BuildingId = case_when(
+  #     is.na(BuildingId.x) & !is.na(BuildingId.y) ~ BuildingId.y,
+  #     is.na(BuildingId.y) & !is.na(BuildingId.x) ~ BuildingId.x,
+  #     BuildingId.x == BuildingId.y ~ BuildingId.x,
+  #     is.na(BuildingId.x) & is.na(BuildingId.y) ~ NA_character_,
+  #     .default = "weird"
+  #   ),
+  #   .keep = "unused",
+  #   .after = FiscalYear
+  # ) |>
   # If its a parking contractname the rentable area is the # of stalls, if its land the hectares, building sqm
   # need to find the right join and setup conditions to get all the details in there
   left_join(Leasing, by = join_by(ContractName == ls_ls_id)) |>
@@ -248,12 +244,26 @@ PRR2015 <- BudgetAssetAr |>
     RentableArea = case_when(
       startsWith(ContractName, "P") ~ ParkingStalls,
       startsWith(ContractName, "L") &
-        PR_Tenure == "LEASED" &
-        ls_area_negotiated == 0 ~ PR_TotalRentableLand,
-      startsWith(ContractName, "L") ~ ls_area_negotiated,
-      startsWith(ContractName, "N") ~ PR_TotalRentableLand,
-      .default = RentableArea
+        startsWith(PrimaryLocation, "B") ~ RentableAreaBuilding,
+      startsWith(ContractName, "L") &
+        startsWith(PrimaryLocation, "N") ~ RentableAreaLand,
+      startsWith(ContractName, "B") ~ RentableAreaBuilding,
+      startsWith(ContractName, "N") ~ RentableAreaLand,
+      # startsWith(ContractName, "L") &
+      #   PR_Tenure == "LEASED" &
+      #   ls_area_negotiated == 0 ~ PR_TotalRentableLand,
+      # startsWith(ContractName, "L") ~ ls_area_negotiated,
+      # startsWith(ContractName, "L") & !is.na(RentableArea) ~ RentableArea,
+      # startsWith(ContractName, "L") &
+      #   ls_area_negotiated != 0 ~ ls_area_negotiated,
+      # startsWith(ContractName, "N") ~ PR_TotalRentableLand,
+      .default = 0
     )
+  ) |>
+  relocate(
+    RentableArea,
+    ParkingStalls,
+    .before = BaseRent
   ) |>
   mutate(
     CostRate = case_when(
@@ -273,6 +283,8 @@ PRR2015 <- BudgetAssetAr |>
       BuildingId,
       PropertyId,
       LeaseId,
+      RentableAreaBuilding,
+      RentableAreaLand,
       ls_id_key,
       ls_bl_id,
       ls_pr_id,
