@@ -407,9 +407,11 @@ get_bearer_token <- function(
 }
 
 call_jira_api <- function(
+  api_name,
+  script_name,
+  dashboard_id,
   query_url,
   expand_opts,
-  dashboard_id,
   max_results = 100,
   token_string,
   start_time
@@ -427,9 +429,9 @@ call_jira_api <- function(
           utils::URLencode(
             paste0(
               "project=",
-              DASHBOARD_ID,
-              " AND updated >= \"",
-              etl_window$jira_start_time,
+              dashboard_id,
+              " AND Updated >= \"",
+              start_time,
               "\""
             ),
             repeated = TRUE
@@ -438,9 +440,8 @@ call_jira_api <- function(
         expand = expand_opts,
         maxResults = max_results,
         fields = "*all",
-        # startAt = start_at, #deprecated for nextPageToken
         nextPageToken = nextPageToken,
-        .multi = "comma" # control how vectors are appended, for expand_opts
+        .multi = "comma"
       ) |>
       apply_proxy_if_needed() |>
       req_error(
@@ -466,6 +467,7 @@ call_jira_api <- function(
         }
       )
 
+    resp <- req_perform(req) |> resp_body_json()
     # Perform request with error handling and structured logging
     resp <- tryCatch(
       req_perform(req) |> resp_body_json(),
@@ -480,7 +482,7 @@ call_jira_api <- function(
         log_daily_etl_run(
           api_name = API_NAME,
           script_name = SCRIPT_NAME,
-          table_name = DASHBOARD_ID,
+          table_name = dashboard_id,
           status = "FAILURE",
           message = substr(desc, 1, 500)
         )
@@ -507,9 +509,9 @@ call_jira_api <- function(
       cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
 
       log_daily_etl_run(
-        api_name = API_NAME,
-        script_name = SCRIPT_NAME,
-        table_name = DASHBOARD_ID,
+        api_name = api_name,
+        script_name = script_name,
+        table_name = dashboard_id,
         duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
         status = "NO_DATA",
         message = no_data_msg
@@ -520,15 +522,20 @@ call_jira_api <- function(
       )
       stop(cond)
     }
+
+    cat("Completed Round: ", round, "\n")
     if (round == 1) {
       data <- resp$issues
+      names <- resp$names
     } else {
-      data <- full_join(data, resp$issues)
+      data <- append(data, resp$issues)
     }
 
-    round <- 2
+    round <- round + 1
   }
+  list(issues = data, names = names)
 }
+
 #' Safe Hoist - Extract values from list columns with NA handling
 #'
 #' A safe wrapper around tidyr::hoist() that handles both list columns and NA values
