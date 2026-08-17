@@ -19,7 +19,7 @@ source(here::here("utilities/R/utilities.R"))
 # archibus_budget_asset
 # archibus_budget_asset_ar
 
-CBRE_TABLE_NAME <- "archibus_ls"
+CBRE_TABLE_NAME <- "archibus_property"
 
 # Query API
 chunk_1 <- call_cbre_api(

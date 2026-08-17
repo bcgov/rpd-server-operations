@@ -319,12 +319,23 @@ PRR2015 <- BudgetAssetAr |>
     ),
     .after = PricingMethod
   ) |>
+  # L1102 2425 is 0.61 so full hectares, then 2526-2728 is 0.14 which is the rounded ls_negotatiated_area.
   mutate(
     RentableArea = case_when(
       startsWith(ContractName, "P") ~ ParkingStalls,
+      startsWith(ContractName, "L") &
+        startsWith(PrimaryLocation, "N") ~ RentableAreaLand,
       startsWith(PrimaryLocation, "N") ~ PR_TotalRentableLand,
-      .default = RentableArea
-    )
+      .default = RentableAreaBuilding
+    ),
+    .after = City
+  ) |>
+  relocate(
+    RentableAreaBuilding,
+    RentableAreaLand,
+    ls_area_negotiated,
+    PR_TotalRentableLand,
+    .after = RentableArea
   ) |>
   mutate(
     CostRate = round(TotalCost / RentableArea, digits = 2)
@@ -377,7 +388,8 @@ compare <- ExtractPRR2015 |>
     RentableArea = `2526 Year Rentable Area`
   ) |>
   mutate(
-    RentableArea = as.double(gsub(",", "", RentableArea))
+    RentableArea = as.double(gsub(",", "", RentableArea)),
+    PricingMethod = stringr::str_to_title(PricingMethod)
   )
 
 compare_to <- PRR2015 |>
@@ -392,6 +404,22 @@ compare_to <- PRR2015 |>
 
 outcome <- setdiff(compare, compare_to)
 
+outcome_lease <- outcome |>
+  filter(startsWith(ContractName, "L")) |>
+  filter(startsWith(PrimaryLocation, "N")) |>
+  left_join(
+    compare_to,
+    by = join_by(ContractName, PrimaryLocation, PricingMethod, City)
+  ) |>
+  mutate(
+    CurrentRentableArea = RentableArea.x,
+    ExpectedRentableArea = RentableArea.y,
+    .keep = "unused"
+  )
+openxlsx2::write_xlsx(
+  outcome_lease,
+  here::here("output/PRR2015/setdiff_2526_PRR2015_leased_lands.xlsx")
+)
 # openxlsx2::write_xlsx(
 #   outcome,
 #   here::here("output/PRR2015/setdiff_2526_2026_06_29_PRR2015.xlsx")
