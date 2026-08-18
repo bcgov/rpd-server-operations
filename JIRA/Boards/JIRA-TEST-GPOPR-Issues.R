@@ -3,249 +3,170 @@
 task_start <- Sys.time()
 
 # Set necessary variables
-DASHBOARD_ID <- "GPOPR"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
-TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
-API_NAME <- "Jira"
-SCRIPT_NAME <- "Jira_GPOPR"
+dashboard_id <- "GPOPR"
+target_table <- DBI::Id(schema = schema_name, table = dashboard_id)
+temp_table <- paste0("#", dashboard_id, "Temp")
+api_name <- "Jira"
+script_name <- "Jira_GPOPR"
 
 # Setup API parameters ####
 expand_opts = c("names", "fields")
 max_results = 100
-nextPageToken = NULL
-progress = 0
-round = 1
+start_time <- etl_window$jira_start_time
 
 # Issues Loop ####
-while (progress < 2) {
-  req <- request(query_url) |>
-    req_headers_redacted(Authorization = token_string) |>
-    # configure project, max_results, and start_at
-    req_url_query(
-      jql = I(
-        # I wrapper skips auto-formatting of the extra "=" sign
-        utils::URLencode(
-          paste0(
-            "project=",
-            DASHBOARD_ID,
-            " AND updated >= \"",
-            etl_window$jira_start_time,
-            "\""
-          ),
-          repeated = TRUE
-        )
-      ),
-      expand = expand_opts,
-      maxResults = max_results,
-      fields = "*all",
-      # startAt = start_at, #deprecated for nextPageToken
-      nextPageToken = nextPageToken,
-      .multi = "comma" # control how vectors are appended, for expand_opts
-    ) |>
-    # Server logging and proxy steps
-    apply_proxy_if_needed() |>
-    req_error(
-      is_error = function(resp) {
-        lr <- resp_header(resp, "x-seraph-loginreason")
-        bad_auth <- !is.null(lr) &&
-          grepl("AUTHENTICATED_FAILED|AUTHENTICATION_DENIED", lr)
-        empty_ok <- FALSE # we only care about bad_auth here
-        bad_auth || empty_ok
-      },
+data <- call_jira_api(
+  api_name,
+  script_name,
+  dashboard_id,
+  query_url,
+  expand_opts,
+  max_results,
+  token_string,
+  start_time
+)
 
-      body = function(resp) {
-        paste0(
-          "Auth Failure for ",
-          SCRIPT_NAME,
-          " reason: ",
-          resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
-          " traceid: ",
-          resp_header(resp, "atl-traceid") %||% "NA",
-          " url: ",
-          resp_url(resp)
-        )
-      }
-    )
-
-  # Perform request with error handling and structured logging
-  resp <- tryCatch(
-    req_perform(req) |> resp_body_json(),
-    error = function(e) {
-      # Compose a one-line description with context
-      desc <- if (!is.null(e$body) && is.character(e$body)) {
-        e$body
-      } else {
-        e$message
-      }
-      # Log error to daily run file
-      log_daily_etl_run(
-        api_name = API_NAME,
-        script_name = SCRIPT_NAME,
-        table_name = DASHBOARD_ID,
-        status = "FAILURE",
-        message = substr(desc, 1, 500)
-      )
-      stop(e) # rethrow so task scheduler flags a failure (current monitoring is by Nagios)
-    }
+if (length(data$issues) == 0) {
+  # API succeeded, nothing to load
+  no_data_msg <- paste0(
+    "No data returned from API for window ",
+    start_time,
+    " to ",
+    format(Sys.time(), tz = "UTC"),
+    " UTC"
   )
 
-  # Used to update total_results in while loop
-  nextPageToken <- resp["nextPageToken"][[1]]
+  cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
 
-  if (is.null(nextPageToken)) {
-    progress <- 2
-  }
-
-  if (length(resp$issues) == 0) {
-    # API succeeded, nothing to load
-    no_data_msg <- paste0(
-      "No data returned from API for window ",
-      etl_window$jira_start_time,
-      " to ",
-      format(Sys.time(), tz = "UTC"),
-      " UTC"
-    )
-
-    cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
-
-    log_daily_etl_run(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = DASHBOARD_ID,
-      duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
-      status = "NO_DATA",
-      message = no_data_msg
-    )
-    cond <- structure(
-      class = c("no_data_condition", "condition"),
-      list(message = no_data_msg)
-    )
-    stop(cond)
-  }
-
-  tryCatch(
-    {
-      names <- resp |>
-        purrr::pluck("names") |>
-        tibble::enframe() |>
-        safe_hoist(value, Value = 1L) |>
-        group_by(Value) |>
-        mutate(row_name = row_number(), row_count = n()) |>
-        mutate(
-          Value = case_when(
-            row_count > 1 ~ paste0(Value, "-", row_name),
-            .default = Value
-          )
-        ) |>
-        select(-c(row_name, row_count)) |>
-        tibble::deframe()
-
-      issues <- resp |>
-        purrr::pluck("issues") |>
-        tibble::enframe() |>
-        tidyr::unnest_wider(value) |>
-        tidyr::unnest_wider(fields) |>
-        plyr::rename(names) |>
-        # select_if(~ !all(is.na(.))) |>
-        rename_with(~ gsub(" ", "", .)) |>
-        select(
-          IssueKey = key,
-          Created,
-          Updated,
-          Resolved,
-          Assignee,
-          GPOPackageApprover,
-          GPOSubtype,
-          Organization = `Ministry/BPSOrganization`,
-          City = CityDropdown,
-          RequestType,
-          Requestparticipants,
-          Priority,
-          Duedate,
-          Status,
-          Summary
-        ) |>
-        safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-        safe_hoist(
-          GPOPackageApprover,
-          GPOPackageApprover = "displayName",
-          .remove = FALSE
-        ) |>
-        safe_hoist(Status, Status = "name", .remove = FALSE) |>
-        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-        safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-        safe_hoist(City, City = "value", .remove = FALSE) |>
-        safe_hoist(
-          RequestType,
-          RequestType = list("requestType", "name"),
-          .remove = FALSE
-        ) |>
-        tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
-        tidyr::unnest_wider(
-          starts_with("Requestparticipants"),
-          names_sep = "-"
-        ) |>
-        rowwise() |>
-        mutate(
-          RequestParticipants = stringr::str_c(
-            c_across(
-              matches(
-                "Requestparticipants-[0-9]+-displayName"
-              )
-            ),
-            collapse = ";"
-          )
-        ) |>
-        ungroup() |>
-        select(
-          IssueKey,
-          Created,
-          Updated,
-          Resolved,
-          Duedate,
-          Priority,
-          Status,
-          Assignee,
-          GPOPackageApprover,
-          GPOSubtype,
-          Organization,
-          City,
-          RequestType,
-          RequestParticipants,
-          Summary
-        ) |>
-        mutate(
-          across(
-            c(Created, Updated, Resolved, Duedate),
-            ~ as.Date(.x, format = "%Y-%m-%d")
-          )
-        ) |>
-        # in dev all NA values so listed as logical, doubt that will hold long term
-        mutate(GPOSubtype = as.character(GPOSubtype))
-    },
-    error = function(e) {
-      log_daily_etl_run(
-        api_name = API_NAME,
-        script_name = SCRIPT_NAME,
-        table_name = DASHBOARD_ID,
-        status = "FAILURE",
-        message = paste0(
-          "Data wrangling failure: ",
-          substr(conditionMessage(e), 1, 500)
-        )
-      )
-      stop(e) # rethrow so Task Scheduler/Nagios still flags it
-    }
+  log_daily_etl_run(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
+    duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+    status = "NO_DATA",
+    message = no_data_msg
   )
-
-  if (round == 1) {
-    Issues <- issues
-  } else {
-    Issues <- full_join(Issues, issues)
-  }
-
-  round <- 2
+  cond <- structure(
+    class = c("no_data_condition", "condition"),
+    list(message = no_data_msg)
+  )
+  stop(cond)
 }
+
+tryCatch(
+  {
+    names <- data |>
+      purrr::pluck("names") |>
+      tibble::enframe() |>
+      safe_hoist(value, Value = 1L) |>
+      group_by(Value) |>
+      mutate(row_name = row_number(), row_count = n()) |>
+      mutate(
+        Value = case_when(
+          row_count > 1 ~ paste0(Value, "-", row_name),
+          .default = Value
+        )
+      ) |>
+      select(-c(row_name, row_count)) |>
+      tibble::deframe()
+
+    issues <- data |>
+      purrr::pluck("issues") |>
+      tibble::enframe() |>
+      tidyr::unnest_wider(value) |>
+      tidyr::unnest_wider(fields) |>
+      plyr::rename(names) |>
+      # select_if(~ !all(is.na(.))) |>
+      rename_with(~ gsub(" ", "", .)) |>
+      select(
+        IssueKey = key,
+        Created,
+        Updated,
+        Resolved,
+        Assignee,
+        GPOPackageApprover,
+        GPOSubtype,
+        Organization = `Ministry/BPSOrganization`,
+        City = CityDropdown,
+        RequestType,
+        Requestparticipants,
+        Priority,
+        Duedate,
+        Status,
+        Summary
+      ) |>
+      safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+      safe_hoist(
+        GPOPackageApprover,
+        GPOPackageApprover = "displayName",
+        .remove = FALSE
+      ) |>
+      safe_hoist(Status, Status = "name", .remove = FALSE) |>
+      safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+      safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+      safe_hoist(City, City = "value", .remove = FALSE) |>
+      safe_hoist(
+        RequestType,
+        RequestType = list("requestType", "name"),
+        .remove = FALSE
+      ) |>
+      tidyr::unnest_wider(Requestparticipants, names_sep = "-") |>
+      tidyr::unnest_wider(
+        starts_with("Requestparticipants"),
+        names_sep = "-"
+      ) |>
+      rowwise() |>
+      mutate(
+        RequestParticipants = stringr::str_c(
+          c_across(
+            matches(
+              "Requestparticipants-[0-9]+-displayName"
+            )
+          ),
+          collapse = ";"
+        )
+      ) |>
+      ungroup() |>
+      select(
+        IssueKey,
+        Created,
+        Updated,
+        Resolved,
+        Duedate,
+        Priority,
+        Status,
+        Assignee,
+        GPOPackageApprover,
+        GPOSubtype,
+        Organization,
+        City,
+        RequestType,
+        RequestParticipants,
+        Summary
+      ) |>
+      mutate(
+        across(
+          c(Created, Updated, Resolved, Duedate),
+          ~ as.Date(.x, format = "%Y-%m-%d")
+        )
+      ) |>
+      # in dev all NA values so listed as logical, doubt that will hold long term
+      mutate(GPOSubtype = as.character(GPOSubtype))
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
+      status = "FAILURE",
+      message = paste0(
+        "Data wrangling failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
 
 tryCatch(
   {
@@ -253,9 +174,9 @@ tryCatch(
   },
   error = function(e) {
     log_daily_etl_run(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = DASHBOARD_ID,
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
       status = "FAILURE",
       message = paste0(
         "Issues assignment failure: ",
@@ -267,13 +188,13 @@ tryCatch(
 )
 
 # Start database transaction ####
-# dbRemoveTable(con, TARGET_TABLE)
-if (!dbExistsTable(con, TARGET_TABLE)) {
+# dbRemoveTable(con, target_table)
+if (!dbExistsTable(con, target_table)) {
   sql <- paste0(
     "CREATE TABLE ",
-    SCHEMA_NAME,
+    schema_name,
     ".",
-    DASHBOARD_ID,
+    dashboard_id,
     " (
         RefreshDate          DATETIME2(3)     NOT NULL,
         IssueKey             NVARCHAR(20)     NOT NULL,
@@ -306,8 +227,8 @@ dbBegin(con)
 # Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
+    if (dbExistsTable(con, temp_table)) {
+      dbRemoveTable(con, temp_table)
     }
 
     # Create temp table to hold new data
@@ -315,7 +236,7 @@ tryCatch(
       con,
       paste0(
         "CREATE TABLE ",
-        TEMP_TABLE,
+        temp_table,
         " (
           RefreshDate          DATETIME2(3)     NOT NULL,
           IssueKey             NVARCHAR(20)     NOT NULL,
@@ -341,7 +262,7 @@ tryCatch(
     # Write into temp table the current Issues
     dbWriteTable(
       con,
-      name = TEMP_TABLE,
+      name = temp_table,
       value = Issues,
       append = TRUE,
       overwrite = FALSE
@@ -355,7 +276,7 @@ tryCatch(
          FROM (
            SELECT IssueKey
            FROM ",
-        TEMP_TABLE,
+        temp_table,
         "
            GROUP BY IssueKey
            HAVING COUNT(*) > 1
@@ -393,12 +314,12 @@ tryCatch(
         tgt.RequestParticipants = src.RequestParticipants,
         tgt.Summary             = src.Summary
         FROM ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
-        DASHBOARD_ID,
+        dashboard_id,
         " tgt
           INNER JOIN ",
-        TEMP_TABLE,
+        temp_table,
         " src
           ON tgt.IssueKey = src.IssueKey;"
       )
@@ -409,9 +330,9 @@ tryCatch(
       con,
       paste0(
         "INSERT INTO ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
-        DASHBOARD_ID,
+        dashboard_id,
         " (
           RefreshDate,
           IssueKey,
@@ -448,12 +369,12 @@ tryCatch(
           src.RequestParticipants,
           src.Summary
         FROM ",
-        TEMP_TABLE,
+        temp_table,
         " src
         LEFT JOIN ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
-        DASHBOARD_ID,
+        dashboard_id,
         " tgt
         ON tgt.IssueKey = src.IssueKey
         WHERE tgt.IssueKey IS NULL;"
@@ -481,9 +402,9 @@ task_duration <- interval(task_start, task_end) / dseconds()
 
 if (is.null(etl_error)) {
   log_daily_etl_run(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = DASHBOARD_ID,
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
     duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
@@ -493,9 +414,9 @@ if (is.null(etl_error)) {
   )
 } else {
   log_daily_etl_run(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = DASHBOARD_ID,
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
     status = "FAILURE",
     message = substr(etl_error$message, 1, 500)
   )
