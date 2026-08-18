@@ -79,7 +79,7 @@ tryCatch(
       select(-c(row_name, row_count)) |>
       tibble::deframe()
 
-    issues <- data |>
+    Issues <- data |>
       purrr::pluck("issues") |>
       tibble::enframe() |>
       tidyr::unnest_wider(value) |>
@@ -203,7 +203,13 @@ tryCatch(
       ) |>
       # This step guarantees the dataframe shape after pivot
       # variable API payload may result in missing columns
-      ensure_columns(c("type_name", "type_inward", "type_outward", "inwardIssue_key", "outwardIssue_key")) |>
+      ensure_columns(c(
+        "type_name",
+        "type_inward",
+        "type_outward",
+        "inwardIssue_key",
+        "outwardIssue_key"
+      )) |>
       # Next three steps have a .default = "Error", will need some kind of logging or check for this
       mutate(
         TypeFlag = case_when(
@@ -256,11 +262,12 @@ tryCatch(
   }
 )
 
-error_rows <- LinkedIssues |> filter(RelationDesc == "Error" | RelationIssueKey == "Error")
+error_rows <- LinkedIssues |>
+  filter(RelationDesc == "Error" | RelationIssueKey == "Error")
 
 if (nrow(error_rows) > 0) {
   log_daily_etl_run(
-    status = "WARNING",  # or whatever your existing status vocabulary supports
+    status = "WARNING", # or whatever your existing status vocabulary supports
     message = sprintf(
       "Relation Error in Desc or IssueKey for %d row(s). IssueKeys: %s",
       nrow(error_rows),

@@ -70,7 +70,7 @@ tryCatch(
       select(-c(row_name, row_count)) |>
       tibble::deframe()
 
-    issues <- data |>
+    Issues <- data |>
       purrr::pluck("issues") |>
       tibble::enframe() |>
       tidyr::unnest_wider(value) |>
@@ -421,14 +421,4 @@ if (is.null(etl_error)) {
     message = substr(etl_error$message, 1, 500)
   )
   stop(etl_error)
-}
-
-if (Sys.getenv("ETL_ENV") == "Muon") {
-  write.csv(
-    Issues,
-    "E:/Projects/PBI-Gateway/GPOPR_Issues.csv",
-    row.names = FALSE
-  )
-} else {
-  cat("NO CSV FOR YOU!!!", "\n")
 }

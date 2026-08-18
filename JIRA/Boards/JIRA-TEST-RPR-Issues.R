@@ -4,7 +4,7 @@ task_start <- Sys.time()
 
 # Set necessary variables
 dashboard_id <- "RPR"
-target_table <- DBI::Id(schema = SCHEMA_NAME, table = dashboard_id)
+target_table <- DBI::Id(schema = schema_name, table = dashboard_id)
 temp_table <- paste0("#", dashboard_id, "Temp")
 api_name <- "Jira"
 script_name <- "Jira_RPR"
@@ -72,7 +72,7 @@ tryCatch(
       select(-c(row_name, row_count)) |>
       tibble::deframe()
 
-    issues <- data |>
+    Issues <- data |>
       purrr::pluck("issues") |>
       tibble::enframe() |>
       tidyr::unnest_wider(value) |>
@@ -210,7 +210,7 @@ tryCatch(
 if (!dbExistsTable(con, target_table)) {
   sql <- paste0(
     "CREATE TABLE ",
-    SCHEMA_NAME,
+    schema_name,
     ".",
     dashboard_id,
     " (
@@ -348,7 +348,7 @@ tryCatch(
        tgt.Branch                 = src.Branch,
        tgt.RequestParticipants    = src.RequestParticipants
       FROM ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
         dashboard_id,
         " tgt
@@ -364,7 +364,7 @@ tryCatch(
       con,
       paste0(
         "INSERT INTO ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
         dashboard_id,
         "
@@ -419,7 +419,7 @@ tryCatch(
         temp_table,
         " src
          LEFT JOIN ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
         dashboard_id,
         " tgt

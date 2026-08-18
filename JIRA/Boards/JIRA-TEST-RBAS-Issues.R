@@ -72,7 +72,7 @@ tryCatch(
       tibble::deframe()
 
     # pull rows of issues, rename, unnest columns and format.
-    issues <- data |>
+    Issues <- data |>
       purrr::pluck("issues") |>
       tibble::enframe() |>
       tidyr::unnest_wider(value) |>

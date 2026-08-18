@@ -70,7 +70,7 @@ tryCatch(
       select(-c(row_name, row_count)) |>
       tibble::deframe()
 
-    issues <- data |>
+    Issues <- data |>
       purrr::pluck("issues") |>
       tibble::enframe() |>
       tidyr::unnest_wider(value) |>

@@ -27,124 +27,115 @@ data <- call_jira_api(
 )
 
 if (length(data$issues) == 0) {
-    # API succeeded, nothing to load
-    no_data_msg <- paste0(
-      "No data returned from API for window ",
-      start_time,
-      " to ",
-      format(Sys.time(), tz = "UTC"),
-      " UTC"
-    )
-    cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+  # API succeeded, nothing to load
+  no_data_msg <- paste0(
+    "No data returned from API for window ",
+    start_time,
+    " to ",
+    format(Sys.time(), tz = "UTC"),
+    " UTC"
+  )
+  cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+  log_daily_etl_run(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
+    duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+    status = "NO_DATA",
+    message = no_data_msg
+  )
+  cond <- structure(
+    class = c("no_data_condition", "condition"),
+    list(message = no_data_msg)
+  )
+  stop(cond)
+}
+
+tryCatch(
+  {
+    names <- data |>
+      purrr::pluck("names") |>
+      tibble::enframe() |>
+      safe_hoist(value, Value = 1L) |>
+      group_by(Value) |>
+      mutate(row_name = row_number(), row_count = n()) |>
+      mutate(
+        Value = case_when(
+          row_count > 1 ~ paste0(Value, "-", row_name),
+          .default = Value
+        )
+      ) |>
+      select(-c(row_name, row_count)) |>
+      tibble::deframe()
+
+    Issues <- data |>
+      purrr::pluck("issues") |>
+      tibble::enframe() |>
+      tidyr::unnest_wider(value) |>
+      tidyr::unnest_wider(fields) |>
+      plyr::rename(names) |>
+      # select_if(~ !all(is.na(.))) |>
+      rename_with(~ gsub(" ", "", .)) |>
+      select(
+        IssueKey = key,
+        Status,
+        RequestType,
+        Summary,
+        Created,
+        Updated,
+        Resolved,
+        ProjectEffectiveDate,
+        Assignee,
+        CSM,
+        CSRIssueSubtype,
+        Organization = `Ministry/BPSOrganization`,
+        PIN = `PIN(ARENumber)`,
+        Priority,
+        ResponsibleGroup,
+        Workstream
+      ) |>
+      safe_hoist(Status, Status = "name", .remove = FALSE) |>
+      safe_hoist(
+        RequestType,
+        RequestType = list("requestType", "name"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+      safe_hoist(CSM, CSM = "displayName", .remove = FALSE) |>
+      safe_hoist(
+        CSRIssueSubtype,
+        CSRIssueSubtype = "value",
+        .remove = FALSE
+      ) |>
+      safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+      safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+      safe_hoist(
+        ResponsibleGroup,
+        ResponsibleGroup = "value",
+        .remove = FALSE
+      ) |>
+      safe_hoist(Workstream, Workstream = "value", .remove = FALSE) |>
+      mutate(
+        across(
+          c(Created, Updated, Resolved, ProjectEffectiveDate),
+          ~ as.Date(.x, format = "%Y-%m-%d")
+        )
+      )
+  },
+  error = function(e) {
     log_daily_etl_run(
       api_name = api_name,
       script_name = script_name,
       table_name = dashboard_id,
-      duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
-      status = "NO_DATA",
-      message = no_data_msg
-    )
-    cond <- structure(
-      class = c("no_data_condition", "condition"),
-      list(message = no_data_msg)
-    )
-    stop(cond)
-  }
-
-  tryCatch(
-    {
-      names <- data |>
-        purrr::pluck("names") |>
-        tibble::enframe() |>
-        safe_hoist(value, Value = 1L) |>
-        group_by(Value) |>
-        mutate(row_name = row_number(), row_count = n()) |>
-        mutate(
-          Value = case_when(
-            row_count > 1 ~ paste0(Value, "-", row_name),
-            .default = Value
-          )
-        ) |>
-        select(-c(row_name, row_count)) |>
-        tibble::deframe()
-
-      issues <- data |>
-        purrr::pluck("issues") |>
-        tibble::enframe() |>
-        tidyr::unnest_wider(value) |>
-        tidyr::unnest_wider(fields) |>
-        plyr::rename(names) |>
-        # select_if(~ !all(is.na(.))) |>
-        rename_with(~ gsub(" ", "", .)) |>
-        select(
-          IssueKey = key,
-          Status,
-          RequestType,
-          Summary,
-          Created,
-          Updated,
-          Resolved,
-          ProjectEffectiveDate,
-          Assignee,
-          CSM,
-          CSRIssueSubtype,
-          Organization = `Ministry/BPSOrganization`,
-          PIN = `PIN(ARENumber)`,
-          Priority,
-          ResponsibleGroup,
-          Workstream
-        ) |>
-        safe_hoist(Status, Status = "name", .remove = FALSE) |>
-        safe_hoist(
-          RequestType,
-          RequestType = list("requestType", "name"),
-          .remove = FALSE
-        ) |>
-        safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-        safe_hoist(CSM, CSM = "displayName", .remove = FALSE) |>
-        safe_hoist(
-          CSRIssueSubtype,
-          CSRIssueSubtype = "value",
-          .remove = FALSE
-        ) |>
-        safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-        safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
-        safe_hoist(
-          ResponsibleGroup,
-          ResponsibleGroup = "value",
-          .remove = FALSE
-        ) |>
-        safe_hoist(Workstream, Workstream = "value", .remove = FALSE) |>
-        mutate(
-          across(
-            c(Created, Updated, Resolved, ProjectEffectiveDate),
-            ~ as.Date(.x, format = "%Y-%m-%d")
-          )
-        )
-    },
-    error = function(e) {
-      log_daily_etl_run(
-        api_name = api_name,
-        script_name = script_name,
-        table_name = dashboard_id,
-        status = "FAILURE",
-        message = paste0(
-          "Data wrangling failure: ",
-          substr(conditionMessage(e), 1, 500)
-        )
+      status = "FAILURE",
+      message = paste0(
+        "Data wrangling failure: ",
+        substr(conditionMessage(e), 1, 500)
       )
-      stop(e) # rethrow so Task Scheduler/Nagios still flags it
-    }
-  )
-
-  if (round == 1) {
-    Issues <- issues
-  } else {
-    Issues <- full_join(Issues, issues)
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
   }
-
-  round <- 2
-}
+)
 
 tryCatch(
   {
