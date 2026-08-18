@@ -3,113 +3,43 @@
 task_start <- Sys.time()
 
 # Set necessary variables
-DASHBOARD_ID <- "CSR"
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = DASHBOARD_ID)
-TEMP_TABLE <- paste0("#", DASHBOARD_ID, "Temp")
-API_NAME <- "Jira"
-SCRIPT_NAME <- "Jira_CSR"
+dashboard_id <- "CSR"
+target_table <- DBI::Id(schema = schema_name, table = dashboard_id)
+temp_table <- paste0("#", dashboard_id, "Temp")
+api_name <- "Jira"
+script_name <- "Jira_CSR"
 
 # Setup API parameters ####
 expand_opts = c("names", "fields")
 max_results = 100
-nextPageToken = NULL
-progress = 0
-round = 1
+start_time <- etl_window$jira_start_time
 
 # Issues Loop ####
-while (progress < 2) {
-  req <- request(query_url) |>
-    req_headers_redacted(Authorization = token_string) |>
-    # configure project, max_results, and start_at
-    req_url_query(
-      jql = I(
-        # I wrapper skips auto-formatting of the extra "=" sign
-        utils::URLencode(
-          paste0(
-            "project=",
-            DASHBOARD_ID,
-            " AND updated >= \"",
-            etl_window$jira_start_time,
-            "\""
-          ),
-          repeated = TRUE
-        )
-      ),
-      expand = expand_opts,
-      maxResults = max_results,
-      fields = "*all",
-      # startAt = start_at, #deprecated for nextPageToken
-      nextPageToken = nextPageToken,
-      .multi = "comma" # control how vectors are appended, for expand_opts
-    ) |>
-    # Server logging and proxy steps
-    apply_proxy_if_needed() |>
-    req_error(
-      is_error = function(resp) {
-        lr <- resp_header(resp, "x-seraph-loginreason")
-        bad_auth <- !is.null(lr) &&
-          grepl("AUTHENTICATED_FAILED|AUTHENTICATION_DENIED", lr)
-        empty_ok <- FALSE # we only care about bad_auth here
-        bad_auth || empty_ok
-      },
+data <- call_jira_api(
+  api_name,
+  script_name,
+  dashboard_id,
+  query_url,
+  expand_opts,
+  max_results,
+  token_string,
+  start_time
+)
 
-      body = function(resp) {
-        paste0(
-          "Auth Failure for ",
-          SCRIPT_NAME,
-          " reason: ",
-          resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
-          " traceid: ",
-          resp_header(resp, "atl-traceid") %||% "NA",
-          " url: ",
-          resp_url(resp)
-        )
-      }
-    )
-
-  # Perform request with error handling and structured logging
-  resp <- tryCatch(
-    req_perform(req) |> resp_body_json(),
-    error = function(e) {
-      # Compose a one-line description with context
-      desc <- if (!is.null(e$body) && is.character(e$body)) {
-        e$body
-      } else {
-        e$message
-      }
-      # Log error to daily run file
-      log_daily_etl_run(
-        api_name = API_NAME,
-        script_name = SCRIPT_NAME,
-        table_name = DASHBOARD_ID,
-        status = "FAILURE",
-        message = substr(desc, 1, 500)
-      )
-      stop(e) # rethrow so task scheduler flags a failure (current monitoring is by Nagios)
-    }
-  )
-
-  # Used to update total_results in while loop
-  nextPageToken <- resp["nextPageToken"][[1]]
-
-  if (is.null(nextPageToken)) {
-    progress <- 2
-  }
-
-  if (length(resp$issues) == 0) {
+if (length(data$issues) == 0) {
     # API succeeded, nothing to load
     no_data_msg <- paste0(
       "No data returned from API for window ",
-      etl_window$jira_start_time,
+      start_time,
       " to ",
       format(Sys.time(), tz = "UTC"),
       " UTC"
     )
     cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
     log_daily_etl_run(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = DASHBOARD_ID,
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
       duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
       status = "NO_DATA",
       message = no_data_msg
@@ -123,7 +53,7 @@ while (progress < 2) {
 
   tryCatch(
     {
-      names <- resp |>
+      names <- data |>
         purrr::pluck("names") |>
         tibble::enframe() |>
         safe_hoist(value, Value = 1L) |>
@@ -138,7 +68,7 @@ while (progress < 2) {
         select(-c(row_name, row_count)) |>
         tibble::deframe()
 
-      issues <- resp |>
+      issues <- data |>
         purrr::pluck("issues") |>
         tibble::enframe() |>
         tidyr::unnest_wider(value) |>
@@ -194,9 +124,9 @@ while (progress < 2) {
     },
     error = function(e) {
       log_daily_etl_run(
-        api_name = API_NAME,
-        script_name = SCRIPT_NAME,
-        table_name = DASHBOARD_ID,
+        api_name = api_name,
+        script_name = script_name,
+        table_name = dashboard_id,
         status = "FAILURE",
         message = paste0(
           "Data wrangling failure: ",
@@ -227,9 +157,9 @@ tryCatch(
   },
   error = function(e) {
     log_daily_etl_run(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = DASHBOARD_ID,
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
       status = "FAILURE",
       message = paste0(
         "Issues assignment failure: ",
@@ -242,13 +172,13 @@ tryCatch(
 
 
 # Start database transaction ####
-# dbRemoveTable(con, TARGET_TABLE)
-if (!dbExistsTable(con, TARGET_TABLE)) {
+# dbRemoveTable(con, target_table)
+if (!dbExistsTable(con, target_table)) {
   sql <- paste0(
     "CREATE TABLE ",
-    SCHEMA_NAME,
+    schema_name,
     ".",
-    DASHBOARD_ID,
+    dashboard_id,
     " (
       RefreshDate          DATETIME2(3)  NOT NULL,
       IssueKey             NVARCHAR(100) NOT NULL,
@@ -282,8 +212,8 @@ dbBegin(con)
 # Begin error handling and rollback of transaction on failure
 tryCatch(
   {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
+    if (dbExistsTable(con, temp_table)) {
+      dbRemoveTable(con, temp_table)
     }
 
     # Create temp table to hold new data
@@ -291,7 +221,7 @@ tryCatch(
       con,
       paste0(
         "CREATE TABLE ",
-        TEMP_TABLE,
+        temp_table,
         " (
           RefreshDate          DATETIME2(3)  NOT NULL,
           IssueKey             NVARCHAR(100) NOT NULL,
@@ -318,7 +248,7 @@ tryCatch(
     # Write into temp table the current Issues
     dbWriteTable(
       con,
-      name = TEMP_TABLE,
+      name = temp_table,
       value = Issues,
       append = TRUE,
       overwrite = FALSE
@@ -332,7 +262,7 @@ tryCatch(
          FROM (
            SELECT IssueKey
            FROM ",
-        TEMP_TABLE,
+        temp_table,
         "
            GROUP BY IssueKey
            HAVING COUNT(*) > 1
@@ -372,12 +302,12 @@ tryCatch(
         tgt.[ResponsibleGroup]     = src.[ResponsibleGroup],
         tgt.[Workstream]           = src.[Workstream]
       FROM ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
-        DASHBOARD_ID,
+        dashboard_id,
         " tgt
        INNER JOIN ",
-        TEMP_TABLE,
+        temp_table,
         " src
        ON tgt.IssueKey = src.IssueKey;"
       )
@@ -388,9 +318,9 @@ tryCatch(
       con,
       paste0(
         "INSERT INTO ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
-        DASHBOARD_ID,
+        dashboard_id,
         " (
           [RefreshDate],
           [IssueKey],
@@ -429,12 +359,12 @@ tryCatch(
           src.[ResponsibleGroup],
           src.[Workstream]
         FROM ",
-        TEMP_TABLE,
+        temp_table,
         " src
         LEFT JOIN ",
-        SCHEMA_NAME,
+        schema_name,
         ".",
-        DASHBOARD_ID,
+        dashboard_id,
         " tgt
         ON tgt.IssueKey = src.IssueKey
         WHERE tgt.IssueKey IS NULL;"
@@ -462,9 +392,9 @@ task_duration <- interval(task_start, task_end) / dseconds()
 
 if (is.null(etl_error)) {
   log_daily_etl_run(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = DASHBOARD_ID,
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
     duration = task_duration,
     status = "SUCCESS",
     n_inserted = n_inserted,
@@ -474,9 +404,9 @@ if (is.null(etl_error)) {
   )
 } else {
   log_daily_etl_run(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = DASHBOARD_ID,
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
     status = "FAILURE",
     message = substr(etl_error$message, 1, 500)
   )

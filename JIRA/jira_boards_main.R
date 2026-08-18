@@ -21,25 +21,25 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Setup orchestrator variables
 orchestrator_start <- Sys.time()
-ORCHESTRATOR_NAME <- "jira_boards"
+orchestrator_name <- "jira_boards"
 
 etl_window <- get_etl_window()
 
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
+etl_status <- "DEV"
+sql_server <- if (etl_status == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
 } else {
   "windfarm.idir.bcgov\\CA_TST"
 }
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "Jira"
+db_name <- "BuildingIntelligence"
+schema_name <- "Jira"
 
 # Connect to SQL database
 con <- dbConnect(
   odbc(),
   driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
+  server = sql_server,
+  database = db_name,
   Trusted_Connection = "Yes"
 )
 
@@ -69,8 +69,8 @@ if (base_url != stringr::str_extract(req$url, ".+3/")) {
   desc <- "Query URL does not match returned URL"
 
   log_daily_etl_run(
-    api_name = ORCHESTRATOR_NAME,
-    script_name = ORCHESTRATOR_NAME,
+    api_name = orchestrator_name,
+    script_name = orchestrator_name,
     status = "WARNING",
     message = substr(desc, 1, 500)
   )
@@ -166,8 +166,8 @@ rollup_message <- if (n_error == 0) {
 }
 
 log_daily_etl_run(
-  api_name = ORCHESTRATOR_NAME,
-  script_name = ORCHESTRATOR_NAME,
+  api_name = orchestrator_name,
+  script_name = orchestrator_name,
   status = overall_status,
   message = substr(rollup_message, 1, 500)
 )
