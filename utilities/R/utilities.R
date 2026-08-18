@@ -480,8 +480,8 @@ call_jira_api <- function(
         }
         # Log error to daily run file
         log_daily_etl_run(
-          api_name = API_NAME,
-          script_name = SCRIPT_NAME,
+          api_name = api_name,
+          script_name = script_name,
           table_name = dashboard_id,
           status = "FAILURE",
           message = substr(desc, 1, 500)
@@ -500,7 +500,7 @@ call_jira_api <- function(
       # API succeeded, nothing to load
       no_data_msg <- paste0(
         "No data returned from API for window ",
-        etl_window$jira_start_time,
+        start_time,
         " to ",
         format(Sys.time(), tz = "UTC"),
         " UTC"

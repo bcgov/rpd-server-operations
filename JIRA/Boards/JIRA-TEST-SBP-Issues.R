@@ -30,7 +30,7 @@ if (length(data$issues) == 0) {
   # API succeeded, nothing to load
   no_data_msg <- paste0(
     "No data returned from API for window ",
-    etl_window$jira_start_time,
+    start_time,
     " to ",
     format(Sys.time(), tz = "UTC"),
     " UTC"
@@ -249,9 +249,9 @@ tryCatch(
   },
   error = function(e) {
     log_daily_etl_run(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = DASHBOARD_ID,
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
       status = "FAILURE",
       message = paste0(
         "Status Change failure: ",
@@ -304,9 +304,9 @@ tryCatch(
   },
   error = function(e) {
     log_daily_etl_run(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = DASHBOARD_ID,
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
       status = "FAILURE",
       message = paste0(
         "Issues Cleanup failure: ",
