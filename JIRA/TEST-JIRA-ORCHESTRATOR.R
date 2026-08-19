@@ -21,7 +21,7 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Setup orchestrator variables
 orchestrator_start <- Sys.time()
-orchestrator_name <- "jira_boards"
+orchestrator_name <- "TEST-JIRA"
 
 etl_window <- get_etl_window()
 
@@ -81,14 +81,14 @@ if (base_url != stringr::str_extract(req$url, ".+3/")) {
 query_url <- paste0(base_url, "search/jql")
 
 scripts <- c(
-  "JIRA/Boards/JIRA-TEST-CSR-Issues.R",
-  "JIRA/Boards/JIRA-TEST-GPOPR-Issues.R",
-  "JIRA/Boards/JIRA-TEST-PAR-Issues.R",
-  "JIRA/Boards/JIRA-TEST-PSO-Issues.R",
-  "JIRA/Boards/JIRA-TEST-RBAS-Issues.R",
-  "JIRA/Boards/JIRA-TEST-RPR-Issues.R",
-  "JIRA/Boards/JIRA-TEST-SBP-Issues.R",
-  "JIRA/Boards/JIRA-TEST-SBPSB-Issues.R"
+  "JIRA/Boards/TEST/JIRA-TEST-CSR-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-GPOPR-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-PAR-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-PSO-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-RBAS-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-RPR-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-SBP-Issues.R",
+  "JIRA/Boards/TEST/JIRA-TEST-SBPSB-Issues.R"
 )
 
 # -- Per-script result tracking --

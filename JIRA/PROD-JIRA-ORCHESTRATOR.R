@@ -21,7 +21,7 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Setup orchestrator variables
 orchestrator_start <- Sys.time()
-orchestrator_name <- "jira_boards"
+orchestrator_name <- "PROD-JIRA"
 
 etl_window <- get_etl_window()
 
