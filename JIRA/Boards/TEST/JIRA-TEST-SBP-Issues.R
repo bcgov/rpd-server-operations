@@ -1,0 +1,624 @@
+# For server logging
+# Begin timer
+task_start <- Sys.time()
+
+# Set necessary variables
+dashboard_id <- "SBP"
+target_table <- DBI::Id(schema = schema_name, table = dashboard_id)
+temp_table <- paste0("#", dashboard_id, "Temp")
+api_name <- "Jira"
+script_name <- "Jira_SBP"
+
+# Setup API parameters ####
+expand_opts <- c("changelog", "names", "fields")
+max_results <- 100
+start_time <- etl_window$jira_start_time
+
+# Issues Loop ####
+data <- call_jira_api(
+  api_name,
+  script_name,
+  dashboard_id,
+  query_url,
+  expand_opts,
+  max_results,
+  token_string,
+  start_time
+)
+
+if (length(data$issues) == 0) {
+  # API succeeded, nothing to load
+  no_data_msg <- paste0(
+    "No data returned from API for window ",
+    start_time,
+    " to ",
+    format(Sys.time(), tz = "UTC"),
+    " UTC"
+  )
+
+  cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+
+  log_daily_etl_run(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
+    duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+    status = "NO_DATA",
+    message = no_data_msg
+  )
+
+  cond <- structure(
+    class = c("no_data_condition", "condition"),
+    list(message = no_data_msg)
+  )
+  stop(cond)
+}
+
+tryCatch(
+  {
+    names <- data |>
+      purrr::pluck("names") |>
+      tibble::enframe() |>
+      safe_hoist(value, Value = 1L) |>
+      group_by(Value) |>
+      mutate(row_name = row_number(), row_count = n()) |>
+      mutate(
+        Value = case_when(
+          row_count > 1 ~ paste0(Value, "-", row_name),
+          .default = Value
+        )
+      ) |>
+      select(-c(row_name, row_count)) |>
+      tibble::deframe()
+
+    Issues <- data |>
+      purrr::pluck("issues") |>
+      tibble::enframe() |>
+      tidyr::unnest_wider(value) |>
+      tidyr::unnest_wider(fields) |>
+      plyr::rename(names) |>
+      rename_with(~ gsub(" ", "", .)) |>
+      # Parent column is sometimes missing as sparsely populated
+      mutate(
+        Parent = if ("Parent" %in% names(pick(everything()))) Parent else NA
+      ) |>
+      # Select fields of interest
+      select(
+        IssueKey = key,
+        IssueType,
+        Address,
+        Assignee,
+        Created,
+        RequestedDueDate,
+        SpaceBookingAdmin = `NameofSpaceBookingAdmin`,
+        NumberOfSpaces = `NumberofSpacestoOnboard`,
+        FloorPlan = `Doyouhaveafloorplan?`,
+        FurniturePlan = `Doyouhaveafurnitureplan?`,
+        LastUpdatedStatus,
+        Department = `Department-1`,
+        DueDate = Duedate,
+        Organization = `Ministry/BPSOrganization`,
+        Priority,
+        Reporter,
+        RequestParticipants = Requestparticipants,
+        RequestType,
+        Resolved,
+        Status,
+        Summary,
+        Updated,
+        Parent,
+        changelog
+      ) |>
+      safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
+      safe_hoist(
+        Address,
+        Address = list("content", 1L, "content", 1L, "text"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+      safe_hoist(
+        RequestedDueDate,
+        RequestedDueDate = "value",
+        .remove = FALSE
+      ) |>
+      safe_hoist(FloorPlan, FloorPlan = "value", .remove = FALSE) |>
+      safe_hoist(FurniturePlan, FurniturePlan = "value", .remove = FALSE) |>
+      safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+      safe_hoist(Priority, Priority = "name", .remove = FALSE) |>
+      safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+      safe_hoist_all(
+        RequestParticipants,
+        RequestParticipants = list("displayName"),
+        .remove = FALSE
+      ) |>
+      # mutate(
+      #   RequestParticipants = RequestParticipants_displayName,
+      #   .keep = "unused"
+      # ) |>
+      safe_hoist(
+        RequestType,
+        RequestType = list("requestType", "name"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(Status, Status = "name", .remove = FALSE) |>
+      safe_hoist(Parent, Parent = "key", .remove = FALSE)
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
+      status = "FAILURE",
+      message = paste0(
+        "Data wrangling failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
+
+# Calculate time spent in status for each ticket.
+# timestamp is used for tickets that have only been open, calc time from creation to sys.time for total elapsed time.
+timestamp <- format(Sys.time(), format = "%Y-%m-%dT%H:%M:%OS3%z")
+
+tryCatch(
+  {
+    StatusChange <- Issues |>
+      select(IssueKey, Status, TicketCreated = Created, changelog) |>
+      safe_hoist(changelog, histories = list("histories"), .remove = FALSE) |>
+      select(-c(changelog)) |>
+      unnest_longer(col = histories, values_to = "values") |>
+      unnest_longer(
+        col = values,
+        values_to = "values",
+        indices_to = "column"
+      ) |>
+      filter(column %in% c("created", "items")) |>
+      pivot_wider(
+        names_from = column,
+        values_from = values,
+        values_fn = list
+      ) |>
+      unnest_longer(col = created:items) |>
+      select(-c(created_id, items_id)) |>
+      unnest_longer(items) |>
+      safe_hoist(
+        items,
+        item_field = list("field"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(
+        items,
+        item_fromString = list("fromString"),
+        .remove = FALSE
+      ) |>
+      safe_hoist(
+        items,
+        item_toString = list("toString"),
+        .remove = FALSE
+      ) |>
+      group_by(IssueKey) |>
+      mutate(rowNum = row_number()) |>
+      mutate(
+        created = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ timestamp,
+          .default = created
+        ),
+        item_toString = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ "No-Change",
+          .default = item_toString
+        ),
+        item_fromString = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ "Open",
+          .default = item_fromString
+        ),
+        item_field = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ "status",
+          .default = item_field
+        )
+      ) |>
+      ungroup() |>
+      filter(item_field == "status") |>
+      select(-c(items, rowNum)) |>
+      mutate(
+        TicketCreated = ymd_hms(TicketCreated),
+        created = ymd_hms(created)
+      ) |>
+      arrange(IssueKey, created) |>
+      group_by(IssueKey) |>
+      mutate(
+        TimeElapsed = as.numeric(difftime(
+          created,
+          lag(created, n = 1, default = first(TicketCreated)),
+          units = "days"
+        ))
+      ) |>
+      ungroup() |>
+      select(-c(item_toString, item_field, created, Status, TicketCreated)) |>
+      mutate(
+        item_fromString = gsub(" ", "", tools::toTitleCase(item_fromString))
+      ) |> # deal with variable capitalization
+      group_by(IssueKey, item_fromString) |>
+      summarise(
+        TimeElapsed = sum(TimeElapsed, na.rm = TRUE),
+        .groups = "drop_last"
+      ) |>
+      pivot_wider(names_from = item_fromString, values_from = TimeElapsed) |>
+      ungroup()
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
+      status = "FAILURE",
+      message = paste0(
+        "Status Change failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
+
+# With smaller datasets now that I filter on updated, need to make sure all status type columns exist
+status_cols <- c(
+  "Closed",
+  "InProgress",
+  "Open",
+  "Reopened",
+  "WaitingforCustomer",
+  "OnHold"
+)
+
+missing_cols <- setdiff(status_cols, names(StatusChange))
+
+if (length(missing_cols) > 0) {
+  StatusChange <- add_column(
+    StatusChange,
+    !!!set_names(rep(list(NA_real_), length(missing_cols)), missing_cols)
+  )
+}
+
+
+# Deal with issues where extra newline characters screwed up the read in of data to power bi
+tryCatch(
+  {
+    Issues <- Issues |>
+      mutate(across(where(is.character), ~ gsub(",", "", .x))) |>
+      mutate(across(where(is.character), ~ trimws(.x))) |>
+      left_join(StatusChange, by = join_by(IssueKey)) |>
+      select(-changelog) |>
+      mutate(across(
+        c(Created, Updated, Resolved),
+        ~ as.POSIXct(.x, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
+      )) |>
+      mutate(DueDate = as.Date(DueDate, format = "%Y-%m-%d")) |>
+      mutate(NumberOfSpaces = as.integer(NumberOfSpaces)) |>
+      mutate(across(
+        c(Closed, InProgress, Open, Reopened, WaitingforCustomer, OnHold),
+        ~ ifelse(is.finite(.x), .x, NA_real_)
+      )) |>
+      mutate(RefreshDate = Sys.time(), .before = everything())
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = api_name,
+      script_name = script_name,
+      table_name = dashboard_id,
+      status = "FAILURE",
+      message = paste0(
+        "Issues Cleanup failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
+
+# Start database transaction ####
+# dbRemoveTable(con, target_table)
+if (!dbExistsTable(con, target_table)) {
+  sql <- paste0(
+    "CREATE TABLE ",
+    schema_name,
+    ".",
+    dashboard_id,
+    " (
+      RefreshDate          DATETIME2(3)    NOT NULL,
+      IssueKey             NVARCHAR(20)    NOT NULL,
+      IssueType            NVARCHAR(50)    NULL,
+      Address              NVARCHAR(800)   NULL,
+      Assignee             NVARCHAR(100)   NULL,
+      Created              DATETIME2(3)    NULL,
+      RequestedDueDate     NVARCHAR(100)   NULL,
+      SpaceBookingAdmin    NVARCHAR(100)   NULL,
+      NumberOfSpaces       INT             NULL,
+      FloorPlan            NVARCHAR(10)    NULL,
+      FurniturePlan        NVARCHAR(10)    NULL,
+      LastUpdatedStatus    NVARCHAR(800)   NULL,
+      Department           NVARCHAR(300)   NULL,
+      DueDate              DATE            NULL,
+      Organization         NVARCHAR(100)   NULL,
+      Priority             NVARCHAR(100)   NULL,
+      Reporter             NVARCHAR(100)   NULL,
+      RequestParticipants  NVARCHAR(900)   NULL,
+      RequestType          NVARCHAR(250)   NULL,
+      Resolved             DATETIME2(3)    NULL,
+      Status               NVARCHAR(100)   NULL,
+      Summary              NVARCHAR(900)   NULL,
+      Updated              DATETIME2(3)    NULL,
+      Parent               NVARCHAR(100)   NULL,
+      Closed               DECIMAL(18,6)   NULL,
+      InProgress           DECIMAL(18,6)   NULL,
+      [Open]               DECIMAL(18,6)   NULL,
+      Reopened             DECIMAL(18,6)   NULL,
+      WaitingforCustomer   DECIMAL(18,6)   NULL,
+      OnHold               DECIMAL(18,6)   NULL
+    );"
+  )
+
+  dbExecute(con, sql)
+}
+
+etl_error <- NULL
+
+# Control database transaction to ensure all steps done together or not at all
+dbBegin(con)
+
+# Begin error handling and rollback of transaction on failure
+tryCatch(
+  {
+    if (dbExistsTable(con, temp_table)) {
+      dbRemoveTable(con, temp_table)
+    }
+
+    # Create temp table to hold new data
+    dbExecute(
+      con,
+      paste0(
+        "CREATE TABLE ",
+        temp_table,
+        " (
+          RefreshDate          DATETIME2(3)    NOT NULL,
+          IssueKey             NVARCHAR(20)    NOT NULL,
+          IssueType            NVARCHAR(50)    NULL,
+          Address              NVARCHAR(800)   NULL,
+          Assignee             NVARCHAR(100)   NULL,
+          Created              DATETIME2(3)    NULL,
+          RequestedDueDate     NVARCHAR(100)   NULL,
+          SpaceBookingAdmin    NVARCHAR(100)   NULL,
+          NumberOfSpaces       INT             NULL,
+          FloorPlan            NVARCHAR(10)    NULL,
+          FurniturePlan        NVARCHAR(10)    NULL,
+          LastUpdatedStatus    NVARCHAR(800)   NULL,
+          Department           NVARCHAR(300)   NULL,
+          DueDate              DATE            NULL,
+          Organization         NVARCHAR(100)   NULL,
+          Priority             NVARCHAR(100)   NULL,
+          Reporter             NVARCHAR(100)   NULL,
+          RequestParticipants  NVARCHAR(900)   NULL,
+          RequestType          NVARCHAR(250)   NULL,
+          Resolved             DATETIME2(3)    NULL,
+          Status               NVARCHAR(100)   NULL,
+          Summary              NVARCHAR(900)   NULL,
+          Updated              DATETIME2(3)    NULL,
+          Parent               NVARCHAR(100)   NULL,
+          Closed               DECIMAL(18,6)   NULL,
+          InProgress           DECIMAL(18,6)   NULL,
+          [Open]               DECIMAL(18,6)   NULL,
+          Reopened             DECIMAL(18,6)   NULL,
+          WaitingforCustomer   DECIMAL(18,6)   NULL,
+          OnHold               DECIMAL(18,6)   NULL
+        );
+        "
+      )
+    )
+
+    # Write into temp table the current Issues
+    dbWriteTable(
+      con,
+      name = temp_table,
+      value = Issues,
+      append = TRUE,
+      overwrite = FALSE
+    )
+
+    # -- Guard: catch duplicate keys in source data before touching target --
+    dup_count <- dbGetQuery(
+      con,
+      paste0(
+        "SELECT COUNT(*) AS n
+         FROM (
+           SELECT IssueKey
+           FROM ",
+        temp_table,
+        "
+           GROUP BY IssueKey
+           HAVING COUNT(*) > 1
+         ) dupes;"
+      )
+    )$n
+
+    if (dup_count > 0) {
+      stop(paste0(
+        "Duplicate IssueKey values detected in source data (",
+        dup_count,
+        " keys affected). Rolling back."
+      ))
+    }
+
+    # Update the SBP table with new data for existing rows
+    n_updated <- dbExecute(
+      con,
+      paste0(
+        "
+      UPDATE tgt
+      SET
+      tgt.RefreshDate          = src.RefreshDate,
+      tgt.IssueType            = src.IssueType,
+      tgt.Address              = src.Address,
+      tgt.Assignee             = src.Assignee,
+      tgt.Created              = src.Created,
+      tgt.RequestedDueDate     = src.RequestedDueDate,
+      tgt.SpaceBookingAdmin    = src.SpaceBookingAdmin,
+      tgt.NumberOfSpaces       = src.NumberOfSpaces,
+      tgt.FloorPlan            = src.FloorPlan,
+      tgt.FurniturePlan        = src.FurniturePlan,
+      tgt.LastUpdatedStatus    = src.LastUpdatedStatus,
+      tgt.Department           = src.Department,
+      tgt.DueDate              = src.DueDate,
+      tgt.Organization         = src.Organization,
+      tgt.Priority             = src.Priority,
+      tgt.Reporter             = src.Reporter,
+      tgt.RequestParticipants  = src.RequestParticipants,
+      tgt.RequestType          = src.RequestType,
+      tgt.Resolved             = src.Resolved,
+      tgt.Status               = src.Status,
+      tgt.Summary              = src.Summary,
+      tgt.Updated              = src.Updated,
+      tgt.Parent               = src.Parent,
+      tgt.Closed               = src.Closed,
+      tgt.InProgress           = src.InProgress,
+      tgt.[Open]               = src.[Open],
+      tgt.Reopened             = src.Reopened,
+      tgt.WaitingforCustomer   = src.WaitingforCustomer,
+      tgt.OnHold               = src.OnHold
+    FROM ",
+        schema_name,
+        ".",
+        dashboard_id,
+        " tgt
+        INNER JOIN ",
+        temp_table,
+        " src
+        ON tgt.IssueKey = src.IssueKey;"
+      )
+    )
+
+    # Insert new rows into the SBP table
+    n_inserted <- dbExecute(
+      con,
+      paste0(
+        "INSERT INTO ",
+        schema_name,
+        ".",
+        dashboard_id,
+        " (
+          RefreshDate,
+          IssueKey,
+          IssueType,
+          Address,
+          Assignee,
+          Created,
+          RequestedDueDate,
+          SpaceBookingAdmin,
+          NumberOfSpaces,
+          FloorPlan,
+          FurniturePlan,
+          LastUpdatedStatus,
+          Department,
+          DueDate,
+          Organization,
+          Priority,
+          Reporter,
+          RequestParticipants,
+          RequestType,
+          Resolved,
+          Status,
+          Summary,
+          Updated,
+          Parent,
+          Closed,
+          InProgress,
+          [Open],
+          Reopened,
+          WaitingforCustomer,
+          OnHold
+        )
+        SELECT
+          src.RefreshDate,
+          src.IssueKey,
+          src.IssueType,
+          src.Address,
+          src.Assignee,
+          src.Created,
+          src.RequestedDueDate,
+          src.SpaceBookingAdmin,
+          src.NumberOfSpaces,
+          src.FloorPlan,
+          src.FurniturePlan,
+          src.LastUpdatedStatus,
+          src.Department,
+          src.DueDate,
+          src.Organization,
+          src.Priority,
+          src.Reporter,
+          src.RequestParticipants,
+          src.RequestType,
+          src.Resolved,
+          src.Status,
+          src.Summary,
+          src.Updated,
+          src.Parent,
+          src.Closed,
+          src.InProgress,
+          src.[Open],
+          src.Reopened,
+          src.WaitingforCustomer,
+          src.OnHold
+        FROM ",
+        temp_table,
+        " src
+        LEFT JOIN ",
+        schema_name,
+        ".",
+        dashboard_id,
+        " tgt
+        ON tgt.IssueKey = src.IssueKey
+        WHERE tgt.IssueKey IS NULL;"
+      )
+    )
+
+    # Complete the transaction
+    dbCommit(con)
+
+    # Hoist counts to outer scope for logging
+    n_updated <<- n_updated
+    n_inserted <<- n_inserted
+
+    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
+    # rollback transaction on fail, completion of error handling
+  },
+  error = function(e) {
+    dbRollback(con)
+    etl_error <<- e
+  }
+)
+
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
+if (is.null(etl_error)) {
+  log_daily_etl_run(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
+    duration = task_duration,
+    status = "SUCCESS",
+    n_inserted = n_inserted,
+    n_updated = n_updated,
+    n_deleted = NA,
+    message = "ETL completed successfully"
+  )
+} else {
+  log_daily_etl_run(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = dashboard_id,
+    status = "FAILURE",
+    message = substr(etl_error$message, 1, 500)
+  )
+  stop(etl_error)
+}

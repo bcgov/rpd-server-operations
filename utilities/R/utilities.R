@@ -456,7 +456,7 @@ call_jira_api <- function(
         body = function(resp) {
           paste0(
             "Auth Failure for ",
-            SCRIPT_NAME,
+            script_name,
             " reason: ",
             resp_header(resp, "x-seraph-loginreason") %||% "UNKNOWN",
             " traceid: ",

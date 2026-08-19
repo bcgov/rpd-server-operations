@@ -25,7 +25,7 @@ orchestrator_name <- "jira_boards"
 
 etl_window <- get_etl_window()
 
-etl_status <- "DEV"
+etl_status <- "PROD"
 sql_server <- if (etl_status == "PROD") {
   "dynamo.idir.bcgov\\CA_PRD"
 } else {
@@ -81,14 +81,14 @@ if (base_url != stringr::str_extract(req$url, ".+3/")) {
 query_url <- paste0(base_url, "search/jql")
 
 scripts <- c(
-  "JIRA/Boards/TEST/JIRA-TEST-CSR-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-GPOPR-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-PAR-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-PSO-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-RBAS-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-RPR-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-SBP-Issues.R",
-  "JIRA/Boards/TEST/JIRA-TEST-SBPSB-Issues.R"
+  "JIRA/Boards/PROD/PROD-JIRA-CSR.R",
+  "JIRA/Boards/PROD/PROD-JIRA-GPOPR.R",
+  "JIRA/Boards/PROD/PROD-JIRA-PAR.R",
+  "JIRA/Boards/PROD/PROD-JIRA-PSO.R",
+  "JIRA/Boards/PROD/PROD-JIRA-RBAS.R",
+  "JIRA/Boards/PROD/PROD-JIRA-RPR.R",
+  "JIRA/Boards/PROD/PROD-JIRA-SBP.R",
+  "JIRA/Boards/PROD/PROD-JIRA-SBPSB.R"
 )
 
 # -- Per-script result tracking --
