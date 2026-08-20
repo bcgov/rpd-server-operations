@@ -7,7 +7,7 @@ dashboard_id <- "SBP"
 target_table <- DBI::Id(schema = schema_name, table = dashboard_id)
 temp_table <- paste0("#", dashboard_id, "Temp")
 api_name <- "Jira"
-script_name <- "Jira_SBP"
+script_name <- "PROD_Jira_SBP"
 
 # Setup API parameters ####
 expand_opts <- c("changelog", "names", "fields")
@@ -588,7 +588,7 @@ tryCatch(
     n_updated <<- n_updated
     n_inserted <<- n_inserted
 
-    cat("ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
+    cat(script_name, " ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
     # rollback transaction on fail, completion of error handling
   },
   error = function(e) {
