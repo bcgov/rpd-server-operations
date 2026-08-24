@@ -83,12 +83,12 @@ if (raw_data$status == "no_data") {
 
 clean_data <- raw_data |>
   purrr::pluck("data") |>
-  # select_if(~ !all(is.na(.))) |>
-  # select_if(~ !all(. == 0)) |>
-  # select_if(~ !all(. == '-1')) |>
-  # select_if(~ !all(. == "N/A")) |>
-  # select_if(~ !all(. == "-")) |>
-  filter(rm_status_pobc == "Active") |>
+  select_if(~ !all(is.na(.))) |>
+  select_if(~ !all(. == 0)) |>
+  select_if(~ !all(. == '-1')) |>
+  select_if(~ !all(. == "N/A")) |>
+  select_if(~ !all(. == "-")) #|>
+filter(rm_status_pobc == "Active") |>
   select(
     edp_update_ts,
     rm_date_costs_end,

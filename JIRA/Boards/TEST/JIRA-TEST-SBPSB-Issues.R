@@ -21,7 +21,7 @@ expand_opts = c("names", "fields")
 max_results = 100
 start_time <- etl_window$jira_start_time
 
-# Issues Loop ####
+# API Call ####
 data <- call_jira_api(
   api_name,
   script_name,
@@ -62,6 +62,8 @@ if (length(data$issues) == 0) {
   stop(cond)
 }
 
+
+# Issues ####
 tryCatch(
   {
     names <- data |>
@@ -101,7 +103,6 @@ tryCatch(
         ApprovedByExecutive = ApprovedbyExecutives,
         MoSoCOW,
         ImpactToUser = ImpacttoUser,
-        LinkedIssues,
         Priority,
         Reporter,
         RequestType,
@@ -140,147 +141,7 @@ tryCatch(
       ) |>
       safe_hoist(Status, Status = "name", .remove = FALSE) |>
       safe_hoist(Project, Project = "key", .remove = FALSE) |>
-      safe_hoist(Parent, Parent = "key", .remove = FALSE)
-  },
-  error = function(e) {
-    log_daily_etl_run(
-      api_name = api_name,
-      script_name = script_name,
-      table_name = dashboard_id,
-      status = "FAILURE",
-      message = paste0(
-        "Data wrangling failure: ",
-        substr(conditionMessage(e), 1, 500)
-      )
-    )
-    stop(e) # rethrow so Task Scheduler/Nagios still flags it
-  }
-)
-
-
-# Linked Issues
-tryCatch(
-  {
-    LinkedIssues <- Issues |>
-      select(IssueKey, LinkedIssues) |>
-      tidyr::unnest_wider(LinkedIssues, names_sep = "_") |>
-      tidyr::unnest_wider(starts_with("LinkedIssues"), names_sep = "_") |>
-      tidyr::unnest_wider(where(is.list), names_sep = "_") |>
-      # select(IssueKey, matches("(\\d+)_id"), ends_with("type_name"), , ends_with("type_outward"), ends_with("outwardIssue_key")) |>
-      select(
-        IssueKey,
-        matches("(\\d+)_id"),
-        ends_with("type_name"),
-        ends_with("type_inward"),
-        ends_with("type_outward"),
-        ends_with("Issue_key")
-      ) |>
-      pivot_longer(
-        cols = matches("LinkedIssues_(\\d+)_id"),
-        names_to = "link_name",
-        values_to = "link_value"
-      ) |>
-      filter(!is.na(link_value)) |>
-      relocate(link_value, .after = IssueKey) |>
-      pivot_longer(
-        cols = matches("(\\d+)"),
-        names_to = "col_name",
-        values_to = "col_value"
-      ) |>
-      mutate(
-        link_name_num = stringr::str_extract(link_name, "(\\d+)"),
-        col_name_num = stringr::str_extract(col_name, "(\\d+)")
-      ) |>
-      filter(link_name_num == col_name_num) |>
-      select(-c(link_name, link_name_num, col_name_num)) |>
-      mutate(
-        col_name = stringr::str_replace(col_name, "LinkedIssues_(\\d+)_", "")
-      ) |>
-      pivot_wider(
-        id_cols = c(IssueKey, link_value),
-        names_from = col_name,
-        values_from = col_value
-      ) |>
-      # This step guarantees the dataframe shape after pivot
-      # variable API payload may result in missing columns
-      ensure_columns(c(
-        "type_name",
-        "type_inward",
-        "type_outward",
-        "inwardIssue_key",
-        "outwardIssue_key"
-      )) |>
-      # Next three steps have a .default = "Error", will need some kind of logging or check for this
-      mutate(
-        TypeFlag = case_when(
-          is.na(inwardIssue_key) ~ "Outward",
-          is.na(outwardIssue_key) ~ "Inward",
-          .default = "Error"
-        )
-      ) |>
-      mutate(
-        RelationDesc = case_when(
-          TypeFlag == "Outward" ~ type_outward,
-          TypeFlag == "Inward" ~ type_inward,
-          .default = "Error"
-        )
-      ) |>
-      mutate(
-        RelationIssueKey = case_when(
-          TypeFlag == "Outward" ~ outwardIssue_key,
-          TypeFlag == "Inward" ~ inwardIssue_key,
-          .default = "Error"
-        )
-      ) |>
-      rename(
-        RelationId = link_value,
-        RelationCategory = type_name,
-      ) |>
-      select(
-        -c(
-          type_outward,
-          type_inward,
-          TypeFlag,
-          outwardIssue_key,
-          inwardIssue_key
-        )
-      ) |>
-      mutate(RefreshDate = Sys.time(), .before = everything())
-  },
-  error = function(e) {
-    log_daily_etl_run(
-      api_name = api_name,
-      script_name = script_name2,
-      table_name = dashboard_id,
-      status = "FAILURE",
-      message = paste0(
-        "LinkedIssues failure: ",
-        substr(conditionMessage(e), 1, 500)
-      )
-    )
-    stop(e) # rethrow so Task Scheduler/Nagios still flags it
-  }
-)
-
-error_rows <- LinkedIssues |>
-  filter(RelationDesc == "Error" | RelationIssueKey == "Error")
-
-if (nrow(error_rows) > 0) {
-  log_daily_etl_run(
-    status = "WARNING", # or whatever your existing status vocabulary supports
-    message = sprintf(
-      "Relation Error in Desc or IssueKey for %d row(s). IssueKeys: %s",
-      nrow(error_rows),
-      paste(head(error_rows$IssueKey, 10), collapse = ", ")
-    )
-  )
-}
-
-# Deal with issues where extra newline characters screwed up the read in of data to power bi
-tryCatch(
-  {
-    Issues <- Issues |>
-      select(-LinkedIssues) |>
+      safe_hoist(Parent, Parent = "key", .remove = FALSE) |>
       mutate(across(where(is.character), ~ gsub(",", "", .x))) |>
       mutate(across(where(is.character), ~ trimws(.x))) |>
       mutate(
@@ -300,7 +161,7 @@ tryCatch(
       table_name = dashboard_id,
       status = "FAILURE",
       message = paste0(
-        "Issues assignment failure: ",
+        "Data wrangling failure: ",
         substr(conditionMessage(e), 1, 500)
       )
     )
@@ -514,7 +375,14 @@ tryCatch(
     n_updated <<- n_updated
     n_inserted <<- n_inserted
 
-    cat(script_name, " ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
+    cat(
+      script_name,
+      " ETL complete — updated:",
+      n_updated,
+      "| inserted:",
+      n_inserted,
+      "\n"
+    )
     # rollback transaction on fail, completion of error handling
   },
   error = function(e) {
@@ -549,8 +417,197 @@ if (is.null(etl_error)) {
   stop(etl_error)
 }
 
-# Database SBPSB Linked Issues ####
+# Linked Issues ####
+tryCatch(
+  {
+    names <- data |>
+      purrr::pluck("names") |>
+      tibble::enframe() |>
+      safe_hoist(value, Value = 1L) |>
+      group_by(Value) |>
+      mutate(row_name = row_number(), row_count = n()) |>
+      mutate(
+        Value = case_when(
+          row_count > 1 ~ paste0(Value, "-", row_name),
+          .default = Value
+        )
+      ) |>
+      select(-c(row_name, row_count)) |>
+      tibble::deframe()
 
+    LinkedIssues <- data |>
+      purrr::pluck("issues") |>
+      tibble::enframe() |>
+      tidyr::unnest_wider(value) |>
+      tidyr::unnest_wider(fields) |>
+      plyr::rename(names) |>
+      rename_with(~ gsub(" ", "", .)) |>
+      # Select fields of interest
+      select(
+        IssueKey = key,
+        LinkedIssues,
+      )
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = api_name,
+      script_name = script_name2,
+      table_name = dashboard_id,
+      status = "FAILURE",
+      message = paste0(
+        "LinkedIssues Initial Wrangling Failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
+
+if (sum(!is.na(LinkedIssues$LinkedIssues)) == 0) {
+  # API succeeded, nothing to load
+  no_data_msg <- paste0(
+    "No LinkedIssues returned from API for window ",
+    etl_window$jira_start_time,
+    " to ",
+    format(Sys.time(), tz = "UTC"),
+    " UTC"
+  )
+
+  cat(no_data_msg, "— nothing to load. Exiting gracefully.\n")
+
+  log_daily_etl_run(
+    api_name = api_name,
+    script_name = script_name2,
+    table_name = paste0(dashboard_id, extension),
+    duration = as.numeric(difftime(Sys.time(), task_start, units = "secs")),
+    status = "NO_DATA",
+    message = no_data_msg
+  )
+
+  cond <- structure(
+    class = c("no_data_condition", "condition"),
+    list(message = no_data_msg)
+  )
+
+  stop(cond)
+}
+
+tryCatch(
+  {
+    LinkedIssues <- LinkedIssues |>
+      tidyr::unnest_wider(LinkedIssues, names_sep = "_") |>
+      tidyr::unnest_wider(starts_with("LinkedIssues"), names_sep = "_") |>
+      tidyr::unnest_wider(where(is.list), names_sep = "_") |>
+      select(
+        IssueKey,
+        matches("(\\d+)_id"),
+        ends_with("type_name"),
+        ends_with("type_inward"),
+        ends_with("type_outward"),
+        ends_with("Issue_key")
+      ) |>
+      pivot_longer(
+        cols = matches("LinkedIssues_(\\d+)_id"),
+        names_to = "link_name",
+        values_to = "link_value"
+      ) |>
+      filter(!is.na(link_value)) |>
+      relocate(link_value, .after = IssueKey) |>
+      pivot_longer(
+        cols = matches("(\\d+)"),
+        names_to = "col_name",
+        values_to = "col_value"
+      ) |>
+      mutate(
+        link_name_num = stringr::str_extract(link_name, "(\\d+)"),
+        col_name_num = stringr::str_extract(col_name, "(\\d+)")
+      ) |>
+      filter(link_name_num == col_name_num) |>
+      select(-c(link_name, link_name_num, col_name_num)) |>
+      mutate(
+        col_name = stringr::str_replace(col_name, "LinkedIssues_(\\d+)_", "")
+      ) |>
+      pivot_wider(
+        id_cols = c(IssueKey, link_value),
+        names_from = col_name,
+        values_from = col_value
+      ) |>
+      # This step guarantees the dataframe shape after pivot
+      # variable API payload may result in missing columns
+      ensure_columns(c(
+        "type_name",
+        "type_inward",
+        "type_outward",
+        "inwardIssue_key",
+        "outwardIssue_key"
+      )) |>
+      # Next three steps have a .default = "Error", will need some kind of logging or check for this
+      mutate(
+        TypeFlag = case_when(
+          is.na(inwardIssue_key) ~ "Outward",
+          is.na(outwardIssue_key) ~ "Inward",
+          .default = "Error"
+        )
+      ) |>
+      mutate(
+        RelationDesc = case_when(
+          TypeFlag == "Outward" ~ type_outward,
+          TypeFlag == "Inward" ~ type_inward,
+          .default = "Error"
+        )
+      ) |>
+      mutate(
+        RelationIssueKey = case_when(
+          TypeFlag == "Outward" ~ outwardIssue_key,
+          TypeFlag == "Inward" ~ inwardIssue_key,
+          .default = "Error"
+        )
+      ) |>
+      rename(
+        RelationId = link_value,
+        RelationCategory = type_name,
+      ) |>
+      select(
+        -c(
+          type_outward,
+          type_inward,
+          TypeFlag,
+          outwardIssue_key,
+          inwardIssue_key
+        )
+      ) |>
+      mutate(RefreshDate = Sys.time(), .before = everything())
+  },
+  error = function(e) {
+    log_daily_etl_run(
+      api_name = api_name,
+      script_name = script_name2,
+      table_name = dashboard_id,
+      status = "FAILURE",
+      message = paste0(
+        "LinkedIssues failure: ",
+        substr(conditionMessage(e), 1, 500)
+      )
+    )
+    stop(e) # rethrow so Task Scheduler/Nagios still flags it
+  }
+)
+
+error_rows <- LinkedIssues |>
+  filter(RelationDesc == "Error" | RelationIssueKey == "Error")
+
+if (nrow(error_rows) > 0) {
+  log_daily_etl_run(
+    status = "WARNING", # or whatever your existing status vocabulary supports
+    message = sprintf(
+      "Relation Error in Desc or IssueKey for %d row(s). IssueKeys: %s",
+      nrow(error_rows),
+      paste(head(error_rows$IssueKey, 10), collapse = ", ")
+    )
+  )
+}
+
+# Database SBPSB Linked Issues ####
 # dbRemoveTable(con, target_table2)
 if (!dbExistsTable(con, target_table2)) {
   sql <- paste0(
@@ -707,7 +764,14 @@ tryCatch(
     n_updated <<- n_updated
     n_inserted <<- n_inserted
 
-    cat(script_name2, " ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
+    cat(
+      script_name2,
+      " ETL complete — updated:",
+      n_updated,
+      "| inserted:",
+      n_inserted,
+      "\n"
+    )
     # rollback transaction on fail, completion of error handling
   },
   error = function(e) {
