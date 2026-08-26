@@ -155,7 +155,11 @@ clean_data <- resp |>
     )
   ) |>
   mutate(
-    DateRequired = as.POSIXct(dateRequired, format = "%Y-%m-%dT%H:%M:%OS")
+    DateRequired = as.POSIXct(
+      dateRequired,
+      format = "%Y-%m-%dT%H:%M:%OS",
+      tz = "UTC"
+    )
   ) |>
   select(
     SubmissionId,
@@ -190,7 +194,11 @@ clean_data <- resp |>
     DateRequired
   ) |>
   mutate(
-    SubmissionTime = as.POSIXct(SubmissionTime, format = "%Y-%m-%dT%H:%M:%OS")
+    SubmissionTime = as.POSIXct(
+      SubmissionTime,
+      format = "%Y-%m-%dT%H:%M:%OS",
+      tz = "UTC"
+    )
   ) |>
   mutate(RefreshDate = Sys.time(), .before = everything()) |>
   mutate(across(where(is.character), ~ na_if(., "")))
