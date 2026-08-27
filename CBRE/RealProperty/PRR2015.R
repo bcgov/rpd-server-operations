@@ -105,18 +105,53 @@ BudgetAssetAr <- BudgetAssetArData |>
       .default = "weird"
     ),
     .before = everything()
+  ) |>
+  # This section handles a weird edge case of duplicate rows that contain some admin costs for a contract name
+  # and will include a building ID in that row, but no building Id and all the rest of the costs in another row.
+  # currently 25 cases, with this it now matches BudgetAsset
+  group_by(ContractName, FiscalYear) |>
+  arrange(BuildingId) |>
+  summarise(
+    across(
+      c(
+        BuildingId,
+        PropertyId,
+        LeaseId
+      ),
+      first,
+      .names = "{col}"
+    ),
+    across(
+      c(
+        BaseRent,
+        OperationsMaintenance,
+        Utilities,
+        LLOperationsMaintenance,
+        PropertyTax,
+        Parking,
+        AdminFee,
+        LLAdminFee,
+        TaxAdmin,
+        OMAdmin,
+        UtilityAdmin,
+        TotalAdmin,
+        TotalCost
+      ),
+      sum,
+      .names = "{col}"
+    ),
+    .groups = "drop"
   )
-
-# assertthat::assert_that(
-#   sum(BudgetAssetAr$ContractName == "weird") == 0
-# )
 
 # Budget Asset ####
 BudgetAsset <- BudgetAssetData |>
   select(
     ContractName = budget_asset_asset_id,
-    FiscalYear = budget_asset_budget_id,
     BuildingId = budget_asset_bl_id,
+    PropertyId = budget_asset_pr_id,
+    LeaseId = budget_asset_ls_id,
+    PlaId = budget_asset_pla_id,
+    FiscalYear = budget_asset_budget_id,
     RentableAreaBuilding = budget_asset_area_space,
     RentableAreaLand = budget_asset_area_land,
     ParkingStalls = budget_asset_parking_stalls
@@ -127,7 +162,6 @@ Leasing <- LeasingData |>
   select(
     ls_ls_id,
     ls_status,
-    ls_id_key,
     ls_bl_id,
     ls_pr_id,
     ls_lease_sublease,
@@ -140,7 +174,6 @@ Leasing <- LeasingData |>
     ls_date_end,
     ls_date_terminated
   ) |>
-  # filter(ls_lease_sublease %in% c("L", "P"))
   mutate(
     LeaseGroup = case_when(
       ls_lease_sublease %in% c("L", "P") ~ gsub("-V\\d+", "", ls_ls_id),
@@ -158,14 +191,6 @@ Leasing <- LeasingData |>
   mutate(ls_ls_id = gsub("-V\\d+", "", ls_ls_id)) |>
   filter(ls_lease_sublease %in% c("L", "P"))
 
-# assertthat::assert_that(
-#   length(setdiff(
-#     BudgetAssetAr |> filter(!is.na(LeaseId)) |> pull(LeaseId),
-#     Leasing$ls_ls_id
-#   )) ==
-#     0
-# )
-
 # Building ####
 Building <- BuildingData |>
   select(
@@ -175,14 +200,6 @@ Building <- BuildingData |>
     bl_area_rentable,
     linkCity
   )
-
-# assertthat::assert_that(
-#   length(setdiff(
-#     BudgetAssetAr |> filter(!is.na(BuildingId)) |> pull(BuildingId),
-#     Building$BuildingId
-#   )) ==
-#     0
-# )
 
 # Property ####
 Property <- PropertyData |>
@@ -197,18 +214,21 @@ Property <- PropertyData |>
 
 # Create Report ####
 PRR2015 <- BudgetAssetAr |>
-  left_join(BudgetAsset, by = join_by(ContractName, FiscalYear)) |>
-  # mutate(
-  #   BuildingId = case_when(
-  #     is.na(BuildingId.x) & !is.na(BuildingId.y) ~ BuildingId.y,
-  #     is.na(BuildingId.y) & !is.na(BuildingId.x) ~ BuildingId.x,
-  #     BuildingId.x == BuildingId.y ~ BuildingId.x,
-  #     is.na(BuildingId.x) & is.na(BuildingId.y) ~ NA_character_,
-  #     .default = "weird"
-  #   ),
-  #   .keep = "unused",
-  #   .after = FiscalYear
-  # ) |>
+  full_join(
+    BudgetAsset,
+    by = join_by(ContractName, FiscalYear, LeaseId, PropertyId)
+  ) |>
+  mutate(
+    BuildingId = case_when(
+      is.na(BuildingId.x) & !is.na(BuildingId.y) ~ BuildingId.y,
+      is.na(BuildingId.y) & !is.na(BuildingId.x) ~ BuildingId.x,
+      BuildingId.x == BuildingId.y ~ BuildingId.x,
+      is.na(BuildingId.x) & is.na(BuildingId.y) ~ NA_character_,
+      .default = "weird"
+    ),
+    .keep = "unused",
+    .after = FiscalYear
+  ) |>
   # If its a parking contractname the rentable area is the # of stalls, if its land the hectares, building sqm
   # need to find the right join and setup conditions to get all the details in there
   left_join(Leasing, by = join_by(ContractName == ls_ls_id)) |>
@@ -244,26 +264,21 @@ PRR2015 <- BudgetAssetAr |>
     RentableArea = case_when(
       startsWith(ContractName, "P") ~ ParkingStalls,
       startsWith(ContractName, "L") &
-        startsWith(PrimaryLocation, "B") ~ RentableAreaBuilding,
-      startsWith(ContractName, "L") &
         startsWith(PrimaryLocation, "N") ~ RentableAreaLand,
-      startsWith(ContractName, "B") ~ RentableAreaBuilding,
-      startsWith(ContractName, "N") ~ RentableAreaLand,
-      # startsWith(ContractName, "L") &
-      #   PR_Tenure == "LEASED" &
-      #   ls_area_negotiated == 0 ~ PR_TotalRentableLand,
-      # startsWith(ContractName, "L") ~ ls_area_negotiated,
-      # startsWith(ContractName, "L") & !is.na(RentableArea) ~ RentableArea,
-      # startsWith(ContractName, "L") &
-      #   ls_area_negotiated != 0 ~ ls_area_negotiated,
-      # startsWith(ContractName, "N") ~ PR_TotalRentableLand,
-      .default = 0
-    )
+      startsWith(PrimaryLocation, "N") &
+        RentableAreaLand != 0 ~ RentableAreaLand,
+      startsWith(PrimaryLocation, "N") ~ PR_TotalRentableLand,
+      .default = RentableAreaBuilding
+    ),
+    .after = City
   ) |>
   relocate(
-    RentableArea,
+    RentableAreaBuilding,
+    RentableAreaLand,
+    ls_area_negotiated,
+    PR_TotalRentableLand,
     ParkingStalls,
-    .before = BaseRent
+    .after = RentableArea
   ) |>
   mutate(
     CostRate = case_when(
@@ -285,10 +300,19 @@ PRR2015 <- BudgetAssetAr |>
       LeaseId,
       RentableAreaBuilding,
       RentableAreaLand,
-      ls_id_key,
+      ls_area_negotiated,
       ls_bl_id,
       ls_pr_id,
       ls_lease_sublease,
+      ls_ls_parent_id,
+      ls_option1,
+      ls_version,
+      PlaId,
+      ls_date_end,
+      ls_date_terminated,
+      ls_date_start,
+      ls_appropriated_hectares,
+      LeaseGroup,
       Tenure,
       bl_area_rentable,
       linkCity,
@@ -297,8 +321,7 @@ PRR2015 <- BudgetAssetAr |>
       PR_TotalRentableLand,
       PR_linkAddress,
       PR_linkCity,
-      ls_status,
-      ls_area_negotiated
+      ls_status
     )
   ) |>
   mutate(

@@ -11,10 +11,10 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "PORT_ProjectCosts"
+TABLE_NAME <- "PORT_CSR0001"
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "PORT_ProjectCosts"
+SCRIPT_NAME <- "PORT_CSR0001"
 API_NAME <- "None"
 
 # Connect to SQL database
@@ -33,11 +33,11 @@ BuildingData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_company")
-DepartmentData <- dbFetch(query, n = -1)
+CompanyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_cost_tran_recur")
-DepartmentData <- dbFetch(query, n = -1)
+CostTranData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_dp")
@@ -63,3 +63,8 @@ dbClearResult(query)
 query <- dbSendQuery(con, "SELECT * FROM CbreStaging.archibus_rmpct")
 RoomAllocatedData <- dbFetch(query, n = -1)
 dbClearResult(query)
+
+
+test <- CostTranData |>
+  filter(cost_tran_recur_ls_id == "A5125290-L5728") |>
+  filter(cost_tran_recur_cost_cat_id == "PARKING")

@@ -198,7 +198,6 @@ Leasing <- LeasingData |>
   select(
     ls_ls_id,
     ls_status,
-    ls_id_key,
     ls_bl_id,
     ls_pr_id,
     ls_lease_sublease,
@@ -206,6 +205,7 @@ Leasing <- LeasingData |>
     ls_option1,
     ls_version,
     ls_area_negotiated,
+    ls_appropriated_hectares,
     ls_date_start,
     ls_date_end,
     ls_date_terminated
@@ -325,6 +325,8 @@ PRR2015 <- BudgetAssetAr |>
       startsWith(ContractName, "P") ~ ParkingStalls,
       startsWith(ContractName, "L") &
         startsWith(PrimaryLocation, "N") ~ RentableAreaLand,
+      startsWith(PrimaryLocation, "N") &
+        RentableAreaLand != 0 ~ RentableAreaLand,
       startsWith(PrimaryLocation, "N") ~ PR_TotalRentableLand,
       .default = RentableAreaBuilding
     ),
@@ -338,7 +340,13 @@ PRR2015 <- BudgetAssetAr |>
     .after = RentableArea
   ) |>
   mutate(
-    CostRate = round(TotalCost / RentableArea, digits = 2)
+    CostRate = case_when(
+      RentableArea != 0 & TotalCost != 0 ~ round(
+        TotalCost / RentableArea,
+        digits = 2
+      ),
+      .default = 0
+    )
   ) |>
   # PrimaryLocation edge cases
   # L5637 - somehow has a PrimaryLocation defined, seems its pulling via an option1 clause in a PreActive agreement
@@ -349,7 +357,6 @@ PRR2015 <- BudgetAssetAr |>
       BuildingId,
       PropertyId,
       LeaseId,
-      ls_id_key,
       ls_bl_id,
       ls_pr_id,
       ls_lease_sublease,
@@ -364,7 +371,14 @@ PRR2015 <- BudgetAssetAr |>
       ls_status
     )
   ) |>
-  arrange(ContractName, desc(FiscalYear))
+  mutate(
+    across(
+      where(is.numeric),
+      ~ round(.x, digits = 2)
+    )
+  ) |>
+  arrange(ContractName, desc(FiscalYear)) |>
+  mutate(RefreshDate = as.POSIXct(Sys.time()), .before = everything())
 
 # L5637
 # L5913
@@ -376,7 +390,7 @@ PRR2015 <- BudgetAssetAr |>
 #   "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
 # ))
 ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
-  "input/PortfolioPerformance/2026-08-12_PRR2015_2526_2627.xlsx"
+  "input/PortfolioPerformance/2026-08-26_PRR2015_2526_2627.xlsx"
 ))
 
 compare <- ExtractPRR2015 |>
@@ -424,6 +438,33 @@ openxlsx2::write_xlsx(
 #   outcome,
 #   here::here("output/PRR2015/setdiff_2526_2026_06_29_PRR2015.xlsx")
 # )
+
+# Review with old PORT_PRR2015 script ####
+myPRR2015 <- PRR2015 |>
+  filter(FiscalYear == "2627")
+
+compare <- myPRR2015 |>
+  select(
+    ContractName,
+    PrimaryLocation,
+    City,
+    RentableArea,
+    ParkingStalls,
+    BaseRent
+  )
+
+compare_to <- PRR2015Extract |>
+  select(
+    ContractName,
+    PrimaryLocation = Identifier,
+    City,
+    RentableArea,
+    ParkingStalls,
+    BaseRent
+  )
+
+outcome <- setdiff(compare, compare_to)
+
 # Column mapping ####
 # Contract Name - Calculated column
 # Primary Location - Calculated column
