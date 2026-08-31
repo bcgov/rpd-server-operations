@@ -73,7 +73,7 @@ CostData AS
         cost_tran_recur_parking_stalls,
         CASE
 	        WHEN cost_tran_recur_date_amort_start IS NOT NULL 
-		    THEN DATEDIFF(month, cost_tran_recur_date_amort_start, cost_tran_recur_date_amort_end) 
+		    THEN DATEDIFF(month, cost_tran_recur_date_amort_start, cost_tran_recur_date_amort_end) + 1
 	        ELSE 12
 	    END AS termMonths
 
@@ -84,7 +84,7 @@ CalcCosts AS
     (SELECT
         cost_tran_recur_ls_id,
         FY,
-        AVG(
+        MAX(
             CASE
                 WHEN cost_tran_recur_cost_cat_id <> 'PARKING'
                 THEN NULLIF(cost_tran_recur_area,0)
@@ -241,6 +241,8 @@ FROM AgreementMaster am
 LEFT JOIN CalcCosts cc ON am.ls_ls_id = cc.cost_tran_recur_ls_id
 LEFT JOIN TotalParking tp ON am.ls_ls_id = tp.rmpct_ls_id
 
---WHERE ls_ls_id = 'A5125290-L5728'
+--WHERE FY IN ('2526', '2627')
+--AND ls_ls_id = 'A5077167-L5531'
 
-ORDER BY AgreementNum
+ORDER BY AgreementNum,
+         FY
