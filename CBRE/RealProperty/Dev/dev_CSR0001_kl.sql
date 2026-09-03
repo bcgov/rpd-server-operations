@@ -80,20 +80,215 @@ CostData AS
     FROM CbreStaging.archibus_cost_tran_recur
     ),
 
+AmortCostData AS
+(SELECT
+        cost_tran_recur_ls_id,
+        cost_tran_recur_cost_cat_id,
+        cost_tran_recur_amount_income_base_payment,
+        CASE
+            WHEN cost_tran_recur_date_amort_start IS NOT NULL
+            THEN CAST(cost_tran_recur_date_amort_start AS DATE)
+            ELSE CAST(cost_tran_recur_date_start AS DATE)
+        END AS AmortStart,
+
+        CASE
+            WHEN cost_tran_recur_date_amort_end IS NOT NULL
+            THEN CAST(cost_tran_recur_date_amort_end AS DATE)
+
+            ELSE DATEADD(
+                DAY,
+                -1,
+                DATEADD(
+                    YEAR,
+                    1,
+                    CASE
+                        WHEN MONTH(cost_tran_recur_date_start) >= 4
+                        THEN DATEFROMPARTS(YEAR(cost_tran_recur_date_start),4,1)
+                        ELSE DATEFROMPARTS(YEAR(cost_tran_recur_date_start)-1,4,1)
+                    END
+                )
+            )
+        END AS AmortEnd
+
+    FROM CbreStaging.archibus_cost_tran_recur
+
+    WHERE cost_tran_recur_cost_cat_id LIKE '%AMORT%' AND cost_tran_recur_period = 'MONTH'
+),
+
+AmortSeed AS
+(
+    SELECT
+        cost_tran_recur_ls_id,
+        cost_tran_recur_cost_cat_id,
+        cost_tran_recur_amount_income_base_payment,
+        AmortStart,
+        AmortEnd,
+
+        CASE
+            WHEN MONTH(AmortStart) >= 4
+                THEN DATEFROMPARTS(YEAR(AmortStart),4,1)
+            ELSE
+                DATEFROMPARTS(YEAR(AmortStart)-1,4,1)
+        END AS FYStart
+
+    FROM AmortCostData
+),
+
+AmortizationSplit AS
+(
+    SELECT
+        cost_tran_recur_ls_id,
+        cost_tran_recur_cost_cat_id,
+        cost_tran_recur_amount_income_base_payment,
+        AmortStart,
+        AmortEnd,
+        FYStart
+
+    FROM AmortSeed
+    UNION ALL
+
+    SELECT
+        cost_tran_recur_ls_id,
+        cost_tran_recur_cost_cat_id,
+        cost_tran_recur_amount_income_base_payment,
+        AmortStart,
+        AmortEnd,
+        DATEADD(YEAR,1,FYStart)
+
+    FROM AmortizationSplit
+
+    WHERE DATEADD(YEAR,1,FYStart) <= AmortEnd
+),
+
+AmortizationFY AS
+(
+    SELECT
+        cost_tran_recur_ls_id,
+        cost_tran_recur_cost_cat_id,
+        cost_tran_recur_amount_income_base_payment,
+
+        CONCAT(
+            RIGHT(YEAR(FYStart),2),
+            RIGHT(YEAR(DATEADD(YEAR,1,FYStart)),2)
+        ) AS FY,
+
+        FYStart,
+
+        DATEADD(
+            DAY,
+            -1,
+            DATEADD(YEAR,1,FYStart)
+        ) AS FYEnd,
+
+        CASE
+            WHEN AmortStart > FYStart
+            THEN AmortStart
+            ELSE FYStart
+        END AS OverlapStart,
+
+        CASE
+            WHEN AmortEnd <
+                 DATEADD(DAY,-1,DATEADD(YEAR,1,FYStart))
+            THEN AmortEnd
+            ELSE DATEADD(DAY,-1,DATEADD(YEAR,1,FYStart))
+        END AS OverlapEnd
+
+    FROM AmortizationSplit
+),
+
+AmortTotals AS
+(
+    SELECT
+        cost_tran_recur_ls_id,
+        FY,
+
+        SUM(
+            cost_tran_recur_amount_income_base_payment *
+            (
+                DATEDIFF(
+                    MONTH,
+                    OverlapStart,
+                    OverlapEnd
+                ) + 1
+            )
+        ) AS Amort
+
+    FROM AmortizationFY
+
+    GROUP BY
+        cost_tran_recur_ls_id,
+        FY
+),
+
+BPIndData AS
+(
+    SELECT
+        cost_tran_recur_ls_id,
+
+        CONCAT(
+            RIGHT(
+                CASE
+                    WHEN MONTH(cost_tran_recur_date_start) >= 4
+                    THEN YEAR(cost_tran_recur_date_start)
+                    ELSE YEAR(cost_tran_recur_date_start)-1
+                END,
+                2
+            ),
+            RIGHT(
+                CASE
+                    WHEN MONTH(cost_tran_recur_date_start) >= 4
+                    THEN YEAR(cost_tran_recur_date_start)+1
+                    ELSE YEAR(cost_tran_recur_date_start)
+                END,
+                2
+            )
+        ) AS FY,
+
+        cost_tran_recur_cost_cat_id,
+        cost_tran_recur_resp_type,
+        cost_tran_recur_parking_stalls
+
+    FROM CbreStaging.archibus_cost_tran_recur
+),
+
+BPAggData AS
+(
+    SELECT
+        cost_tran_recur_ls_id,
+        FY,
+
+        SUM(
+            CASE
+                WHEN (
+                        cost_tran_recur_cost_cat_id LIKE '%PRKG%'
+                     OR cost_tran_recur_cost_cat_id LIKE '%PARKING%'
+                     )
+                     AND cost_tran_recur_resp_type <> 'LE'
+                THEN cost_tran_recur_parking_stalls
+                ELSE 0
+            END
+        ) AS BillableParkingStalls
+
+    FROM BPIndData
+
+    GROUP BY
+        cost_tran_recur_ls_id,
+        FY
+),
+
 CalcCosts AS
     (SELECT
         cost_tran_recur_ls_id,
         FY,
-        MAX(
+        /*MAX(
             CASE
                 WHEN cost_tran_recur_cost_cat_id <> 'PARKING'
                 THEN NULLIF(cost_tran_recur_area,0)
                 END)
-            AS BillableAreaBuilding,
-        MAX(cost_tran_recur_parking_stalls) AS BillableParkingStalls,
+            AS BillableAreaBuilding,*/
         SUM(
             CASE
-                WHEN cost_tran_recur_cost_cat_id = 'BASE RENT'
+                WHEN cost_tran_recur_cost_cat_id = 'BASE RENT' 
                     AND cost_tran_recur_period = 'MONTH'
                 THEN cost_tran_recur_amount_income_base_payment * termMonths
                 ELSE 0
@@ -133,15 +328,7 @@ CalcCosts AS
         ) AS Tax,
         SUM(
             CASE
-                WHEN cost_tran_recur_cost_cat_id = '%AMORTIZATION%'
-                    AND cost_tran_recur_period = 'MONTH'
-                THEN cost_tran_recur_amount_income_base_payment * termMonths
-                ELSE 0
-            END
-        ) AS Amort,
-        SUM(
-            CASE
-                WHEN cost_tran_recur_cost_cat_id = 'PARKING'
+                WHEN cost_tran_recur_cost_cat_id IN ('PARKING','PARKING ADMIN_BA')
                     AND cost_tran_recur_period = 'MONTH'
                 THEN cost_tran_recur_amount_income_base_payment * termMonths
                 ELSE 0
@@ -179,6 +366,7 @@ CalcCosts AS
                 ELSE 0
             END
         ) AS TaxAdmin
+
     FROM CostData
     GROUP BY
     cost_tran_recur_ls_id,
@@ -190,7 +378,7 @@ TotalParking AS
         rmpct_ls_id,
 	    COUNT(DISTINCT rmpct_rm_id) AS TotalParking
     FROM CbreStaging.archibus_rmpct
-    WHERE rmpct_rm_cat LIKE '%PRKG%'
+    WHERE rmpct_rm_cat LIKE '%PRKG%' OR rmpct_rm_cat LIKE '%PARKING%'
     GROUP BY
     rmpct_ls_id
     )
@@ -215,34 +403,40 @@ SELECT
 	am.ls_date_end AS AgrDurationEnd,
     am.ls_area_negotiated AS RentableAreaBuilding,
 	am.ls_appropriated_sqm AS AppropriatedAreaBuilding,
-    cc.BillableAreaBuilding AS BillableAreaBuilding,
+    am.ls_area_negotiated - am.ls_appropriated_sqm AS BillableAreaBuilding,
 	am.TotalRentableLand AS AreaLand,
-    ROUND(am.TotalRentableLand, 2) AS AppropriatedAreaLand,
+    ROUND(am.TotalRentableLand,2) AS AppropriatedAreaLand,
     am.TotalRentableLand - ROUND(am.TotalRentableLand, 2) AS BillableAreaLand,
     tp.TotalParking AS TotalParkingStalls,
     am.ls_appropriated_parking_stalls AS AppropriatedAreaParking,
-    cc.BillableParkingStalls AS BillableParkingStalls,
+    IIF(bp.BillableParkingStalls < 0, 0, bp.BillableParkingStalls) AS BillableParkingStalls,
     cc.BaseRent AS BaseRent,
     cc.OM AS OM,
     cc.Utilities AS Utilities,
     cc.OM + cc.Utilities AS OMTotal,
     cc.LLOM AS LLOM,
     cc.Tax AS Tax,
-    cc.Amort AS Amort,
+    ISNULL(at.Amort,0) AS Amort,    
     cc.ParkingCost AS ParkingCost,
     cc.LLAdmin as LLAdmin,
     cc.OMAdmin AS OMAdmin,
     cc.UtilAdmin AS UtilAdmin,
     cc.TaxAdmin AS TaxAdmin,
     cc.LLAdmin + cc.OMAdmin + cc.UtilAdmin + cc.TaxAdmin AS TotalAdmin,
-    cc.BaseRent + cc.OM + cc.Utilities + cc.LLOM + cc.Tax + cc.Amort + cc.ParkingCost + cc.LLAdmin + cc.OMAdmin + cc.UtilAdmin + cc.TaxAdmin AS AnnualCharge
+    cc.BaseRent + cc.OM + cc.Utilities + cc.LLOM + cc.Tax + ISNULL(at.Amort,0) + cc.ParkingCost + cc.LLAdmin + cc.OMAdmin + cc.UtilAdmin + cc.TaxAdmin AS AnnualCharge
 FROM AgreementMaster am
 
+
 LEFT JOIN CalcCosts cc ON am.ls_ls_id = cc.cost_tran_recur_ls_id
+LEFT JOIN AmortTotals at
+    ON am.ls_ls_id = at.cost_tran_recur_ls_id
+   AND cc.FY = at.FY
+LEFT JOIN BPAggData bp
+    ON am.ls_ls_id = bp.cost_tran_recur_ls_id
+   AND cc.FY = bp.FY
 LEFT JOIN TotalParking tp ON am.ls_ls_id = tp.rmpct_ls_id
 
---WHERE FY IN ('2526', '2627')
---AND ls_ls_id = 'A5077167-L5531'
+WHERE cc.FY IN ('2526', '2627')
 
 ORDER BY AgreementNum,
          FY
