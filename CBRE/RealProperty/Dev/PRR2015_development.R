@@ -390,20 +390,37 @@ PRR2015 <- BudgetAssetAr |>
 #   "input/PortfolioPerformance/2026-06-29_PRR2015_2526_2627.xlsx"
 # ))
 ExtractPRR2015 <- openxlsx2::read_xlsx(here::here(
-  "input/PortfolioPerformance/2026-08-26_PRR2015_2526_2627.xlsx"
+  "input/PortfolioPerformance/2026-09-03_PRR2015_2526_2627.xlsx"
 ))
 
+# 2526 ####
 compare <- ExtractPRR2015 |>
   select(
     ContractName = `Contract Name`,
     PrimaryLocation = `Primary Location`,
     PricingMethod = `Pricing Method`,
     City,
-    RentableArea = `2526 Year Rentable Area`
+    RentableArea = `2526 Year Rentable Area`,
+    ParkingStalls = `2526 Year Parking Stalls`,
+    BaseRent = `2526 Year Base Rent`,
+    OperationsMaintenance = `2526 Year  O&M`,
+    Utilities = `2526 Year Utilities`,
+    LLOperationsMaintenance = `2526 Year LLO&M`,
+    PropertyTax = `2526 Year Tax`
   ) |>
   mutate(
+    PricingMethod = stringr::str_to_title(PricingMethod),
     RentableArea = as.double(gsub(",", "", RentableArea)),
-    PricingMethod = stringr::str_to_title(PricingMethod)
+    ParkingStalls = as.double(ParkingStalls),
+    BaseRent = as.double(gsub("[,$]", "", BaseRent)),
+    OperationsMaintenance = as.double(gsub("[,$]", "", OperationsMaintenance)),
+    Utilities = as.double(gsub("[,$]", "", Utilities)),
+    LLOperationsMaintenance = as.double(gsub(
+      "[,$]",
+      "",
+      LLOperationsMaintenance
+    )),
+    PropertyTax = as.double(gsub("[,$]", "", PropertyTax))
   )
 
 compare_to <- PRR2015 |>
@@ -413,27 +430,64 @@ compare_to <- PRR2015 |>
     PrimaryLocation,
     PricingMethod,
     City,
-    RentableArea
+    RentableArea,
+    ParkingStalls,
+    BaseRent,
+    OperationsMaintenance,
+    Utilities,
+    LLOperationsMaintenance,
+    PropertyTax
   )
 
 outcome <- setdiff(compare, compare_to)
 
-outcome_lease <- outcome |>
-  filter(startsWith(ContractName, "L")) |>
-  filter(startsWith(PrimaryLocation, "N")) |>
-  left_join(
-    compare_to,
-    by = join_by(ContractName, PrimaryLocation, PricingMethod, City)
+# 2627 ####
+compare_2627 <- ExtractPRR2015 |>
+  select(
+    ContractName = `Contract Name`,
+    PrimaryLocation = `Primary Location`,
+    PricingMethod = `Pricing Method`,
+    City,
+    RentableArea = `2627 Year Rentable Area`,
+    ParkingStalls = `2627 Year Parking Stalls`,
+    BaseRent = `2627 Year Base Rent`,
+    OperationsMaintenance = `2627 Year O&M`,
+    Utilities = `2627 Year Utilities`,
+    LLOperationsMaintenance = `2627 Year LLO&M`,
+    PropertyTax = `2627 Year Tax`
   ) |>
   mutate(
-    CurrentRentableArea = RentableArea.x,
-    ExpectedRentableArea = RentableArea.y,
-    .keep = "unused"
+    PricingMethod = stringr::str_to_title(PricingMethod),
+    RentableArea = as.double(gsub(",", "", RentableArea)),
+    ParkingStalls = as.double(ParkingStalls),
+    BaseRent = as.double(gsub("[,$]", "", BaseRent)),
+    OperationsMaintenance = as.double(gsub("[,$]", "", OperationsMaintenance)),
+    Utilities = as.double(gsub("[,$]", "", Utilities)),
+    LLOperationsMaintenance = as.double(gsub(
+      "[,$]",
+      "",
+      LLOperationsMaintenance
+    )),
+    PropertyTax = as.double(gsub("[,$]", "", PropertyTax))
   )
-openxlsx2::write_xlsx(
-  outcome_lease,
-  here::here("output/PRR2015/setdiff_2526_PRR2015_leased_lands.xlsx")
-)
+
+compare_to_2627 <- PRR2015 |>
+  filter(FiscalYear == "2627") |>
+  select(
+    ContractName,
+    PrimaryLocation,
+    PricingMethod,
+    City,
+    RentableArea,
+    ParkingStalls,
+    BaseRent,
+    OperationsMaintenance,
+    Utilities,
+    LLOperationsMaintenance,
+    PropertyTax
+  )
+
+outcome_2627 <- setdiff(compare, compare_to)
 # openxlsx2::write_xlsx(
 #   outcome,
 #   here::here("output/PRR2015/setdiff_2526_2026_06_29_PRR2015.xlsx")

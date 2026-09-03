@@ -32,6 +32,7 @@ scripts <- c(
   "CBRE/RealProperty/FacilityDetail.R",
   "CBRE/RealProperty/SpaceAllocation.R",
   "CBRE/RealProperty/ActivityCodeReport.R",
+  "CBRE/RealProperty/PRR2015.R",
   "CBRE/RealProperty/PORT_ProjectCosts.R",
   "CBRE/RealProperty/PORT_WorkOrders.R"
 )

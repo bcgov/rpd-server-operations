@@ -72,3 +72,15 @@ CostRecur <- CostData #|>
 #   names_from = CostCategory,
 #   values_from = TotalAmount
 # ) |>
+
+test <- CostData |>
+  filter(cost_tran_recur_ls_id == "A106431-P500122")
+
+test <- CostData |>
+  filter(cost_tran_recur_ls_id == "A120236-B0049718")
+
+test2 <- RoomAllocatedData |>
+  filter(rmpct_ls_id == "A120236-B0049718")
+
+test3 <- LeasingData |>
+  filter(ls_ls_id == "A120236-B0049718")
