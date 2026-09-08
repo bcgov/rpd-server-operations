@@ -15,7 +15,7 @@ TABLE_NAME <- "ORG2000"
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 SCRIPT_NAME <- "ORG2000"
-API_NAME <- "CBRE"
+API_NAME <- "None"
 
 options(scipen = 999)
 options(digits = 7)
