@@ -31,8 +31,7 @@ con <- dbConnect(
 # call api
 raw_data <- call_cbre_api(
   CBRE_TABLE_NAME,
-  # start_time = etl_window$cbre_start_time,
-  start_time = "2020-01-01T00:00:00Z",
+  start_time = etl_window$cbre_start_time,
   end_time = etl_window$cbre_end_time
 )
 
