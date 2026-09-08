@@ -85,28 +85,40 @@ if (raw_data$status == "no_data") {
 
 clean_data <- raw_data |>
   purrr::pluck("data") |>
-  # select_if(~ !all(is.na(.))) |>
-  # select_if(~ !all(. == 0)) |>
-  # select_if(~ !all(. == '-1')) |>
-  # select_if(~ !all(. == "N/A")) |>
-  # select_if(~ !all(. == "-")) |>
+  select_if(~ !all(is.na(.))) |>
+  select_if(~ !all(. == 0)) |>
+  select_if(~ !all(. == '-1')) |>
+  select_if(~ !all(. == "N/A")) |>
+  select_if(~ !all(. == "-")) |>
   select(
-    edp_update_ts,
     dp_name,
     dp_dp_id,
     dp_dv_id,
     dp_customer_category,
     dp_customer_segment,
+    dp_customer_class,
+    dp_customer_ref,
+    dp_mvpt_category,
     dp_gl_code,
     dp_hpattern_acad,
     dp_status,
+    dp_collector,
+    dp_contact_id,
+    dp_sales_rep,
+    dp_pam,
+    dp_reconciled,
+    dp_recovery_fee,
+    dp_option1,
+    dp_option2,
     dp_tax_code,
+    dp_address_ref,
     dp_area_chargable,
     dp_area_comn,
     dp_area_comn_nocup,
     dp_area_nocup,
     dp_area_ocup,
-    dp_area_rm
+    dp_area_rm,
+    edp_update_ts
   ) |>
   mutate(
     across(
@@ -140,22 +152,34 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     TABLE_NAME,
     " (
         RefreshDate            DATETIME2(3)   NOT NULL,
-        edp_update_ts          DATETIME2(3)   NULL,
         dp_name                NVARCHAR(200)  NULL,
         dp_dp_id               NVARCHAR(50)   NOT NULL,
         dp_dv_id               NVARCHAR(10)   NULL,
         dp_customer_category   NVARCHAR(25)   NULL,
         dp_customer_segment    NVARCHAR(90)   NULL,
+        dp_customer_class      NVARCHAR(50)   NULL,
+        dp_customer_ref        NVARCHAR(20)   NULL,
+        dp_mvpt_category       NVARCHAR(90)   NULL,
         dp_gl_code             NVARCHAR(50)   NULL,
         dp_hpattern_acad       NVARCHAR(50)   NULL,
         dp_status              NVARCHAR(10)   NULL,
+        dp_collector           NVARCHAR(50)   NULL,
+        dp_contact_id          NVARCHAR(90)   NULL,
+        dp_sales_rep           NVARCHAR(90)   NULL,
+        dp_pam                 NVARCHAR(10)   NULL,
+        dp_reconciled          NVARCHAR(10)   NULL,
+        dp_recovery_fee        NVARCHAR(10)   NULL,
+        dp_option1             NVARCHAR(30)   NULL,
+        dp_option2             NVARCHAR(10)   NULL,
         dp_tax_code            NVARCHAR(20)   NULL,
+        dp_address_ref         NVARCHAR(20)   NULL,
         dp_area_chargable      DECIMAL(18,2)  NULL,
         dp_area_comn           DECIMAL(18,2)  NULL,
         dp_area_comn_nocup     DECIMAL(18,2)  NULL,
         dp_area_nocup          DECIMAL(18,2)  NULL,
         dp_area_ocup           DECIMAL(18,2)  NULL,
-        dp_area_rm             DECIMAL(18,2)  NULL
+        dp_area_rm             DECIMAL(18,2)  NULL,
+        edp_update_ts          DATETIME2(3)   NULL
       );"
   )
   dbExecute(con, sql)
@@ -184,22 +208,34 @@ tryCatch(
         TEMP_TABLE,
         " (
         RefreshDate            DATETIME2(3)   NOT NULL,
-        edp_update_ts          DATETIME2(3)   NULL,
         dp_name                NVARCHAR(200)  NULL,
         dp_dp_id               NVARCHAR(50)   NOT NULL,
         dp_dv_id               NVARCHAR(10)   NULL,
         dp_customer_category   NVARCHAR(25)   NULL,
         dp_customer_segment    NVARCHAR(90)   NULL,
+        dp_customer_class      NVARCHAR(50)   NULL,
+        dp_customer_ref        NVARCHAR(20)   NULL,
+        dp_mvpt_category       NVARCHAR(90)   NULL,
         dp_gl_code             NVARCHAR(50)   NULL,
         dp_hpattern_acad       NVARCHAR(50)   NULL,
         dp_status              NVARCHAR(10)   NULL,
+        dp_collector           NVARCHAR(50)   NULL,
+        dp_contact_id          NVARCHAR(90)   NULL,
+        dp_sales_rep           NVARCHAR(90)   NULL,
+        dp_pam                 NVARCHAR(10)   NULL,
+        dp_reconciled          NVARCHAR(10)   NULL,
+        dp_recovery_fee        NVARCHAR(10)   NULL,
+        dp_option1             NVARCHAR(30)   NULL,
+        dp_option2             NVARCHAR(10)   NULL,
         dp_tax_code            NVARCHAR(20)   NULL,
+        dp_address_ref         NVARCHAR(20)   NULL,
         dp_area_chargable      DECIMAL(18,2)  NULL,
         dp_area_comn           DECIMAL(18,2)  NULL,
         dp_area_comn_nocup     DECIMAL(18,2)  NULL,
         dp_area_nocup          DECIMAL(18,2)  NULL,
         dp_area_ocup           DECIMAL(18,2)  NULL,
-        dp_area_rm             DECIMAL(18,2)  NULL
+        dp_area_rm             DECIMAL(18,2)  NULL,
+        edp_update_ts          DATETIME2(3)   NULL
     );
   "
       )
@@ -233,22 +269,34 @@ tryCatch(
         TABLE_NAME,
         "(
         RefreshDate,
-        edp_update_ts,
         dp_name,
         dp_dp_id,
         dp_dv_id,
         dp_customer_category,
         dp_customer_segment,
+        dp_customer_class,
+        dp_customer_ref,
+        dp_mvpt_category,
         dp_gl_code,
         dp_hpattern_acad,
         dp_status,
+        dp_collector,
+        dp_contact_id,
+        dp_sales_rep,
+        dp_pam,
+        dp_reconciled,
+        dp_recovery_fee,
+        dp_option1,
+        dp_option2,
         dp_tax_code,
+        dp_address_ref,
         dp_area_chargable,
         dp_area_comn,
         dp_area_comn_nocup,
         dp_area_nocup,
         dp_area_ocup,
-        dp_area_rm
+        dp_area_rm,
+        edp_update_ts
       )
        SELECT * FROM ",
         TEMP_TABLE,
