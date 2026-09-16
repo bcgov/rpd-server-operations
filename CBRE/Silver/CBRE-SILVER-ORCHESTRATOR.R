@@ -50,11 +50,13 @@ scripts <- c(
   "CBRE/Silver/Scripts/dim_property.R",
   "CBRE/Silver/Scripts/fact_budget.R",
   "CBRE/Silver/Scripts/fact_project_activity.R",
-  "CBRE/Silver/Scripts/fact_project_role.R",
-  "CBRE/Silver/Scripts/fact_project.R",
-  "CBRE/Silver/Scripts/fm_benchmark_dim_asset.R",
-  "CBRE/Silver/Scripts/fm_benchmark_property_asset_link.R",
-  "CBRE/Silver/Scripts/fm_dim_property_extended_attribute.R",
+  # skipping this section
+  # "CBRE/Silver/Scripts/fact_project_role.R",
+  # "CBRE/Silver/Scripts/fact_project.R",
+  # "CBRE/Silver/Scripts/fm_benchmark_dim_asset.R",
+  # "CBRE/Silver/Scripts/fm_benchmark_property_asset_link.R",
+  # "CBRE/Silver/Scripts/fm_dim_property_extended_attribute.R",
+  # only partially completed fm_fact_workorder
   "CBRE/Silver/Scripts/fm_fact_workorder.R",
   "CBRE/Silver/Scripts/kahua_cashflow.R",
   "CBRE/Silver/Scripts/kahua_milestones.R",

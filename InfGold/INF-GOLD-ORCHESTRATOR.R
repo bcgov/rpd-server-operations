@@ -26,16 +26,16 @@ library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
 # Start orchestrator
 orchestrator_start <- Sys.time()
-ORCHESTRATOR_NAME <- "CBRE-GOLD-ORCHESTRATOR"
+ORCHESTRATOR_NAME <- "INF-GOLD-ORCHESTRATOR"
 
 scripts <- c(
-  "CBRE/Gold/Scripts/FacilityDetail.R",
-  "CBRE/Gold/Scripts/SpaceAllocation.R",
-  "CBRE/Gold/Scripts/ActivityCodeReport.R",
-  "CBRE/Gold/Scripts/PRR2015.R",
-  "CBRE/Gold/Scripts/PORT_ProjectCosts.R",
-  "CBRE/Gold/Scripts/ORG2000.R",
-  "CBRE/Gold/Scripts/PORT_WorkOrders.R"
+  "InfGold/Scripts/FacilityDetail.R",
+  "InfGold/Scripts/SpaceAllocation.R",
+  "InfGold/Scripts/ActivityCodeReport.R",
+  "InfGold/Scripts/PRR2015.R",
+  "InfGold/Scripts/PORT_ProjectCosts.R",
+  "InfGold/Scripts/ORG2000.R",
+  "InfGold/Scripts/PORT_WorkOrders.R"
 )
 
 # -- Per-script result tracking --
