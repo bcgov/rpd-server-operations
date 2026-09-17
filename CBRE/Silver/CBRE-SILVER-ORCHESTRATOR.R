@@ -55,8 +55,7 @@ scripts <- c(
   # "CBRE/Silver/Scripts/fact_project.R",
   # "CBRE/Silver/Scripts/fm_benchmark_dim_asset.R",
   # "CBRE/Silver/Scripts/fm_benchmark_property_asset_link.R",
-  # "CBRE/Silver/Scripts/fm_dim_property_extended_attribute.R",
-  # only partially completed fm_fact_workorder
+  "CBRE/Silver/Scripts/fm_dim_property_extended_attribute.R",
   "CBRE/Silver/Scripts/fm_fact_workorder.R",
   "CBRE/Silver/Scripts/kahua_cashflow.R",
   "CBRE/Silver/Scripts/kahua_milestones.R",
@@ -70,10 +69,10 @@ scripts <- c(
   "CBRE/Silver/Scripts/pjm_fact_milestone.R",
   "CBRE/Silver/Scripts/pjm_fact_project_role.R",
   "CBRE/Silver/Scripts/pjm_fact_project_activity.R",
-  "CBRE/Silver/Scripts/pjm_fact_project.R",
+  "CBRE/Silver/Scripts/pjm_fact_project.R" #,
   # Claude Reviewed up to here
-  "CBRE/Silver/Scripts/pjm_dim_invoice.R",
-  "CBRE/Silver/Scripts/pjm_fact_invoice.R"
+  # "CBRE/Silver/Scripts/pjm_dim_invoice.R",
+  # "CBRE/Silver/Scripts/pjm_fact_invoice.R"
   #   fin_dim_general_ledger
   # fin_fact_general_ledger_actuals
   #   fin_dim_invoice_line
