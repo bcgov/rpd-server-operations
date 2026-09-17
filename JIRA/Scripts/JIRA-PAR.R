@@ -1,7 +1,7 @@
 # For server logging
 # Begin timer
 task_start <- Sys.time()
-
+# gentle update
 # Set necessary variables
 etl_status <- "PROD"
 sql_server <- if (etl_status == "PROD") {
