@@ -93,8 +93,8 @@ tryCatch(
         MYSCReq = `MYSCReq#`,
         RequestType,
         Status,
-        StatusCategory,
-        StatusCategoryChanged,
+        StatusCategory = Statuscategory,
+        StatusCategoryChanged = Statuscategorychanged,
         Assignee,
         EmployeeID,
         Reporter,
@@ -397,7 +397,14 @@ tryCatch(
     n_updated <<- n_updated
     n_inserted <<- n_inserted
 
-    cat(script_name, " ETL complete — updated:", n_updated, "| inserted:", n_inserted, "\n")
+    cat(
+      script_name,
+      " ETL complete — updated:",
+      n_updated,
+      "| inserted:",
+      n_inserted,
+      "\n"
+    )
     # rollback transaction on fail, completion of error handling
   },
   error = function(e) {
