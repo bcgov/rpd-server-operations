@@ -178,7 +178,7 @@ req <- httr2::request(base_url) |>
   httr2::req_perform()
 
 resp <- req |>
-  httr2:resp_body_json()
+  httr2::resp_body_json()
 
 httr2::resp_status(resp)
 httr2::resp_headers(resp)
