@@ -4,3 +4,6 @@ ETL_ENV = dev
 
 # On internet-restricted machines, uncomment and set path to local package repo:
 # RENV_CONFIG_REPOS_OVERRIDE=file:///E:/Projects/packagerepo
+
+# maybe try this
+# options(repos = NULL)

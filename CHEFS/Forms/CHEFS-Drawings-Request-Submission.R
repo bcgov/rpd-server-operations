@@ -47,7 +47,8 @@ req <- request(base_url) |>
   req_headers(Accept = "application/json") |>
   req_perform()
 
-resp <- req |> resp_body_json(check_type = FALSE)
+# resp <- req |> resp_body_json(check_type = FALSE)
+resp <- req |> resp_body_json()
 
 clean_data <- resp |>
   tibble::enframe() |>
