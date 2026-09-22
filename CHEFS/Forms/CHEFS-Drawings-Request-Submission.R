@@ -47,8 +47,15 @@ req <- request(base_url) |>
   req_headers(Accept = "application/json") |>
   req_perform()
 
-# resp <- req |> resp_body_json(check_type = FALSE)
-resp <- req |> resp_body_json()
+# check_type = FALSE silences this error/warning message
+resp <- req |> resp_body_json(check_type = FALSE)
+# Error in `resp_body_json()`:
+# ! Unexpected content type "text/json".
+# • Expecting type "application/json" or suffix "json".
+
+# That error is just httr2 being strict about the Content-Type header
+# the API is returning text/json instead of the standard application/json,
+# and resp_body_json() doesn't recognize that as a JSON type by default.
 
 clean_data <- resp |>
   tibble::enframe() |>
