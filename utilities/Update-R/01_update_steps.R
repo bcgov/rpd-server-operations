@@ -153,3 +153,7 @@ miniCRAN::makeRepo(
 # Once you've pushed changes to main, pull changes to server
 
 # copy repository over to E:/Projects/packagerepo
+
+# Head over to Muon, and pull the main branch changes
+
+renv::restore(library = "E:/Projects/packagerepo", repos = NULL)
