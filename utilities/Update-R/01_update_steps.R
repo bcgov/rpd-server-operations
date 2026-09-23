@@ -155,5 +155,9 @@ miniCRAN::makeRepo(
 # copy repository over to E:/Projects/packagerepo
 
 # Head over to Muon, and pull the main branch changes
+renv::status()
+renv::restore()
 
-renv::restore(library = "E:/Projects/packagerepo", repos = NULL)
+# If you encounter issues with Rstudio loading the project, its probably due to the autoloader.
+# go to the system environment variables, and switch RENV_CONFIG_AUTOLOADER_ENABLED from TRUE to FALSE
+# but also be patient, if it says "you want to proceed" then seems to freeze, just leave it over lunch. Installed fine

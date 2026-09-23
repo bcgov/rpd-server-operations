@@ -28,9 +28,6 @@
       }
     ]
   },
-  "Bioconductor": {
-    "Version": "3.23"
-  },
   "Packages": {
     "AzureAuth": {
       "Package": "AzureAuth",
