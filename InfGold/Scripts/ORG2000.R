@@ -30,7 +30,7 @@ con <- dbConnect(
 )
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreSiler.archibus_dp")
+query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dp")
 DepartmentData <- dbFetch(query, n = -1)
 dbClearResult(query)
 

@@ -45,6 +45,8 @@ options(
 
 renv::restore(repos = c(LOCAL = "file:///E:/Projects/packagerepo"), transactional = FALSE)
 
+# Try this approach next time
+# install.packages(pkgs = c("commonmark", "httpuv", "shiny", "shinyWidgets", "sourcetools", "xtable"), repos = c(LOCAL = "file:///E:/Projects/packagerepo"))
 
 # for .Rprofile
 # options(

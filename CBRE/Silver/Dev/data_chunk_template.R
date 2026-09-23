@@ -36,11 +36,23 @@ chunk_1 <- call_cbre_api(
   # start_time = "2010-06-01T00:00:00Z",
   # end_time = "2022-06-01T00:00:00Z"
   # start_time = "2022-06-01T00:00:00Z",
+  # end_time = "2023-06-01T00:00:00Z"
+  # start_time = "2023-06-01T00:00:00Z",
+  # end_time = "2024-01-01T00:00:00Z"
+  # start_time = "2024-01-01T00:00:00Z",
   # end_time = "2024-06-01T00:00:00Z"
   # start_time = "2024-06-01T00:00:00Z",
+  # end_time = "2024-10-01T00:00:00Z"
+  # start_time = "2024-10-01T00:00:00Z",
   # end_time = "2025-01-01T00:00:00Z"
-  start_time = "2025-01-01T00:00:00Z",
+  start_time = "2025-01-01T00:00:00Z", # here with fm_fact_work_order
   end_time = "2025-06-01T00:00:00Z"
+  # start_time = "2025-01-01T00:00:00Z",
+  # end_time = "2025-06-01T00:00:00Z"
+  # start_time = "2025-06-01T00:00:00Z",
+  # end_time = "2025-09-01T00:00:00Z"
+  # start_time = "2025-09-01T00:00:00Z",
+  # end_time = paste0(Sys.Date() + 1, "T00:00:00Z")
 )
 
 raw_data <- chunk_1

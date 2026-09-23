@@ -3,7 +3,7 @@ BioCpkgList <- c(
   "BiocVersion"
 )
 
-pkgList <- c("blastula", "getPass")
+pkgList <- c("shinyWidgets")
 pkgList <- c(
   "arrow",
   "assertthat",
