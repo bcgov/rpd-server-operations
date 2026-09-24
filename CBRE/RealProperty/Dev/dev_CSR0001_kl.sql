@@ -6,6 +6,12 @@ WITH AgreementMaster AS
 		ls.ls_status,
 		ls.ls_ls_parent_id,
 		ls.ls_fasb_ls_type,
+        CASE
+            WHEN ls.ls_description IS NULL THEN NULL
+            WHEN LTRIM(RTRIM(ls.ls_description)) = '' THEN NULL
+            WHEN UPPER(LTRIM(RTRIM(ls.ls_description))) = 'NULL' THEN NULL
+            ELSE LTRIM(RTRIM(ls.ls_description))
+        END AS ls_description,
 		FORMAT(ls.ls_date_end, 'yyyy-MM-dd') AS ls_date_end,
         ls.ls_area_negotiated,
 		ls.ls_appropriated_sqm,
@@ -17,7 +23,12 @@ WITH AgreementMaster AS
 		bl.linkCity,
 		BranchClient.dp_name AS bcDepName,
 		BranchClient.Client AS bcClient,
-		pr.TotalRentableLand
+        CASE
+            WHEN BranchClient.dp_pam = 1 THEN 'YES'
+            WHEN BranchClient.dp_pam = 0 THEN 'NO'
+            ELSE NULL
+        END AS PAM,
+        pr.TotalRentableLand
 	FROM CbreStaging.archibus_ls ls
 
 	LEFT JOIN CbreStaging.archibus_bl bl
@@ -26,14 +37,16 @@ WITH AgreementMaster AS
 	LEFT JOIN (
 		SELECT
 			dp.dp_dp_id,
-			dp.dp_name,
+			dp.dp_name,  
+            dp.dp_pam,
 			MAX(dv.dv_name) AS Client
 		FROM CbreStaging.archibus_dp dp
 		LEFT JOIN CbreStaging.archibus_dv dv
 			ON dp.dp_dv_id = dv.dv_dv_id
 		GROUP BY
 			dp.dp_dp_id,
-			dp.dp_name
+			dp.dp_name,
+            dp.dp_pam
 			) BranchClient ON ls.ls_tn_name = BranchClient.dp_dp_id
 
 	LEFT JOIN CbreStaging.archibus_property pr
@@ -379,8 +392,9 @@ TotalParking AS
     )
 
 SELECT 
-    am.bcClient AS Client,
-    am.bcDepName AS Branch,
+    am.bcClient AS Division,
+    am.bcDepName AS Tenant,
+    am.PAM AS ParticipatesInPAM,
     am.linkCity AS City,
     CASE
         WHEN am.ls_bl_id IS NOT NULL 
@@ -392,6 +406,7 @@ SELECT
     am.ls_ls_id AS AgreementNum,
     am.ls_status AS AgrStatus,
     cc.FY AS FY,
+    am.ls_description AS 'Description',
 	am.ls_fasb_ls_type AS AgreementType,
 	am.ParentStart AS LeaseStart,
 	am.ParentEnd AS LeaseExpiry,
@@ -431,7 +446,7 @@ LEFT JOIN BPAggData bp
    AND cc.FY = bp.FY
 LEFT JOIN TotalParking tp ON am.ls_ls_id = tp.rmpct_ls_id
 
-WHERE cc.FY IN ('2526', '2627')
+--WHERE cc.FY IN ('2526', '2627')
 
 ORDER BY AgreementNum,
          FY
