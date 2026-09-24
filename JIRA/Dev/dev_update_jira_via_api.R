@@ -45,7 +45,11 @@ token_test <- base64encode(charToRaw(paste0(email, ":", api_key_test)))
 token_test_string <- paste("Basic", token_test)
 
 # Encode my test token scoped
-token_test_scoped <- base64encode(charToRaw(paste0(email, ":", my_api_key_scopes)))
+token_test_scoped <- base64encode(charToRaw(paste0(
+  email,
+  ":",
+  my_api_key_scopes
+)))
 token_test_scoped_string <- paste("Basic", token_test_scoped)
 
 # Encode my test token scoped
@@ -60,6 +64,7 @@ query_url <- paste0(base_url, "search/jql")
 expand_opts = c("names", "fields")
 max_results = 100
 start_time <- etl_window$jira_start_time
+nextPageToken = NULL
 
 req <- request(query_url) |>
   req_headers_redacted(Authorization = token_string) |> # redacted by httr2 in printed output
@@ -79,15 +84,103 @@ req <- request(query_url) |>
     ),
     expand = expand_opts,
     maxResults = max_results,
-    fields = "*all",
     nextPageToken = nextPageToken,
+    fields = "*all",
     .multi = "comma"
   ) |>
   apply_proxy_if_needed() |>
-  req_perform(req)
+  req_perform()
 
 resp <- req |> resp_body_json()
 
+names <- resp |>
+  purrr::pluck("names") |>
+  tibble::enframe() |>
+  safe_hoist(value, Value = 1L) |>
+  group_by(Value) |>
+  mutate(row_name = row_number(), row_count = n()) |>
+  mutate(
+    Value = case_when(
+      row_count > 1 ~ paste0(Value, "-", row_name),
+      .default = Value
+    )
+  ) |>
+  select(-c(row_name, row_count)) |>
+  tibble::deframe()
+
+Issues <- resp |>
+  purrr::pluck("issues") |>
+  tibble::enframe() |>
+  tidyr::unnest_wider(value) |>
+  tidyr::unnest_wider(fields) |>
+  plyr::rename(names) |>
+  rename_with(~ gsub(" ", "", .)) |>
+  select(
+    IssueKey = key,
+    ProjectEffectiveDate,
+    Created,
+    Resolved,
+    Updated,
+    RequestType,
+    Status,
+    StatusCategory = Statuscategory,
+    StatusCategoryChanged = Statuscategorychanged,
+    Assignee,
+    Reporter,
+    Resolution,
+    Summary
+  ) |>
+  safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
+  safe_hoist(Status, Status = "name", .remove = FALSE) |>
+  safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
+  safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+  safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+  safe_hoist(
+    RequestType,
+    RequestType = list("requestType", "name"),
+    .remove = FALSE
+  ) |>
+  mutate(
+    ProjectEffectiveDate = as.Date(
+      ProjectEffectiveDate,
+      format = "%Y-%m-%d"
+    )
+  ) |>
+  mutate(
+    Created = as.POSIXct(
+      Created,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    Resolved = as.POSIXct(
+      Resolved,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    Updated = as.POSIXct(
+      Updated,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    StatusCategoryChanged = as.POSIXct(
+      StatusCategoryChanged,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    TimeToCompletion = case_when(
+      is.na(Resolved) ~ NA,
+      !is.na(Resolved) ~
+        ((as.duration(interval(Created, Resolved))@.Data) / 60) / 60
+    )
+  )
 # Current System uses ####
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
 # Has permissions
