@@ -1,0 +1,9 @@
+-NoProfile -ExecutionPolicy Bypass -File "E:\Projects\rpd-server-operations\Powershell\GAL-LDAPS-Powershell.ps1"
+
+To run in powershell independently:
+
+Change powershell window directory
+
+cd C:\Projects\rpd-server-operations
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Projects\rpd-server-operations\Powershell\GAL-LDAPS-Powershell.ps1"

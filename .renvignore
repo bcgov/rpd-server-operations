@@ -1,0 +1,28 @@
+# First mirror .gitignore
+# R specific files, while keeping example files available
+.Renviron
+!.Renviron.example
+
+.Rprofile
+!.Rprofile.example
+
+.Rproj.user/
+
+# Remove tracking files for SSMS studio vs plugin
+.vs/
+
+# Prevent input and output data files going into public
+/input/
+/output/
+
+# Prevent any logging files from being tracked
+/logs/
+
+# Add extra locations to remove from dependency searching
+# ?renv::dependencies()
+
+# Remove development areas
+*/Dev/
+
+# Remove CBRE scripts as libraries are in orchestrators
+/CBRE/Silver/Scripts/
