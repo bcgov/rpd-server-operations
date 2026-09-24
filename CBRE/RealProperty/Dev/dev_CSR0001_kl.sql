@@ -9,6 +9,7 @@ WITH AgreementMaster AS
 		FORMAT(ls.ls_date_end, 'yyyy-MM-dd') AS ls_date_end,
         ls.ls_area_negotiated,
 		ls.ls_appropriated_sqm,
+        ls.ls_appropriated_hectares,
 		ls.ls_appropriated_parking_stalls,
 		FORMAT(parent.ls_date_start, 'yyyy-MM-dd') AS ParentStart,
 		FORMAT(parent.ls_date_end, 'yyyy-MM-dd') AS ParentEnd,
@@ -280,12 +281,6 @@ CalcCosts AS
     (SELECT
         cost_tran_recur_ls_id,
         FY,
-        /*MAX(
-            CASE
-                WHEN cost_tran_recur_cost_cat_id <> 'PARKING'
-                THEN NULLIF(cost_tran_recur_area,0)
-                END)
-            AS BillableAreaBuilding,*/
         SUM(
             CASE
                 WHEN cost_tran_recur_cost_cat_id = 'BASE RENT' 
@@ -405,8 +400,8 @@ SELECT
 	am.ls_appropriated_sqm AS AppropriatedAreaBuilding,
     am.ls_area_negotiated - am.ls_appropriated_sqm AS BillableAreaBuilding,
 	am.TotalRentableLand AS AreaLand,
-    ROUND(am.TotalRentableLand,2) AS AppropriatedAreaLand,
-    am.TotalRentableLand - ROUND(am.TotalRentableLand, 2) AS BillableAreaLand,
+    am.ls_appropriated_hectares AS AppropriatedAreaLand,
+    am.TotalRentableLand - am.ls_appropriated_hectares AS BillableAreaLand,
     tp.TotalParking AS TotalParkingStalls,
     am.ls_appropriated_parking_stalls AS AppropriatedAreaParking,
     IIF(bp.BillableParkingStalls < 0, 0, bp.BillableParkingStalls) AS BillableParkingStalls,
