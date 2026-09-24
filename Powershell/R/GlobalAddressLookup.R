@@ -4,7 +4,7 @@ task_start <- Sys.time()
 
 # Load helper functions
 source(here::here("renv/activate.R"))
-source(here::here("utilities/R/utilities.R"))
+source(here::here("utilities/utilities.R"))
 
 # Load libraries
 library(base64enc, quietly = TRUE, warn.conflicts = FALSE)

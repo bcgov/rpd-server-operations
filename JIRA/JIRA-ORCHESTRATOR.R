@@ -1,0 +1,155 @@
+# orchestrator_staging.R
+# Sourced by Task Scheduler via Rscript.exe
+# Runs all Jira board scripts, continues on error
+source(here::here("renv/activate.R"))
+
+# Load helper functions
+source(here::here("utilities/utilities.R"))
+
+# Load necessary packages
+library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
+library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
+library(httr2, quietly = TRUE, warn.conflicts = FALSE)
+library(jsonlite, quietly = TRUE, warn.conflicts = FALSE)
+library(lubridate, quietly = TRUE, warn.conflicts = FALSE)
+library(purrr, quietly = TRUE, warn.conflicts = FALSE)
+library(tibble, quietly = TRUE, warn.conflicts = FALSE)
+library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
+
+library(odbc, quietly = TRUE, warn.conflicts = FALSE)
+library(DBI, quietly = TRUE, warn.conflicts = FALSE)
+
+# Setup orchestrator variables
+orchestrator_start <- Sys.time()
+orchestrator_name <- "JIRA-ORCHESTRATOR"
+
+etl_window <- get_etl_window()
+
+email <- "rpd.spbooking@gov.bc.ca"
+api_key <- keyring::key_get(
+  service = "JIRA_API",
+  username = email,
+  keyring = NULL
+)
+
+# Encode token
+token <- base64encode(charToRaw(paste0(email, ":", api_key)))
+token_string <- paste("Basic", token)
+
+base_url <- "https://citz-inf.atlassian.net/rest/api/3/"
+
+req <- request(base_url) |>
+  req_headers(
+    Authorization = token_string
+  ) |>
+  req_url_path_append("dashboard") |>
+  apply_proxy_if_needed() |>
+  req_perform()
+
+# Catch changes in Jira URL
+if (base_url != stringr::str_extract(req$url, ".+3/")) {
+  desc <- "Query URL does not match returned URL"
+
+  log_daily_etl_run(
+    api_name = orchestrator_name,
+    script_name = orchestrator_name,
+    status = "WARNING",
+    message = substr(desc, 1, 500)
+  )
+
+  base_url <- stringr::str_extract(req$url, ".+3/")
+}
+
+query_url <- paste0(base_url, "search/jql")
+
+scripts <- c(
+  "JIRA/Scripts/JIRA-CSR.R",
+  "JIRA/Scripts/JIRA-GPOPR.R",
+  "JIRA/Scripts/JIRA-PAR.R",
+  "JIRA/Scripts/JIRA-PSO.R",
+  "JIRA/Scripts/JIRA-RBAS.R",
+  "JIRA/Scripts/JIRA-RPR.R",
+  "JIRA/Scripts/JIRA-SBP.R",
+  "JIRA/Scripts/JIRA-SBPSB.R"
+)
+
+# -- Per-script result tracking --
+results <- vector("list", length(scripts))
+names(results) <- scripts
+
+for (script in scripts) {
+  script_start <- Sys.time()
+  script_path <- here::here(script)
+
+  tryCatch(
+    {
+      source(script_path)
+      results[[script]] <- list(
+        status = "SUCCESS",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        ))
+      )
+    },
+    no_data_condition = function(e) {
+      results[[script]] <<- list(
+        status = "NO_DATA",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        )),
+        message = conditionMessage(e)
+      )
+    },
+    error = function(e) {
+      results[[script]] <<- list(
+        status = "ERROR",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        )),
+        message = conditionMessage(e)
+      )
+    }
+  )
+}
+
+# -- Rollup --
+orchestrator_duration <- as.numeric(
+  difftime(Sys.time(), orchestrator_start, units = "secs")
+)
+
+n_success <- sum(sapply(results, \(r) r$status %in% c("SUCCESS", "NO_DATA")))
+n_error <- sum(sapply(results, \(r) r$status == "ERROR"))
+overall_status <- if (n_error == 0) "SUCCESS" else "PARTIAL_FAILURE"
+
+failed_scripts <- names(Filter(\(r) r$status == "ERROR", results))
+rollup_message <- if (n_error == 0) {
+  paste0(
+    n_success,
+    " script(s) succeeded in ",
+    round(orchestrator_duration, 1),
+    "s"
+  )
+} else {
+  paste0(
+    n_success,
+    " succeeded, ",
+    n_error,
+    " failed in ",
+    round(orchestrator_duration, 1),
+    "s. Failed: ",
+    paste(failed_scripts, collapse = "; ")
+  )
+}
+
+log_daily_etl_run(
+  api_name = orchestrator_name,
+  script_name = orchestrator_name,
+  status = overall_status,
+  message = substr(rollup_message, 1, 500)
+)

@@ -4,7 +4,7 @@
 source(here::here("renv/activate.R"))
 
 # Load helper functions
-source(here::here("utilities/R/utilities.R"))
+source(here::here("utilities/utilities.R"))
 
 # Set options
 options(scipen = 999)
