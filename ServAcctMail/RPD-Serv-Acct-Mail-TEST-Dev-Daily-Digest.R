@@ -11,7 +11,9 @@ library(lubridate)
 library(readr)
 library(AzureAuth)
 
-# --- 1. Load & classify log rows ---
+recipient <- c("david.rattray@gov.bc.ca", "kara.locke@gov.bc.ca")
+
+# 1. Load & classify log rows ####
 
 log_file <- here::here("logs", paste0("daily_etl_log_", Sys.Date(), ".csv"))
 log_raw <- read_csv(log_file, show_col_types = FALSE) |>
@@ -32,7 +34,7 @@ script_rows <- log_raw |>
   ) |>
   arrange(run_timestamp)
 
-# --- 2. Summary stats ---
+# 2. Summary stats ####
 
 run_date <- format(Sys.Date(), "%B %d, %Y")
 host <- unique(log_raw$host) |> paste(collapse = ", ")
@@ -53,7 +55,7 @@ overall_text <- if (!any_failure) {
   glue("{n_orch_fail + n_scripts_fail} failure(s) detected — review below.")
 }
 
-# --- 3. HTML helpers ---
+# 3. HTML helpers ####
 
 status_badge <- function(s) {
   colour <- switch(
@@ -95,7 +97,7 @@ stat_card <- function(value, label, colour) {
   )
 }
 
-# --- 4. Orchestrator summary table ---
+# 4. Orchestrator summary table ####
 
 orch_table_rows <- apply(orch_rows, 1, \(r) {
   dur_raw <- suppressWarnings(as.numeric(r["duration"]))
@@ -131,7 +133,7 @@ orch_table <- glue(
 '
 )
 
-# --- 5. Individual script detail table ---
+# 5. Individual script detail table ####
 
 script_table_rows <- apply(script_rows, 1, \(r) {
   dur_raw <- suppressWarnings(as.numeric(r["duration"]))
@@ -173,7 +175,7 @@ script_table <- glue(
 '
 )
 
-# --- 6. Assemble full HTML body ---
+# 6. Assemble full HTML body ####
 
 email_html <- glue(
   '
@@ -237,14 +239,16 @@ email_html <- glue(
 '
 )
 
-# --- 7. Send via Graph API ---
+# 7. Send via Graph API ####
 
 appId <- "267fc93d-3fa0-4942-88f9-02f4f7fee693"
 tenantId <- "6fdb5200-3d0d-4a8a-b036-d3685e359adc"
 mailbox <- "RPD.SpBooking@gov.bc.ca"
-recipient <- "david.rattray@gov.bc.ca"
-
 credential <- keyring::key_get(service = "GraphAPI", username = appId)
+
+to_recipients <- lapply(recipient, \(addr) {
+  list(emailAddress = list(address = addr))
+})
 
 # Set proxy environment variable
 Sys.setenv(HTTPS_PROXY = "142.34.229.249:8080")
@@ -273,15 +277,13 @@ request(glue("https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail")) |>
     message = list(
       subject = subject,
       body = list(contentType = "HTML", content = email_html),
-      toRecipients = list(
-        list(emailAddress = list(address = recipient))
-      )
+      toRecipients = to_recipients
     ),
     saveToSentItems = FALSE
   )) |>
   req_perform()
 
-# --- 8. Local preview (dev only) ---
+# 8. Local preview (dev only) ####
 # preview_path <- here::here("output", "digest_preview.html")
 # writeLines(email_html, preview_path)
 # browseURL(preview_path)
