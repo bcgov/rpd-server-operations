@@ -16,8 +16,8 @@ get_tracked_cols <- function(df) {
 #' @param tracked_cols character vector of columns to include in the hash;
 #'   defaults to get_tracked_cols(df) if not supplied
 #' @return df with a new row_hash (CHAR(32) / MD5 hex) column appended
-add_row_hash <- function(df, tracked_cols = get_tracked_cols(df)) {
-  stopifnot("bl_bl_id_key" %in% names(df))
+add_row_hash <- function(df, primary_key, tracked_cols = get_tracked_cols(df)) {
+  stopifnot(primary_key %in% names(df))
   df |>
     rowwise() |>
     mutate(

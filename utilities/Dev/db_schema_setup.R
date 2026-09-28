@@ -14,6 +14,6 @@ con <- dbConnect(
   Trusted_Connection = "Yes"
 )
 
-dbExecute(con, "CREATE SCHEMA InfBronze")
+dbExecute(con, "CREATE SCHEMA ServerLogs")
 dbExecute(con, "CREATE SCHEMA InfSilver")
 dbExecute(con, "CREATE SCHEMA InfGold")

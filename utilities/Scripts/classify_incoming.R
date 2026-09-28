@@ -25,7 +25,7 @@ classify_incoming <- function(incoming, con, schema, table, primary_key) {
     )
   )
 
-  test <- incoming |>
+  incoming |>
     left_join(
       last_known |> rename(row_hash_prev = row_hash),
       by = primary_key
