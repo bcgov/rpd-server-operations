@@ -20,15 +20,17 @@ apply_hash_gate <- function(
 ) {
   # --- Bronze: only NEW / CHANGED rows get a full new version written
   to_write <- classified |>
-    filter(action %in% c("NEW", "CHANGED"))
+    filter(action %in% c("NEW", "CHANGED")) |>
+    select(-c(action))
 
   if (nrow(to_write) > 0) {
     DBI::dbAppendTable(con, bronze_table, to_write)
+    cat("ETL complete — written:", nrow(to_write), " rows.", "\n")
   }
 
   possible_actions <- c("NEW", "UNCHANGED", "CHANGED")
 
-  counts <- count(classified_data, action) |>
+  counts <- count(classified, action) |>
     tidyr::pivot_wider(names_from = action, values_from = n, values_fill = 0) |>
     ensure_columns(possible_actions, value = 0) |>
     rename_with(.fn = stringr::str_to_title, .cols = everything()) |>
@@ -44,6 +46,17 @@ apply_hash_gate <- function(
     )
 
   DBI::dbAppendTable(con, audit_table, log_row)
+
+  cat(
+    "ETL complete — Audit Row Written:",
+    log_row$New,
+    " new, ",
+    log_row$Changed,
+    " changed, and ",
+    log_row$Unchanged,
+    " unchanged.",
+    "\n"
+  )
 
   # invisible(list(
   #   batch_id = batch_id,

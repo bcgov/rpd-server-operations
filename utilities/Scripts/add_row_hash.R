@@ -1,9 +1,10 @@
 #' Get the set of columns to include in the row hash for a given data frame
 #'
 #' @param df A data frame of incoming Bronze-bound records
+#' @param excluded A character vector of excluded column names
 #' @return character vector of column names to hash, in stable (sorted) order
-get_tracked_cols <- function(df) {
-  sort(setdiff(names(df), EXCLUDED_FROM_HASH))
+get_tracked_cols <- function(df, excluded) {
+  sort(setdiff(names(df), excluded))
 }
 
 
@@ -14,9 +15,9 @@ get_tracked_cols <- function(df) {
 #'
 #' @param df Data frame with a bl_bl_id_key column plus business columns
 #' @param tracked_cols character vector of columns to include in the hash;
-#'   defaults to get_tracked_cols(df) if not supplied
+#' @param primary_key records the primary key column name for reusability across datasets
 #' @return df with a new row_hash (CHAR(32) / MD5 hex) column appended
-add_row_hash <- function(df, primary_key, tracked_cols = get_tracked_cols(df)) {
+add_row_hash <- function(df, primary_key, tracked_cols) {
   stopifnot(primary_key %in% names(df))
   df |>
     rowwise() |>
