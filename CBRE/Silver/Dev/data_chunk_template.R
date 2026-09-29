@@ -19,7 +19,10 @@ source(here::here("utilities/utilities.R"))
 # archibus_budget_asset
 # archibus_budget_asset_ar
 
-CBRE_TABLE_NAME <- "com_dim_property_vw"
+"archibus_op"
+"archibus_ls_comm"
+"archibus_commtype"
+CBRE_TABLE_NAME <- "archibus_ls_comm"
 
 # Query API
 chunk_1 <- call_cbre_api(
@@ -28,7 +31,8 @@ chunk_1 <- call_cbre_api(
   end_time = paste0(Sys.Date() + 1, "T00:00:00Z")
 )
 
-raw_data <- chunk_1
+raw_data <- chunk_1 |>
+  purrr::pluck("data")
 
 # Multi chunk section ###################
 chunk_1 <- call_cbre_api(
