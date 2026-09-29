@@ -282,8 +282,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
 # Regular run ####
-# etl_error <- NULL
-# log_row <- NULL
+etl_error <- NULL
+log_row <- NULL
 
 # tryCatch(
 #   {
