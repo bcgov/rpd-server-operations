@@ -58,14 +58,7 @@ apply_hash_gate <- function(
     "\n"
   )
 
-  # invisible(list(
-  #   batch_id = batch_id,
-  #   load_ts = load_ts,
-  #   new = counts$NEW %||% 0,
-  #   changed = counts$CHANGED %||% 0,
-  #   unchanged = counts$UNCHANGED %||% 0,
-  #   total = nrow(classified)
-  # ))
+  return(
+    log_row
+  )
 }
-
-# `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x

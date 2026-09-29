@@ -282,6 +282,11 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
 # Regular run ####
+# etl_error <- NULL
+# log_row <- NULL
+
+# tryCatch(
+#   {
 data <- raw_data |>
   purrr::pluck("data")
 
@@ -302,7 +307,52 @@ classified_data <- classify_incoming(
   PRIMARY_KEY
 )
 
-apply_hash_gate(
+# missing <- find_missing_from_pull(
+#   hashed,
+#   con,
+#   SCHEMA_NAME,
+#   TABLE_NAME,
+#   PRIMARY_KEY,
+#   status_col = "bl_status"
+# )
+
+# missing <- find_missing_from_pull(
+#   hashed,
+#   con,
+#   SCHEMA_NAME,
+#   TABLE_NAME,
+#   PRIMARY_KEY,
+#   status_col = "bl_status"
+# )
+
+#     already_tombstoned <- DBI::dbGetQuery(
+#       con,
+#       glue::glue_sql(
+#         "
+#   SELECT primary_key_value FROM {`AUDIT_SCHEMA`}.key_tombstones
+#   WHERE source_table = {TABLE_NAME}
+# ",
+#         .con = con
+#       )
+#     ) |>
+#       pull(primary_key_value)
+#
+#     newly_missing <- missing_active |>
+#       filter(!(.data[[PRIMARY_KEY]] %in% already_tombstoned))
+#
+#     if (nrow(newly_missing) > 0) {
+#       tombstone_rows <- newly_missing |>
+#         transmute(
+#           source_table = TABLE_NAME,
+#           primary_key_value = as.character(.data[[PRIMARY_KEY]]),
+#           last_status = bl_status,
+#           detected_missing_ts = as.POSIXct(task_start, tz = "UTC"),
+#           batch_id = BATCH_ID
+#         )
+#       DBI::dbAppendTable(con, TOMBSTONE_TABLE, tombstone_rows)
+#     }
+
+log_row <<- apply_hash_gate(
   con,
   classified_data,
   PRIMARY_KEY,
@@ -313,7 +363,11 @@ apply_hash_gate(
   BATCH_ID,
   task_start
 )
-
+#   },
+#   error = function(e) {
+#     etl_error <<- e
+#   }
+# )
 
 task_end <- Sys.time()
 task_duration <- interval(task_start, task_end) / dseconds()
@@ -325,8 +379,8 @@ if (is.null(etl_error)) {
     table_name = TABLE_NAME,
     duration = task_duration,
     status = "SUCCESS",
-    n_inserted = n_inserted,
-    n_updated = NA,
+    n_inserted = log_row$New,
+    n_updated = log_row$Changed,
     n_deleted = NA,
     message = "ETL completed successfully"
   )
