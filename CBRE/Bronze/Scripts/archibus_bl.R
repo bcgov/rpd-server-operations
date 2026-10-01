@@ -282,8 +282,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
 # Regular run ####
-# etl_error <- NULL
-# log_row <- NULL
+etl_error <- NULL
+log_row <- NULL
 
 # tryCatch(
 #   {
@@ -307,23 +307,14 @@ classified_data <- classify_incoming(
   PRIMARY_KEY
 )
 
-# missing <- find_missing_from_pull(
-#   hashed,
-#   con,
-#   SCHEMA_NAME,
-#   TABLE_NAME,
-#   PRIMARY_KEY,
-#   status_col = "bl_status"
-# )
-
-# missing <- find_missing_from_pull(
-#   hashed,
-#   con,
-#   SCHEMA_NAME,
-#   TABLE_NAME,
-#   PRIMARY_KEY,
-#   status_col = "bl_status"
-# )
+missing <- find_missing_from_pull(
+  hashed,
+  con,
+  SCHEMA_NAME,
+  TABLE_NAME,
+  PRIMARY_KEY,
+  status_col = "bl_status"
+)
 
 #     already_tombstoned <- DBI::dbGetQuery(
 #       con,
@@ -363,14 +354,30 @@ log_row <<- apply_hash_gate(
   BATCH_ID,
   task_start
 )
+
+task_end <- Sys.time()
+task_duration <- interval(task_start, task_end) / dseconds()
+
+audit_row <- log_row |>
+  mutate(Missing = nrow(missing), Duration = round(task_duration, digits = 2))
+
+DBI::dbAppendTable(con, audit_table, audit_row)
+
+cat(
+  "ETL complete — Audit Row Written:",
+  log_row$New,
+  " new, ",
+  log_row$Changed,
+  " changed, and ",
+  log_row$Unchanged,
+  " unchanged.",
+  "\n"
+)
 #   },
 #   error = function(e) {
 #     etl_error <<- e
 #   }
 # )
-
-task_end <- Sys.time()
-task_duration <- interval(task_start, task_end) / dseconds()
 
 if (is.null(etl_error)) {
   log_daily_etl_run(
@@ -379,8 +386,8 @@ if (is.null(etl_error)) {
     table_name = TABLE_NAME,
     duration = task_duration,
     status = "SUCCESS",
-    n_inserted = log_row$New,
-    n_updated = log_row$Changed,
+    n_inserted = audit_row$New,
+    n_updated = audit_row$Changed,
     n_deleted = NA,
     message = "ETL completed successfully"
   )

@@ -45,19 +45,6 @@ apply_hash_gate <- function(
       .before = everything()
     )
 
-  DBI::dbAppendTable(con, audit_table, log_row)
-
-  cat(
-    "ETL complete — Audit Row Written:",
-    log_row$New,
-    " new, ",
-    log_row$Changed,
-    " changed, and ",
-    log_row$Unchanged,
-    " unchanged.",
-    "\n"
-  )
-
   return(
     log_row
   )
