@@ -104,9 +104,12 @@ rollup_message <- if (n_error == 0) {
   )
 }
 
-log_daily_etl_run(
-  api_name = ORCHESTRATOR_NAME,
-  script_name = ORCHESTRATOR_NAME,
+log_daily_etl_script(
+  orchestrator_name = ORCHESTRATOR_NAME,
   status = overall_status,
+  duration = orchestrator_duration,
+  n_success = n_success,
+  n_error = n_error,
+  failed_scripts = paste(failed_scripts, collapse = "; "),
   message = substr(rollup_message, 1, 500)
 )

@@ -2,7 +2,9 @@
 #'
 #' @param incoming Hashed incoming data (must have bl_bl_id_key, row_hash)
 #' @param con DBI connection
-#' @param bronze_table Name of the Bronze table (schema-qualified if needed)
+#' @param schema Name of the schema for the Bronze table
+#' @param table Name of the Bronze table (schema-qualified if needed)
+#' @param primary_key Name of the primary key column for partitioning
 #' @return incoming with an `action` column added: "NEW" | "CHANGED" | "UNCHANGED"
 classify_incoming <- function(incoming, con, schema, table, primary_key) {
   stopifnot(all(c(primary_key, "row_hash") %in% names(incoming)))

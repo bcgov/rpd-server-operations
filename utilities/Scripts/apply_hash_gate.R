@@ -3,7 +3,6 @@
 #' @param classified Output of classify_incoming()
 #' @param con DBI connection
 #' @param bronze_table Bronze table name
-#' @param audit_table Audit log table name
 #' @param source_table_name Label for this source, stored in the audit log
 #' @param batch_id Identifier for this run (e.g. from your existing batch/run ID scheme)
 #' @return invisible list with counts, for logging via log_daily_etl_run()
@@ -12,7 +11,6 @@ apply_hash_gate <- function(
   classified,
   primary_key,
   bronze_table,
-  audit_table,
   source_system,
   source_table_name,
   batch_id,
