@@ -56,6 +56,10 @@ test <- archibus_bl |>
   mutate(count = n()) |>
   filter(count > 1)
 
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_rmpct")
+archibus_rmpct <- dbFetch(query, n = -1)
+dbClearResult(query)
+
 # Update ServerLogs.InfBronze ####
 
 # add Missing column
@@ -100,3 +104,10 @@ dbExecute(conn = con, statement = sql)
 # dbExecute(conn = con, statement = sql)
 
 # Okay three rows updated and should be good to go. Just need to implement in regular script
+# sql <- glue::glue_sql(
+#   "UPDATE ServerLogs.InfBronze
+#   SET Duration = 8.8
+#   WHERE batch_id = '20261005120021';",
+#   .con = con
+# )
+# dbExecute(conn = con, statement = sql)

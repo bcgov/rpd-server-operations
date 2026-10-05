@@ -1,15 +1,23 @@
-#' Apply the hash gate: write qualifying rows to Bronze, log every row
+#' Apply the hash gate: write qualifying rows to Bronze, return a log row
 #'
-#' @param classified Output of classify_incoming()
 #' @param con DBI connection
+#' @param classified Output of `classify_incoming()`, including the `action`
+#'   column
 #' @param bronze_table Bronze table name
-#' @param source_table_name Label for this source, stored in the audit log
-#' @param batch_id Identifier for this run (e.g. from your existing batch/run ID scheme)
-#' @return invisible list with counts, for logging via log_daily_etl_run()
+#' @param source_system Label for the source system, stored in the audit log
+#' @param source_table_name Label for this source table, stored in the audit
+#'   log
+#' @param batch_id Identifier for this run (e.g. from your existing batch/run
+#'   ID scheme)
+#' @param start_time Start time of the run; converted to UTC and stored as
+#'   `load_ts` in the audit log
+#' @return A one-row tibble of New / Changed / Unchanged counts plus
+#'   `load_ts`, `batch_id`, `source_system` and `source_table`, for logging
+#'   via `log_daily_etl_run()`
+
 apply_hash_gate <- function(
   con,
   classified,
-  primary_key,
   bronze_table,
   source_system,
   source_table_name,

@@ -377,7 +377,6 @@ if (is.null(etl_error)) {
       log_row <- apply_hash_gate(
         con,
         classified_data,
-        PRIMARY_KEY,
         TARGET_TABLE,
         API_NAME,
         CBRE_TABLE_NAME,

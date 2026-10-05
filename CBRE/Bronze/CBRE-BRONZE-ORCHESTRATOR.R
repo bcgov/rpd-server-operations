@@ -27,7 +27,13 @@ ORCHESTRATOR_NAME <- "CBRE-BRONZE-ORCHESTRATOR"
 etl_window <- get_etl_window()
 
 scripts <- c(
-  "CBRE/Bronze/Scripts/archibus_bl.R"
+  "CBRE/Bronze/Scripts/archibus_bl.R",
+  # "CBRE/Bronze/Scripts/archibus_dp.R",
+  "CBRE/Bronze/Scripts/archibus_dv.R",
+  "CBRE/Bronze/Scripts/archibus_ls.R",
+  "CBRE/Bronze/Scripts/archibus_property.R",
+  "CBRE/Bronze/Scripts/archibus_rm.R",
+  "CBRE/Bronze/Scripts/archibus_rmpct.R"
 )
 
 # -- Per-script result tracking --
