@@ -45,17 +45,8 @@ fields <- resp |>
   tidyr::unnest_wider(clauseNames, names_sep = "_") |>
   tidyr::unnest_wider(schema, names_sep = "_")
 
-# Get custom field option ####
-# https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-options/#api-rest-api-3-customfieldoption-id-get
-query_url <- paste0(base_url, "customFieldOption")
-
-req <- request(query_url) |>
-  req_headers_redacted(Authorization = token_string) |>
-  req_url_path_append(
-    "customfield_10010"
-  ) |>
-  apply_proxy_if_needed() |>
-  req_perform()
+custom_fields <- fields |>
+  filter(schema_type == "option")
 
 # Get custom field contexts ####
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-contexts/#api-group-issue-custom-field-contexts
@@ -64,11 +55,70 @@ query_url <- paste0(base_url, "field")
 req <- request(query_url) |>
   req_headers_redacted(Authorization = token_string) |>
   req_url_path_append(
-    "customfield_10010",
+    "customfield_10404",
     "context"
   ) |>
   apply_proxy_if_needed() |>
   req_perform()
 
+field_contexts <- req |>
+  resp_body_json() |>
+  purrr::pluck("values") |>
+  enframe() |>
+  tidyr::unnest_wider(value, names_sep = "_")
+
 # Get custom field options (context) ####
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-options/#api-rest-api-3-field-fieldid-context-contextid-option-get
+
+query_url <- paste0(base_url, "field")
+
+req <- request(query_url) |>
+  req_headers_redacted(Authorization = token_string) |>
+  req_url_path_append(
+    "customfield_10404",
+    "context",
+    "10490",
+    "option"
+  ) |>
+  apply_proxy_if_needed() |>
+  req_perform()
+
+context_options <- req |>
+  resp_body_json() |>
+  purrr::pluck("values") |>
+  enframe() |>
+  tidyr::unnest_wider(value)
+
+# Update custom field options (context) ####
+# https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-contexts/#api-rest-api-3-field-fieldid-context-contextid-put
+
+# Map of option id -> new label
+updates <- tibble::tribble(
+  ~id     , ~value      ,
+  "10254" , "Bungalow"  ,
+  "10255" , "Campsite"  ,
+  "10256" , "Apartment"
+)
+
+body <- list(
+  options = purrr::pmap(updates, \(id, value) list(id = id, value = value))
+)
+
+query_url <- paste0(base_url, "field")
+
+req <- request(query_url) |>
+  req_headers_redacted(Authorization = token_string) |>
+  req_method("PUT") |>
+  req_url_path_append(
+    "customfield_10404",
+    "context",
+    "10490",
+    "option"
+  ) |>
+  req_body_json(body, auto_unbox = TRUE) |>
+  req_error(is_error = \(r) FALSE) |> # so you can read Jira's message on failure
+  apply_proxy_if_needed() |>
+  req_perform()
+
+resp_status(req)
+resp_body_string(req)
