@@ -40,7 +40,7 @@ dbClearResult(query)
 
 sql <- glue::glue_sql(
   "DELETE FROM ServerLogs.InfBronze
-  WHERE batch_id IN ('20260929230301', '20260929231554', '20260929231717', '20260929231922')",
+  WHERE batch_id IN ('20261001185315')",
   .con = con
 )
 

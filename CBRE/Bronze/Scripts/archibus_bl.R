@@ -394,7 +394,7 @@ if (is.null(etl_error)) {
           )
         )
 
-      DBI::dbAppendTable(con, audit_table, audit_row)
+      DBI::dbAppendTable(con, AUDIT_TABLE, audit_row)
 
       cat(
         "ETL complete — Audit Row Written:",

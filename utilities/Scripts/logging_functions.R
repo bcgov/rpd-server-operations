@@ -49,7 +49,19 @@ log_etl_error <- function(
   invisible(log_row)
 }
 
-
+#' Handles the daily logging of ETL script execution
+#'
+#' @param api_name A character vector naming the source API of incoming Bronze-bound records
+#' @param script_name A character vector naming the ETL script
+#' @param table_name The table name that the log is for
+#' @param status The outcome of the table load
+#' @param duration The time taken to execute the script
+#' @param n_inserted The number of rows inserted into the db
+#' @param n_updated TThe number of rows updated in the db
+#' @param n_deleted The number of rows deleted the db
+#' @param message The message describing the outcome
+#' @param etl_env The ETL Environment it is occurring in
+#' @return invisible tibble of logging data
 log_daily_etl_run <- function(
   api_name,
   script_name,
@@ -103,6 +115,18 @@ log_daily_etl_run <- function(
   invisible(log_row)
 }
 
+#' Handles the daily logging of ETL script execution
+#'
+#' @param orchestrator_name A character vector naming the source API of incoming Bronze-bound records
+#' @param status The outcome of the table load
+#' @param duration The time taken to execute the script
+#' @param n_success The number of scripts that succeeded
+#' @param n_error TThe number of scripts with errors
+#' @param n_no_data The number of scripts with no data
+#' @param failed_scripts The collection of failed scripts
+#' @param message The output message
+#' @param etl_env The ETL Environment it is occurring in
+#' @return invisible tibble of logging data
 log_daily_etl_script <- function(
   orchestrator_name,
   status,
