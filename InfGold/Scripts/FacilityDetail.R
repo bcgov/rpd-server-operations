@@ -50,7 +50,7 @@ query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_property")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(dynamo, "SELECT * FROM [IDIR\\EBORTHIS].RPD_LAND")
+query <- dbSendQuery(dynamo, "SELECT * FROM DATA_OWNER.RPD_LAND")
 LandData <- dbFetch(query, n = -1)
 dbClearResult(query)
 

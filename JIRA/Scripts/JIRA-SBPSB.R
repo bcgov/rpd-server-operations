@@ -452,7 +452,7 @@ tryCatch(
       select(-c(row_name, row_count)) |>
       tibble::deframe()
 
-    LinkedIssues <- data |>
+    LinkedWorkItems <- data |>
       purrr::pluck("issues") |>
       tibble::enframe() |>
       tidyr::unnest_wider(value) |>
@@ -462,7 +462,8 @@ tryCatch(
       # Select fields of interest
       select(
         IssueKey = key,
-        LinkedIssues,
+        # LinkedIssues,
+        Linkedworkitems
       )
   },
   error = function(e) {
@@ -480,7 +481,7 @@ tryCatch(
   }
 )
 
-if (sum(!is.na(LinkedIssues$LinkedIssues)) == 0) {
+if (sum(!is.na(LinkedWorkItems$Linkedworkitems)) == 0) {
   # API succeeded, nothing to load
   no_data_msg <- paste0(
     "No LinkedIssues returned from API for window ",
@@ -511,9 +512,9 @@ if (sum(!is.na(LinkedIssues$LinkedIssues)) == 0) {
 
 tryCatch(
   {
-    LinkedIssues <- LinkedIssues |>
-      tidyr::unnest_wider(LinkedIssues, names_sep = "_") |>
-      tidyr::unnest_wider(starts_with("LinkedIssues"), names_sep = "_") |>
+    LinkedWorkItems <- LinkedWorkItems |>
+      tidyr::unnest_wider(Linkedworkitems, names_sep = "_") |>
+      tidyr::unnest_wider(starts_with("Linkedworkitems"), names_sep = "_") |>
       tidyr::unnest_wider(where(is.list), names_sep = "_") |>
       select(
         IssueKey,
@@ -524,7 +525,7 @@ tryCatch(
         ends_with("Issue_key")
       ) |>
       pivot_longer(
-        cols = matches("LinkedIssues_(\\d+)_id"),
+        cols = matches("Linkedworkitems_(\\d+)_id"),
         names_to = "link_name",
         values_to = "link_value"
       ) |>
@@ -542,7 +543,7 @@ tryCatch(
       filter(link_name_num == col_name_num) |>
       select(-c(link_name, link_name_num, col_name_num)) |>
       mutate(
-        col_name = stringr::str_replace(col_name, "LinkedIssues_(\\d+)_", "")
+        col_name = stringr::str_replace(col_name, "Linkedworkitems_(\\d+)_", "")
       ) |>
       pivot_wider(
         id_cols = c(IssueKey, link_value),
@@ -610,7 +611,7 @@ tryCatch(
   }
 )
 
-error_rows <- LinkedIssues |>
+error_rows <- LinkedWorkItems |>
   filter(RelationDesc == "Error" | RelationIssueKey == "Error")
 
 if (nrow(error_rows) > 0) {
@@ -680,7 +681,7 @@ tryCatch(
     dbWriteTable(
       con,
       name = temp_table2,
-      value = LinkedIssues,
+      value = LinkedWorkItems,
       append = TRUE,
       overwrite = FALSE
     )
