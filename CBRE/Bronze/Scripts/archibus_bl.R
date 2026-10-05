@@ -281,49 +281,68 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 #
 # DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
-# Regular run ####
 etl_error <- NULL
-log_row <- NULL
 
-# tryCatch(
-#   {
-data <- raw_data |>
-  purrr::pluck("data")
+# Hash and Classify Data ####
+tryCatch(
+  {
+    data <- raw_data |>
+      purrr::pluck("data")
 
-tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
+    tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
 
-hashed <- data |>
-  add_row_hash(PRIMARY_KEY, tracked_cols) |>
-  mutate(
-    bronze_load_ts = as.POSIXct(task_start, tz = "UTC"),
-    bronze_batch_id = BATCH_ID
-  )
+    hashed <- data |>
+      add_row_hash(PRIMARY_KEY, tracked_cols) |>
+      mutate(
+        bronze_load_ts = as.POSIXct(task_start, tz = "UTC"),
+        bronze_batch_id = BATCH_ID
+      )
 
-classified_data <- classify_incoming(
-  hashed,
-  con,
-  SCHEMA_NAME,
-  TABLE_NAME,
-  PRIMARY_KEY
+    classified_data <- classify_incoming(
+      hashed,
+      con,
+      SCHEMA_NAME,
+      TABLE_NAME,
+      PRIMARY_KEY
+    )
+  },
+  error = function(e) {
+    log_etl_error(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = TABLE_NAME,
+      step = "hash_classify",
+      condition = e
+    )
+    etl_error <<- e
+  }
 )
 
-# missing <- find_missing_from_pull(
-#   hashed,
-#   con,
-#   SCHEMA_NAME,
-#   TABLE_NAME,
-#   PRIMARY_KEY,
-#   status_col = "bl_status"
-# )
-
-# missing <- find_missing_from_pull(
-#   hashed,
-#   con,
-#   SCHEMA_NAME,
-#   TABLE_NAME,
-#   PRIMARY_KEY,
-#   status_col = "bl_status"
-# )
+# Check for Existing Data not in current API pull ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      missing <- find_missing_from_pull(
+        hashed,
+        con,
+        SCHEMA_NAME,
+        TABLE_NAME,
+        PRIMARY_KEY,
+        status_col = "bl_status"
+      )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "find_missing",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 #     already_tombstoned <- DBI::dbGetQuery(
 #       con,
@@ -352,25 +371,57 @@ classified_data <- classify_incoming(
 #       DBI::dbAppendTable(con, TOMBSTONE_TABLE, tombstone_rows)
 #     }
 
-log_row <<- apply_hash_gate(
-  con,
-  classified_data,
-  PRIMARY_KEY,
-  TARGET_TABLE,
-  AUDIT_TABLE,
-  API_NAME,
-  CBRE_TABLE_NAME,
-  BATCH_ID,
-  task_start
-)
-#   },
-#   error = function(e) {
-#     etl_error <<- e
-#   }
-# )
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      log_row <- apply_hash_gate(
+        con,
+        classified_data,
+        TARGET_TABLE,
+        API_NAME,
+        CBRE_TABLE_NAME,
+        BATCH_ID,
+        task_start
+      )
+
+      audit_row <- log_row |>
+        mutate(
+          Missing = nrow(missing),
+          Duration = round(
+            (interval(task_start, Sys.time()) / dseconds()),
+            digits = 2
+          )
+        )
+
+      DBI::dbAppendTable(con, AUDIT_TABLE, audit_row)
+
+      cat(
+        "ETL complete — Audit Row Written:",
+        audit_row$New,
+        " new, ",
+        audit_row$Changed,
+        " changed, and ",
+        audit_row$Unchanged,
+        " unchanged.",
+        "\n"
+      )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "apply_hash_gate",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 task_end <- Sys.time()
 task_duration <- interval(task_start, task_end) / dseconds()
+
 
 if (is.null(etl_error)) {
   log_daily_etl_run(
@@ -379,9 +430,9 @@ if (is.null(etl_error)) {
     table_name = TABLE_NAME,
     duration = task_duration,
     status = "SUCCESS",
-    n_inserted = log_row$New,
-    n_updated = log_row$Changed,
-    n_deleted = NA,
+    n_inserted = audit_row$New,
+    n_updated = audit_row$Changed,
+    n_deleted = nrow(missing),
     message = "ETL completed successfully"
   )
 } else {
