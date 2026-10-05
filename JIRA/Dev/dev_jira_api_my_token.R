@@ -55,11 +55,11 @@ query_url <- paste0(base_url, "field")
 req <- request(query_url) |>
   req_headers_redacted(Authorization = token_string) |>
   req_url_path_append(
-    "customfield_10404",
     "context"
   ) |>
   apply_proxy_if_needed() |>
   req_perform()
+# HTTP 403 Forbidden
 
 field_contexts <- req |>
   resp_body_json() |>
@@ -69,7 +69,6 @@ field_contexts <- req |>
 
 # Get custom field options (context) ####
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-options/#api-rest-api-3-field-fieldid-context-contextid-option-get
-
 query_url <- paste0(base_url, "field")
 
 req <- request(query_url) |>
@@ -122,3 +121,42 @@ req <- request(query_url) |>
 
 resp_status(req)
 resp_body_string(req)
+
+# Check Permissions ####
+perm_req <- request(paste0(base_url, "mypermissions")) |>
+  req_headers_redacted(Authorization = token_string) |>
+  req_url_query(permissions = "ADMINISTER") |>
+  apply_proxy_if_needed() |>
+  req_perform()
+
+perm_req |>
+  resp_body_json() |>
+  purrr::pluck("permissions", "ADMINISTER", "havePermission")
+
+resp <- request(base_url) |>
+  req_url_path_append("field", "customfield_10083", "context") |>
+  req_headers_redacted(Authorization = token_string) |>
+  req_error(is_error = \(r) FALSE) |>
+  apply_proxy_if_needed() |>
+  req_perform()
+
+resp_status(resp)
+resp_body_string(resp)
+
+
+# Get my permission groups ####
+resp <- request(base_url) |>
+  req_url_path_append("myself") |>
+  req_url_query(expand = "groups") |>
+  req_headers_redacted(Authorization = token_string) |>
+  apply_proxy_if_needed() |>
+  req_perform()
+
+me <- resp |> resp_body_json()
+
+# Basic identity
+me[c("accountId", "displayName", "emailAddress", "active")]
+
+# Groups (names only)
+groups <- me$groups$items |> map_chr("name")
+groups
