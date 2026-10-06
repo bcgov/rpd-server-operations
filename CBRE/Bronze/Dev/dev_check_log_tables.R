@@ -50,6 +50,17 @@ test <- archibus_bl |>
   filter(count > 1) |>
   arrange(bl_bl_id_key, bronze_load_ts)
 
+# archibus_fl ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_fl")
+archibus_fl <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- archibus_fl |>
+  group_by(fl_bl_id, fl_fl_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(fl_bl_id, fl_fl_id, bronze_load_ts)
+
 # archibus_ls ####
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_ls")
 archibus_ls <- dbFetch(query, n = -1)
