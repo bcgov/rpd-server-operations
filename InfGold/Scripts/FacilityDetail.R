@@ -50,21 +50,21 @@ query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_property")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(dynamo, "SELECT * FROM DATA_OWNER.RPD_LAND")
-LandData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-Lands <- LandData |>
-  select(
-    PropertyId = LAND_NUMBER,
-    lat,
-    lon,
-  ) |>
-  group_by(PropertyId) |>
-  summarise(
-    lat = first(lat),
-    lon = first(lon)
-  )
+# query <- dbSendQuery(dynamo, "SELECT * FROM DATA_OWNER.RPD_LAND")
+# LandData <- dbFetch(query, n = -1)
+# dbClearResult(query)
+#
+# Lands <- LandData |>
+#   select(
+#     PropertyId = LAND_NUMBER,
+#     lat,
+#     lon,
+#   ) |>
+#   group_by(PropertyId) |>
+#   summarise(
+#     lat = first(lat),
+#     lon = first(lon)
+#   )
 
 Building <- BuildingData |>
   filter(PobcStatus == "Active") |>
@@ -134,7 +134,11 @@ Property <- PropertyData |>
     BuildingDate,
     PropertyArea = TotalRentableLand
   ) |>
-  left_join(Lands, by = join_by(PropertyId))
+  # left_join(Lands, by = join_by(PropertyId))
+  mutate(
+    lat = NA_real_,
+    lon = NA_real_
+  )
 
 Table <- Building |>
   union(Property) |>
