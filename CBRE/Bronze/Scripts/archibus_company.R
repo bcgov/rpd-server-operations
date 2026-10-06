@@ -11,9 +11,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "InfBronze"
-TABLE_NAME <- "archibus_dp"
-CBRE_TABLE_NAME <- "archibus_dp"
-PRIMARY_KEY <- c("dp_dv_id", "dp_dp_id")
+TABLE_NAME <- "archibus_company"
+CBRE_TABLE_NAME <- "archibus_company"
+PRIMARY_KEY <- c(
+  "company_company_key"
+)
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
@@ -89,8 +91,7 @@ if (raw_data$status == "no_data") {
 }
 
 EXCLUDED_FROM_HASH <- c(
-  "dp_dv_id", # natural key itself — not a "value" to hash
-  "dp_dp_id", # natural key itself — not a "value" to hash
+  "company_company_key", # natural key itself — not a "value" to hash
   "md5_hash", # partner-supplied hash — not used
   "edp_last_updated_timestamp",
   "edp_update_ts",
@@ -104,60 +105,36 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     "CREATE TABLE
     {SCHEMA_NAME}.{TABLE_NAME}
     (
-      dp_address_ref               VARCHAR(100) NULL,
-      dp_admin_email               VARCHAR(100) NULL,
-      dp_admin_phone               VARCHAR(100) NULL,
-      dp_appropriated              VARCHAR(50)  NULL,
-      dp_approving_mgr             VARCHAR(100) NULL,
-      dp_area_avg_em               VARCHAR(50)  NULL,
-      dp_area_chargable            VARCHAR(50)  NULL,
-      dp_area_comn                 VARCHAR(50)  NULL,
-      dp_area_comn_gp              VARCHAR(50)  NULL,
-      dp_area_comn_nocup           VARCHAR(50)  NULL,
-      dp_area_comn_ocup            VARCHAR(50)  NULL,
-      dp_area_comn_rm              VARCHAR(50)  NULL,
-      dp_area_comn_serv            VARCHAR(50)  NULL,
-      dp_area_gp                   VARCHAR(50)  NULL,
-      dp_area_nocup                VARCHAR(50)  NULL,
-      dp_area_ocup                 VARCHAR(50)  NULL,
-      dp_area_rm                   VARCHAR(50)  NULL,
-      dp_area_rm_personnel         VARCHAR(50)  NULL,
-      dp_area_second_circ          VARCHAR(50)  NULL,
-      dp_collector                 VARCHAR(100) NULL,
-      dp_contact_id                VARCHAR(100) NULL,
-      dp_cost                      VARCHAR(50)  NULL,
-      dp_count_em                  VARCHAR(50)  NULL,
-      dp_customer_category         VARCHAR(100) NULL,
-      dp_customer_class            VARCHAR(100) NULL,
-      dp_customer_ref              VARCHAR(100) NULL,
-      dp_customer_segment          VARCHAR(100) NULL,
-      dp_dp_id                     VARCHAR(100) NOT NULL,
-      dp_dv_id                     VARCHAR(50)  NOT NULL,
-      dp_em_area_chargable         VARCHAR(50)  NULL,
-      dp_em_area_comn              VARCHAR(50)  NULL,
-      dp_em_area_comn_rm           VARCHAR(50)  NULL,
-      dp_em_area_comn_serv         VARCHAR(50)  NULL,
-      dp_em_area_rm                VARCHAR(50)  NULL,
-      dp_em_cost                   VARCHAR(50)  NULL,
-      dp_fee_recovery              VARCHAR(50)  NULL,
-      dp_gl_code                   VARCHAR(100) NULL,
-      dp_head                      VARCHAR(100) NULL,
-      dp_hpattern                  VARCHAR(100) NULL,
-      dp_hpattern_acad             VARCHAR(100) NULL,
-      dp_mvpt_category             VARCHAR(100) NULL,
-      dp_name                      VARCHAR(500) NULL,
-      dp_name_short                VARCHAR(100) NULL,
-      dp_option1                   VARCHAR(50)  NULL,
-      dp_option2                   VARCHAR(50)  NULL,
-      dp_pam                       VARCHAR(50)  NULL,
-      dp_reconciled                VARCHAR(50)  NULL,
-      dp_recovery_fee              VARCHAR(50)  NULL,
-      dp_sales_rep                 VARCHAR(100) NULL,
-      dp_source_record_id          VARCHAR(100) NULL,
-      dp_status                    VARCHAR(50)  NULL,
-      dp_tax_code                  VARCHAR(50)  NULL,
-      dp_upload_charge             VARCHAR(50)  NULL,
-      dp_uuid                      VARCHAR(100) NULL,
+      company_address1             VARCHAR(500) NULL,
+      company_address2             VARCHAR(500) NULL,
+      company_alt_fax              VARCHAR(100) NULL,
+      company_alt_phone            VARCHAR(100) NULL,
+      company_city_id              VARCHAR(100) NULL,
+      company_comments             VARCHAR(1000) NULL,
+      company_company              VARCHAR(100) NULL,
+      company_company_key          VARCHAR(100) NOT NULL,
+      company_county_id            VARCHAR(100) NULL,
+      company_ctry_id              VARCHAR(50)  NULL,
+      company_date_end_pobc        VARCHAR(30)  NULL,
+      company_date_last_updated    VARCHAR(30)  NULL,
+      company_date_start_pobc      VARCHAR(30)  NULL,
+      company_dp_id                VARCHAR(100) NULL,
+      company_dv_id                VARCHAR(50)  NULL,
+      company_eft                  VARCHAR(50)  NULL,
+      company_email                VARCHAR(200) NULL,
+      company_fax                  VARCHAR(100) NULL,
+      company_name                 VARCHAR(500) NULL,
+      company_option1              VARCHAR(50)  NULL,
+      company_option2              VARCHAR(50)  NULL,
+      company_phone                VARCHAR(100) NULL,
+      company_regn_id              VARCHAR(100) NULL,
+      company_site_number          VARCHAR(50)  NULL,
+      company_state_id             VARCHAR(50)  NULL,
+      company_status_pobc          VARCHAR(50)  NULL,
+      company_vendor               VARCHAR(100) NULL,
+      company_web_url              VARCHAR(500) NULL,
+      company_website              VARCHAR(500) NULL,
+      company_zip                  VARCHAR(50)  NULL,
       md5_hash                     CHAR(32)     NULL,
       edp_last_updated_timestamp   VARCHAR(100) NULL,
       source_system                VARCHAR(50)  NULL,
@@ -166,7 +143,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       row_hash                     CHAR(32)     NOT NULL,
       bronze_batch_id              BIGINT       NOT NULL,
       bronze_load_ts               DATETIME2(0) NOT NULL,
-      CONSTRAINT PK_bronze_dp PRIMARY KEY CLUSTERED ({paste(PRIMARY_KEY, collapse = ', ')}, bronze_load_ts)
+      CONSTRAINT PK_bronze_company PRIMARY KEY CLUSTERED ({paste(PRIMARY_KEY, collapse = ', ')}, bronze_load_ts)
     );"
   )
   dbExecute(con, sql)
@@ -175,6 +152,13 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # Initial Setup ####
 # data <- raw_data |>
 #   purrr::pluck("data")
+#
+# test <- data |>
+#   group_by(
+#     company_company_key
+#   ) |>
+#   mutate(count = n()) |>
+#   filter(count > 1)
 #
 # tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
 #
@@ -186,18 +170,6 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # str(hashed, max.level = 2, vec.len = 0, list.len = Inf)
 # max_char_lengths(hashed)
 # DBI::dbAppendTable(con, TARGET_TABLE, hashed)
-# test <- hashed |> group_by(dp_dp_id) |> mutate(count = n()) |> filter(count > 1)
-
-# output <- test |>
-#   select(
-#     dp_name,
-#     dp_hpattern_acad,
-#     dp_dp_id,
-#     dp_dv_id,
-#     dp_customer_category,
-#     dp_collector,
-#     dp_sales_rep
-#   )
 
 etl_error <- NULL
 

@@ -28,8 +28,14 @@ etl_window <- get_etl_window()
 
 scripts <- c(
   "CBRE/Bronze/Scripts/archibus_bl.R",
-  # "CBRE/Bronze/Scripts/archibus_dp.R",
+  "CBRE/Bronze/Scripts/archibus_budget_asset_ar.R",
+  "CBRE/Bronze/Scripts/archibus_budget_asset.R",
+  "CBRE/Bronze/Scripts/archibus_company.R",
+  "CBRE/Bronze/Scripts/archibus_cost_cat.R",
+  # "CBRE/Bronze/Scripts/archibus_cost_tran.R",
+  "CBRE/Bronze/Scripts/archibus_dp.R",
   "CBRE/Bronze/Scripts/archibus_dv.R",
+  "CBRE/Bronze/Scripts/archibus_fl.R",
   "CBRE/Bronze/Scripts/archibus_ls.R",
   "CBRE/Bronze/Scripts/archibus_property.R",
   "CBRE/Bronze/Scripts/archibus_rm.R",

@@ -35,18 +35,11 @@ con <- dbConnect(
 
 # Query SQL Datasets ####
 query <- dbSendQuery(con, "SELECT * FROM ServerLogs.InfBronze")
-archibus_bl_logs <- dbFetch(query, n = -1)
+InfBronze_logs <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-sql <- glue::glue_sql(
-  "DELETE FROM ServerLogs.InfBronze
-  WHERE batch_id IN ('20261001185315')",
-  .con = con
-)
 
-dbExecute(conn = con, statement = sql)
-
-
+# archibus_bl ####
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_bl")
 archibus_bl <- dbFetch(query, n = -1)
 dbClearResult(query)
@@ -54,11 +47,75 @@ dbClearResult(query)
 test <- archibus_bl |>
   group_by(bl_bl_id_key) |>
   mutate(count = n()) |>
-  filter(count > 1)
+  filter(count > 1) |>
+  arrange(bl_bl_id_key, bronze_load_ts)
 
+# archibus_ls ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_ls")
+archibus_ls <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- archibus_ls |>
+  group_by(ls_ls_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(ls_ls_id, bronze_load_ts)
+
+check <- test |>
+  filter(ls_ls_id == "PLA00001353")
+
+set1 <- test[1, ]
+set2 <- test[2, ]
+
+df <- data.frame(Row_1 = t(set1), Row_2 = t(set2)) |>
+  filter(Row_1 != Row_2)
+
+# archibus_property ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_property")
+archibus_property <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- archibus_property |>
+  group_by(property_pr_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(property_pr_id, bronze_load_ts)
+
+check <- test |>
+  filter(property_pr_id == "N2000556")
+
+set1 <- test[1, ]
+set2 <- test[2, ]
+
+df <- data.frame(Row_1 = t(set1), Row_2 = t(set2)) |>
+  filter(Row_1 != Row_2)
+
+# archibus_rmpct ####
+# Monitor date last calc and see if it changes every time or this is just a one off.
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_rmpct")
 archibus_rmpct <- dbFetch(query, n = -1)
 dbClearResult(query)
+
+test <- archibus_rmpct |>
+  group_by(rmpct_pct_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(rmpct_pct_id, bronze_load_ts) |>
+  filter(rmpct_pct_id == "38418")
+
+set1 <- test[1, ]
+set2 <- test[2, ]
+
+df <- data.frame(Row_1 = t(set1), Row_2 = t(set2)) |>
+  filter(Row_1 != Row_2)
+# Tidy up Server logs ####
+sql <- glue::glue_sql(
+  "DELETE FROM ServerLogs.InfBronze
+  WHERE batch_id IN ('20261001185315')",
+  .con = con
+)
+
+dbExecute(conn = con, statement = sql)
 
 # Update ServerLogs.InfBronze ####
 

@@ -15,17 +15,18 @@ find_missing_from_pull <- function(
   primary_key,
   status_col = NULL
 ) {
-  select_cols <- c(primary_key, status_col)
+  pk_cols <- paste(primary_key, collapse = ", ")
+  select_cols <- paste(c(primary_key, status_col), collapse = ", ")
 
   last_known <- DBI::dbGetQuery(
     con,
     glue::glue(
       "
-    SELECT {glue::glue_collapse(select_cols, sep = ', ')}
+    SELECT {select_cols}
     FROM (
       SELECT *,
              ROW_NUMBER() OVER (
-               PARTITION BY {primary_key} ORDER BY bronze_load_ts DESC
+               PARTITION BY {pk_cols} ORDER BY bronze_load_ts DESC
              ) AS rn
       FROM {schema}.{table}
     ) ranked
