@@ -48,6 +48,19 @@ fields <- resp |>
 custom_fields <- fields |>
   filter(schema_type == "option")
 
+field_review <- fields |>
+  select(
+    id,
+    name,
+    custom,
+    schema_type,
+    schema_custom,
+    schema_customId
+  ) |>
+  filter(!is.na(schema_customId))
+
+openxlsx2::write_xlsx(field_review, here::here("output/jira_fields.xlsx"))
+
 # Get custom field contexts ####
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-contexts/#api-group-issue-custom-field-contexts
 query_url <- paste0(base_url, "field")
@@ -55,11 +68,11 @@ query_url <- paste0(base_url, "field")
 req <- request(query_url) |>
   req_headers_redacted(Authorization = token_string) |>
   req_url_path_append(
+    "customfield_10404",
     "context"
   ) |>
   apply_proxy_if_needed() |>
   req_perform()
-# HTTP 403 Forbidden
 
 field_contexts <- req |>
   resp_body_json() |>
@@ -92,15 +105,22 @@ context_options <- req |>
 # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-contexts/#api-rest-api-3-field-fieldid-context-contextid-put
 
 # Map of option id -> new label
-updates <- tibble::tribble(
-  ~id     , ~value      ,
-  "10254" , "Bungalow"  ,
-  "10255" , "Campsite"  ,
-  "10256" , "Apartment"
+# updates <- tibble::tribble(
+#   ~id     , ~value      ,
+#   "10254" , "Bungalow"  ,
+#   "10255" , "Campsite"  ,
+#   "10256" , "Apartment"
+# )
+
+revert <- tibble::tribble(
+  ~id     , ~value     ,
+  "10254" , "Building" ,
+  "10255" , "Land"     ,
+  "10256" , "Complex"
 )
 
 body <- list(
-  options = purrr::pmap(updates, \(id, value) list(id = id, value = value))
+  options = purrr::pmap(revert, \(id, value) list(id = id, value = value))
 )
 
 query_url <- paste0(base_url, "field")
