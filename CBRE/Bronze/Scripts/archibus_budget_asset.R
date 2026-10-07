@@ -209,7 +209,7 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "rm_status_pobc"
+        status_col = NULL
       )
     },
     error = function(e) {
