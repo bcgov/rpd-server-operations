@@ -27,7 +27,19 @@ ORCHESTRATOR_NAME <- "CBRE-BRONZE-ORCHESTRATOR"
 etl_window <- get_etl_window()
 
 scripts <- c(
-  "CBRE/Bronze/Scripts/archibus_bl.R"
+  "CBRE/Bronze/Scripts/archibus_bl.R",
+  "CBRE/Bronze/Scripts/archibus_budget_asset_ar.R",
+  "CBRE/Bronze/Scripts/archibus_budget_asset.R",
+  "CBRE/Bronze/Scripts/archibus_company.R",
+  "CBRE/Bronze/Scripts/archibus_cost_cat.R",
+  # "CBRE/Bronze/Scripts/archibus_cost_tran.R",
+  "CBRE/Bronze/Scripts/archibus_dp.R",
+  "CBRE/Bronze/Scripts/archibus_dv.R",
+  "CBRE/Bronze/Scripts/archibus_fl.R",
+  "CBRE/Bronze/Scripts/archibus_ls.R",
+  "CBRE/Bronze/Scripts/archibus_property.R",
+  "CBRE/Bronze/Scripts/archibus_rm.R",
+  "CBRE/Bronze/Scripts/archibus_rmpct.R"
 )
 
 # -- Per-script result tracking --
@@ -104,9 +116,12 @@ rollup_message <- if (n_error == 0) {
   )
 }
 
-log_daily_etl_run(
-  api_name = ORCHESTRATOR_NAME,
-  script_name = ORCHESTRATOR_NAME,
+log_daily_etl_script(
+  orchestrator_name = ORCHESTRATOR_NAME,
   status = overall_status,
+  duration = orchestrator_duration,
+  n_success = n_success,
+  n_error = n_error,
+  failed_scripts = paste(failed_scripts, collapse = "; "),
   message = substr(rollup_message, 1, 500)
 )
