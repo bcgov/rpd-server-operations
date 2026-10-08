@@ -246,7 +246,7 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "rmpct_status_pobc"
+        status_col = "dp_status"
       )
     },
     error = function(e) {
