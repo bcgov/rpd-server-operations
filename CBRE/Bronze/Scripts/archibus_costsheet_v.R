@@ -11,9 +11,9 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "InfBronze"
-TABLE_NAME <- "archibus_rmpct"
-CBRE_TABLE_NAME <- "archibus_rmpct"
-PRIMARY_KEY <- "rmpct_pct_id"
+TABLE_NAME <- "archibus_costsheet_v"
+CBRE_TABLE_NAME <- "archibus_costsheet_v"
+PRIMARY_KEY <- c("costsheet_v_ls_id")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
@@ -89,8 +89,7 @@ if (raw_data$status == "no_data") {
 }
 
 EXCLUDED_FROM_HASH <- c(
-  "rmpct_pct_id", # natural key itself — not a "value" to hash
-  "rmpct_date_last_calc", # updated every day but not necessary to trigger storing a new row
+  "costsheet_v_ls_id", # composite key value — not a "value" to hash
   "md5_hash", # partner-supplied hash — not used
   "edp_last_updated_timestamp",
   "edp_update_ts",
@@ -104,63 +103,78 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     "CREATE TABLE
     {SCHEMA_NAME}.{TABLE_NAME}
     (
-      rmpct_ac_id                  VARCHAR(100)  NULL,
-      rmpct_activity_log_id        VARCHAR(100)  NULL,
-      rmpct_area_chargable         VARCHAR(50)   NULL,
-      rmpct_area_comn              VARCHAR(50)   NULL,
-      rmpct_area_comn_nocup        VARCHAR(50)   NULL,
-      rmpct_area_comn_ocup         VARCHAR(50)   NULL,
-      rmpct_area_comn_rm           VARCHAR(50)   NULL,
-      rmpct_area_comn_serv         VARCHAR(50)   NULL,
-      rmpct_area_rm                VARCHAR(50)   NULL,
-      rmpct_bl_id                  VARCHAR(50)   NOT NULL,
-      rmpct_confirmed              VARCHAR(50)   NULL,
-      rmpct_cost                   VARCHAR(50)   NULL,
-      rmpct_date_created           VARCHAR(30)   NULL,
-      rmpct_date_deleted           VARCHAR(30)   NULL,
-      rmpct_date_end               VARCHAR(30)   NULL,
-      rmpct_date_end_pobc          VARCHAR(30)   NULL,
-      rmpct_date_last_calc         VARCHAR(30)   NULL,
-      rmpct_date_last_modified     VARCHAR(30)   NULL,
-      rmpct_date_start             VARCHAR(30)   NULL,
-      rmpct_date_start_pobc        VARCHAR(30)   NULL,
-      rmpct_day_part               VARCHAR(50)   NULL,
-      rmpct_del_user_name          VARCHAR(100)  NULL,
-      rmpct_dp_id                  VARCHAR(50)   NULL,
-      rmpct_dv_id                  VARCHAR(50)   NULL,
-      rmpct_em_id                  VARCHAR(100)  NULL,
-      rmpct_fl_id                  VARCHAR(50)   NOT NULL,
-      rmpct_from_bl_id             VARCHAR(50)   NULL,
-      rmpct_from_fl_id             VARCHAR(50)   NULL,
-      rmpct_from_rm_id             VARCHAR(50)   NULL,
-      rmpct_ls_id                  VARCHAR(100)  NULL,
-      rmpct_mo_id                  VARCHAR(100)  NULL,
-      rmpct_org_id                 VARCHAR(100)  NULL,
-      rmpct_parent_pct_id          VARCHAR(50)   NULL,
-      rmpct_pct_id                 VARCHAR(50)   NOT NULL,
-      rmpct_pct_space              VARCHAR(50)   NULL,
-      rmpct_pct_time               VARCHAR(50)   NULL,
-      rmpct_primary_em             VARCHAR(50)   NULL,
-      rmpct_primary_rm             VARCHAR(50)   NULL,
-      rmpct_prorate                VARCHAR(50)   NULL,
-      rmpct_resources              VARCHAR(1000) NULL,
-      rmpct_rm_cat                 VARCHAR(100)  NULL,
-      rmpct_rm_id                  VARCHAR(50)   NOT NULL,
-      rmpct_rm_type                VARCHAR(100)  NULL,
-      rmpct_status                 VARCHAR(50)   NULL,
-      rmpct_status_pobc            VARCHAR(50)   NULL,
-      rmpct_sub_id                 VARCHAR(50)   NULL,
-      rmpct_user_name              VARCHAR(100)  NULL,
-      rmpct_visitor_id             VARCHAR(100)  NULL,
-      md5_hash                     CHAR(32)      NULL,
-      edp_last_updated_timestamp   VARCHAR(100)  NULL,
-      source_system                VARCHAR(50)   NULL,
-      source_account_name          VARCHAR(50)   NULL,
-      edp_update_ts                VARCHAR(30)   NULL,
-      row_hash                     CHAR(32)      NOT NULL,
-      bronze_batch_id              BIGINT        NOT NULL,
-      bronze_load_ts               DATETIME2(0)  NOT NULL,
-      CONSTRAINT PK_bronze_rmpct PRIMARY KEY CLUSTERED ({PRIMARY_KEY}, bronze_load_ts)
+      costsheet_v_ls_id                           VARCHAR(100) NOT NULL,
+      costsheet_v_amt_incentive                   VARCHAR(50)  NULL,
+      costsheet_v_om_li                           VARCHAR(50)  NULL,
+      costsheet_v_prk_le_pv                       VARCHAR(50)  NULL,
+      costsheet_v_om_ares                         VARCHAR(50)  NULL,
+      costsheet_v_ti_li                           VARCHAR(50)  NULL,
+      costsheet_v_ci_li                           VARCHAR(50)  NULL,
+      costsheet_v_nci_li                          VARCHAR(50)  NULL,
+      costsheet_v_remd_li                         VARCHAR(50)  NULL,
+      costsheet_v_bbi_li                          VARCHAR(50)  NULL,
+      costsheet_v_ti_le                           VARCHAR(50)  NULL,
+      costsheet_v_omares_le                       VARCHAR(50)  NULL,
+      costsheet_v_tax_li                          VARCHAR(50)  NULL,
+      costsheet_v_discountrate                    VARCHAR(50)  NULL,
+      costsheet_v_face_rate                       VARCHAR(50)  NULL,
+      costsheet_v_rent_free                       VARCHAR(50)  NULL,
+      costsheet_v_cash_incentive                  VARCHAR(50)  NULL,
+      costsheet_v_effective_face_rate             VARCHAR(50)  NULL,
+      costsheet_v_om_le                           VARCHAR(50)  NULL,
+      costsheet_v_tax_le                          VARCHAR(50)  NULL,
+      costsheet_v_net_rate                        VARCHAR(50)  NULL,
+      costsheet_v_total_gross                     VARCHAR(50)  NULL,
+      costsheet_v_om_li_esc                       VARCHAR(50)  NULL,
+      costsheet_v_om_le_esc                       VARCHAR(50)  NULL,
+      costsheet_v_om_ares_esc                     VARCHAR(50)  NULL,
+      costsheet_v_tax_esc                         VARCHAR(50)  NULL,
+      costsheet_v_total_esc                       VARCHAR(50)  NULL,
+      costsheet_v_annual_gross                    VARCHAR(50)  NULL,
+      costsheet_v_parking_li                      VARCHAR(50)  NULL,
+      costsheet_v_gross_rent                      VARCHAR(50)  NULL,
+      costsheet_v_parking_le                      VARCHAR(50)  NULL,
+      costsheet_v_one_time                        VARCHAR(50)  NULL,
+      costsheet_v_one_time_tenant_improvement     VARCHAR(50)  NULL,
+      costsheet_v_total_est_cost                  VARCHAR(50)  NULL,
+      costsheet_v_rent_total_pv                   VARCHAR(50)  NULL,
+      costsheet_v_om_li_pv                        VARCHAR(50)  NULL,
+      costsheet_v_tax_li_pv                       VARCHAR(50)  NULL,
+      costsheet_v_ti_li_pv                        VARCHAR(50)  NULL,
+      costsheet_v_ci_li_pv                        VARCHAR(50)  NULL,
+      costsheet_v_nci_li_pv                       VARCHAR(50)  NULL,
+      costsheet_v_remd_li_pv                      VARCHAR(50)  NULL,
+      costsheet_v_bbi_li_pv                       VARCHAR(50)  NULL,
+      costsheet_v_li_esc_pv                       VARCHAR(50)  NULL,
+      costsheet_v_om_le_esc_pv                    VARCHAR(50)  NULL,
+      costsheet_v_om_ares_esc_pv                  VARCHAR(50)  NULL,
+      costsheet_v_tax_le_esc_pv                   VARCHAR(50)  NULL,
+      costsheet_v_ti_le_pv                        VARCHAR(50)  NULL,
+      costsheet_v_le_ares_per_sqft                VARCHAR(50)  NULL,
+      costsheet_v_net_pv                          VARCHAR(50)  NULL,
+      costsheet_v_net_effective_rate              VARCHAR(50)  NULL,
+      costsheet_v_li_parking_amortize             VARCHAR(50)  NULL,
+      costsheet_v_net_effective_rate_landlord     VARCHAR(50)  NULL,
+      costsheet_v_total_gross_net_pv_ares         VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate            VARCHAR(50)  NULL,
+      costsheet_v_le_parking_amortize             VARCHAR(50)  NULL,
+      costsheet_v_onetime_ares_amortized          VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate_prk        VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate_onetime    VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate_total      VARCHAR(50)  NULL,
+      costsheet_v_om_li_esc_check                 VARCHAR(50)  NULL,
+      costsheet_v_om_le_esc_check                 VARCHAR(50)  NULL,
+      costsheet_v_om_ares_esc_check               VARCHAR(50)  NULL,
+      costsheet_v_tax_esc_check                   VARCHAR(50)  NULL,
+      md5_hash                                    CHAR(32)     NULL,
+      edp_last_updated_timestamp                  VARCHAR(100) NULL,
+      source_system                               VARCHAR(50)  NULL,
+      source_account_name                         VARCHAR(50)  NULL,
+      edp_update_ts                               VARCHAR(30)  NULL,
+      row_hash                                    CHAR(32)     NOT NULL,
+      bronze_batch_id                             BIGINT       NOT NULL,
+      bronze_load_ts                              DATETIME2(0) NOT NULL,
+      CONSTRAINT PK_bronze_costsheet_v PRIMARY KEY CLUSTERED ({paste(PRIMARY_KEY, collapse = ', ')}, bronze_load_ts)
     );"
   )
   dbExecute(con, sql)
@@ -169,7 +183,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # Initial Setup ####
 # data <- raw_data |>
 #   purrr::pluck("data")
-#
+
+# test <- data |> group_by(costsheet_v_ls_id) |> mutate(count = n()) |> filter(count > 1)
 # tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
 #
 # hashed <- add_row_hash(data, PRIMARY_KEY, tracked_cols) |>
@@ -178,6 +193,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 #     bronze_batch_id = BATCH_ID
 #   )
 #
+# str(hashed, max.level = 2, vec.len = 0, list.len = Inf)
+# max_char_lengths(hashed)
 # DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
 etl_error <- NULL
@@ -227,7 +244,7 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "rmpct_status_pobc"
+        status_col = NULL
       )
     },
     error = function(e) {

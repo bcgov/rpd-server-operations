@@ -28,9 +28,11 @@ DB_NAME <- "BuildingIntelligence"
 con <- dbConnect(
   odbc(),
   driver = "ODBC Driver 17 for SQL Server",
+  # driver = "ODBC Driver 18 for SQL Server",
   server = SQL_SERVER,
   database = DB_NAME,
-  Trusted_Connection = "Yes"
+  Trusted_Connection = "Yes",
+  # TrustServerCertificate = "Yes"
 )
 
 # Query SQL Datasets ####
@@ -44,16 +46,55 @@ query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_bl")
 archibus_bl <- dbFetch(query, n = -1)
 dbClearResult(query)
 
+new <- archibus_bl |>
+  filter(bronze_batch_id == "20261007120019")
+
 test <- archibus_bl |>
   group_by(bl_bl_id_key) |>
   mutate(count = n()) |>
   filter(count > 1) |>
   arrange(bl_bl_id_key, bronze_load_ts)
 
+# archibus_dp ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_dp")
+archibus_dp <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- archibus_dp |>
+  group_by(dp_dv_id, dp_dp_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(dp_dv_id, dp_dp_id, bronze_load_ts)
+
+set1 <- test[1, ]
+set2 <- test[2, ]
+set3 <- test[3, ]
+df <- data.frame(Row_1 = t(set1), Row_2 = t(set2), Row_3 = t(set3)) |>
+  filter(Row_1 != Row_2)
+
+# archibus_fl ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_fl")
+archibus_fl <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- archibus_fl |>
+  group_by(fl_bl_id, fl_fl_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(fl_bl_id, fl_fl_id, bronze_load_ts)
+
 # archibus_ls ####
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_ls")
 archibus_ls <- dbFetch(query, n = -1)
 dbClearResult(query)
+
+new <- archibus_ls |>
+  filter(bronze_batch_id == "20261008120232")
+
+test <- archibus_ls |>
+  group_by(ls_ls_id) |>
+  mutate(count = n()) |>
+  filter(count > 1)
 
 test <- archibus_ls |>
   group_by(ls_ls_id) |>
@@ -105,13 +146,20 @@ test <- archibus_rmpct |>
 
 set1 <- test[1, ]
 set2 <- test[2, ]
+set3 <- test[3, ]
+set4 <- test[4, ]
 
-df <- data.frame(Row_1 = t(set1), Row_2 = t(set2)) |>
+df <- data.frame(
+  Row_1 = t(set1),
+  Row_2 = t(set2),
+  Row_3 = t(set3),
+  Row_4 = t(set4)
+) |>
   filter(Row_1 != Row_2)
 # Tidy up Server logs ####
 sql <- glue::glue_sql(
   "DELETE FROM ServerLogs.InfBronze
-  WHERE batch_id IN ('20261001185315')",
+  WHERE batch_id IN ('20261008120357', '20261007120339', '20261006120154')",
   .con = con
 )
 
