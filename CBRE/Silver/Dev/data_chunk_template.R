@@ -22,7 +22,7 @@ source(here::here("utilities/utilities.R"))
 "archibus_op"
 "archibus_ls_comm"
 "archibus_commtype"
-CBRE_TABLE_NAME <- "archibus_city"
+CBRE_TABLE_NAME <- "archibus_costsheet_v"
 
 # Query API
 chunk_1 <- call_cbre_api(
