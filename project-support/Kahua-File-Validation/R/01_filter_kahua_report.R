@@ -7,7 +7,7 @@ library(tools)
 library(openxlsx2)
 library(lubridate)
 
-source(here("utilities/R/utilities.R"))
+source(here("utilities/utilities.R"))
 
 # Validate that the sorting works consistently as we bring in new files
 kahuaFiles <- list.files(

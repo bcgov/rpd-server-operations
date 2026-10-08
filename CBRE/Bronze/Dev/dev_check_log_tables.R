@@ -28,9 +28,11 @@ DB_NAME <- "BuildingIntelligence"
 con <- dbConnect(
   odbc(),
   driver = "ODBC Driver 17 for SQL Server",
+  # driver = "ODBC Driver 18 for SQL Server",
   server = SQL_SERVER,
   database = DB_NAME,
-  Trusted_Connection = "Yes"
+  Trusted_Connection = "Yes",
+  # TrustServerCertificate = "Yes"
 )
 
 # Query SQL Datasets ####
@@ -85,6 +87,14 @@ test <- archibus_fl |>
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_ls")
 archibus_ls <- dbFetch(query, n = -1)
 dbClearResult(query)
+
+new <- archibus_ls |>
+  filter(bronze_batch_id == "20261008120232")
+
+test <- archibus_ls |>
+  group_by(ls_ls_id) |>
+  mutate(count = n()) |>
+  filter(count > 1)
 
 test <- archibus_ls |>
   group_by(ls_ls_id) |>

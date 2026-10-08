@@ -103,93 +103,99 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     "CREATE TABLE
     {SCHEMA_NAME}.{TABLE_NAME}
     (
-      fl_area_allocated            VARCHAR(50)  NULL,
-      fl_area_em_dp                VARCHAR(50)  NULL,
-      fl_area_ext_wall             VARCHAR(50)  NULL,
-      fl_area_fl_comn_gp           VARCHAR(50)  NULL,
-      fl_area_fl_comn_nocup        VARCHAR(50)  NULL,
-      fl_area_fl_comn_ocup         VARCHAR(50)  NULL,
-      fl_area_fl_comn_rm           VARCHAR(50)  NULL,
-      fl_area_fl_comn_serv         VARCHAR(50)  NULL,
-      fl_area_gp                   VARCHAR(50)  NULL,
-      fl_area_gp_comn              VARCHAR(50)  NULL,
-      fl_area_gp_dp                VARCHAR(50)  NULL,
-      fl_area_gross_ext            VARCHAR(50)  NULL,
-      fl_area_gross_int            VARCHAR(50)  NULL,
-      fl_area_manual               VARCHAR(50)  NULL,
-      fl_area_nocup                VARCHAR(50)  NULL,
-      fl_area_nocup_comn           VARCHAR(50)  NULL,
-      fl_area_nocup_dp             VARCHAR(50)  NULL,
-      fl_area_ocup                 VARCHAR(50)  NULL,
-      fl_area_ocup_comn            VARCHAR(50)  NULL,
-      fl_area_ocup_dp              VARCHAR(50)  NULL,
-      fl_area_remain               VARCHAR(50)  NULL,
-      fl_area_rent_excl            VARCHAR(50)  NULL,
-      fl_area_rentable             VARCHAR(50)  NULL,
-      fl_area_rentable_boma        VARCHAR(50)  NULL,
-      fl_area_rm                   VARCHAR(50)  NULL,
-      fl_area_rm_comn              VARCHAR(50)  NULL,
-      fl_area_rm_dp                VARCHAR(50)  NULL,
-      fl_area_serv                 VARCHAR(50)  NULL,
-      fl_area_su                   VARCHAR(50)  NULL,
-      fl_area_usable               VARCHAR(50)  NULL,
-      fl_area_vert_pen             VARCHAR(50)  NULL,
-      fl_bl_id                     VARCHAR(50)  NOT NULL,
-      fl_cap_em_target             VARCHAR(50)  NULL,
-      fl_cost_sqft                 VARCHAR(50)  NULL,
-      fl_count_em                  VARCHAR(50)  NULL,
-      fl_date_costs_end            VARCHAR(30)  NULL,
-      fl_date_costs_start          VARCHAR(30)  NULL,
-      fl_date_end_pobc             VARCHAR(30)  NULL,
-      fl_date_start_pobc           VARCHAR(30)  NULL,
-      fl_detail_dwg                VARCHAR(100) NULL,
-      fl_dwgname                   VARCHAR(100) NULL,
-      fl_ehandle                   VARCHAR(100) NULL,
-      fl_elevation_nom             VARCHAR(50)  NULL,
-      fl_fl_id                     VARCHAR(50)  NOT NULL,
-      fl_height_nom                VARCHAR(50)  NULL,
-      fl_image_file                VARCHAR(100) NULL,
-      fl_is_active_self_svc        VARCHAR(50)  NULL,
-      fl_name                      VARCHAR(200) NULL,
-      fl_option1                   VARCHAR(50)  NULL,
-      fl_option2                   VARCHAR(50)  NULL,
-      fl_prorate_remain            VARCHAR(50)  NULL,
-      fl_ratio_ru                  VARCHAR(50)  NULL,
-      fl_ratio_ur                  VARCHAR(50)  NULL,
-      fl_sort_order                VARCHAR(50)  NULL,
-      fl_source_record_id          VARCHAR(100) NULL,
-      fl_status_pobc               VARCHAR(50)  NULL,
-      fl_std_area_per_em           VARCHAR(50)  NULL,
-      md5_hash                     CHAR(32)     NULL,
-      edp_last_updated_timestamp   VARCHAR(100) NULL,
-      source_system                VARCHAR(50)  NULL,
-      source_account_name          VARCHAR(50)  NULL,
-      edp_update_ts                VARCHAR(30)  NULL,
-      row_hash                     CHAR(32)     NOT NULL,
-      bronze_batch_id              BIGINT       NOT NULL,
-      bronze_load_ts               DATETIME2(0) NOT NULL,
-      CONSTRAINT PK_bronze_fl PRIMARY KEY CLUSTERED ({paste(PRIMARY_KEY, collapse = ', ')}, bronze_load_ts)
+      costsheet_v_ls_id                           VARCHAR(100) NOT NULL,
+      costsheet_v_amt_incentive                   VARCHAR(50)  NULL,
+      costsheet_v_om_li                           VARCHAR(50)  NULL,
+      costsheet_v_prk_le_pv                       VARCHAR(50)  NULL,
+      costsheet_v_om_ares                         VARCHAR(50)  NULL,
+      costsheet_v_ti_li                           VARCHAR(50)  NULL,
+      costsheet_v_ci_li                           VARCHAR(50)  NULL,
+      costsheet_v_nci_li                          VARCHAR(50)  NULL,
+      costsheet_v_remd_li                         VARCHAR(50)  NULL,
+      costsheet_v_bbi_li                          VARCHAR(50)  NULL,
+      costsheet_v_ti_le                           VARCHAR(50)  NULL,
+      costsheet_v_omares_le                       VARCHAR(50)  NULL,
+      costsheet_v_tax_li                          VARCHAR(50)  NULL,
+      costsheet_v_discountrate                    VARCHAR(50)  NULL,
+      costsheet_v_face_rate                       VARCHAR(50)  NULL,
+      costsheet_v_rent_free                       VARCHAR(50)  NULL,
+      costsheet_v_cash_incentive                  VARCHAR(50)  NULL,
+      costsheet_v_effective_face_rate             VARCHAR(50)  NULL,
+      costsheet_v_om_le                           VARCHAR(50)  NULL,
+      costsheet_v_tax_le                          VARCHAR(50)  NULL,
+      costsheet_v_net_rate                        VARCHAR(50)  NULL,
+      costsheet_v_total_gross                     VARCHAR(50)  NULL,
+      costsheet_v_om_li_esc                       VARCHAR(50)  NULL,
+      costsheet_v_om_le_esc                       VARCHAR(50)  NULL,
+      costsheet_v_om_ares_esc                     VARCHAR(50)  NULL,
+      costsheet_v_tax_esc                         VARCHAR(50)  NULL,
+      costsheet_v_total_esc                       VARCHAR(50)  NULL,
+      costsheet_v_annual_gross                    VARCHAR(50)  NULL,
+      costsheet_v_parking_li                      VARCHAR(50)  NULL,
+      costsheet_v_gross_rent                      VARCHAR(50)  NULL,
+      costsheet_v_parking_le                      VARCHAR(50)  NULL,
+      costsheet_v_one_time                        VARCHAR(50)  NULL,
+      costsheet_v_one_time_tenant_improvement     VARCHAR(50)  NULL,
+      costsheet_v_total_est_cost                  VARCHAR(50)  NULL,
+      costsheet_v_rent_total_pv                   VARCHAR(50)  NULL,
+      costsheet_v_om_li_pv                        VARCHAR(50)  NULL,
+      costsheet_v_tax_li_pv                       VARCHAR(50)  NULL,
+      costsheet_v_ti_li_pv                        VARCHAR(50)  NULL,
+      costsheet_v_ci_li_pv                        VARCHAR(50)  NULL,
+      costsheet_v_nci_li_pv                       VARCHAR(50)  NULL,
+      costsheet_v_remd_li_pv                      VARCHAR(50)  NULL,
+      costsheet_v_bbi_li_pv                       VARCHAR(50)  NULL,
+      costsheet_v_li_esc_pv                       VARCHAR(50)  NULL,
+      costsheet_v_om_le_esc_pv                    VARCHAR(50)  NULL,
+      costsheet_v_om_ares_esc_pv                  VARCHAR(50)  NULL,
+      costsheet_v_tax_le_esc_pv                   VARCHAR(50)  NULL,
+      costsheet_v_ti_le_pv                        VARCHAR(50)  NULL,
+      costsheet_v_le_ares_per_sqft                VARCHAR(50)  NULL,
+      costsheet_v_net_pv                          VARCHAR(50)  NULL,
+      costsheet_v_net_effective_rate              VARCHAR(50)  NULL,
+      costsheet_v_li_parking_amortize             VARCHAR(50)  NULL,
+      costsheet_v_net_effective_rate_landlord     VARCHAR(50)  NULL,
+      costsheet_v_total_gross_net_pv_ares         VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate            VARCHAR(50)  NULL,
+      costsheet_v_le_parking_amortize             VARCHAR(50)  NULL,
+      costsheet_v_onetime_ares_amortized          VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate_prk        VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate_onetime    VARCHAR(50)  NULL,
+      costsheet_v_gross_effective_rate_total      VARCHAR(50)  NULL,
+      costsheet_v_om_li_esc_check                 VARCHAR(50)  NULL,
+      costsheet_v_om_le_esc_check                 VARCHAR(50)  NULL,
+      costsheet_v_om_ares_esc_check               VARCHAR(50)  NULL,
+      costsheet_v_tax_esc_check                   VARCHAR(50)  NULL,
+      md5_hash                                    CHAR(32)     NULL,
+      edp_last_updated_timestamp                  VARCHAR(100) NULL,
+      source_system                               VARCHAR(50)  NULL,
+      source_account_name                         VARCHAR(50)  NULL,
+      edp_update_ts                               VARCHAR(30)  NULL,
+      row_hash                                    CHAR(32)     NOT NULL,
+      bronze_batch_id                             BIGINT       NOT NULL,
+      bronze_load_ts                              DATETIME2(0) NOT NULL,
+      CONSTRAINT PK_bronze_costsheet_v PRIMARY KEY CLUSTERED ({paste(PRIMARY_KEY, collapse = ', ')}, bronze_load_ts)
     );"
   )
   dbExecute(con, sql)
 }
 
 # Initial Setup ####
-data <- raw_data |>
-  purrr::pluck("data")
+# data <- raw_data |>
+#   purrr::pluck("data")
 
 # test <- data |> group_by(costsheet_v_ls_id) |> mutate(count = n()) |> filter(count > 1)
-tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
-
-hashed <- add_row_hash(data, PRIMARY_KEY, tracked_cols) |>
-  mutate(
-    bronze_load_ts = as.POSIXct(task_start, tz = "UTC"),
-    bronze_batch_id = BATCH_ID
-  )
-
-str(hashed, max.level = 2, vec.len = 0, list.len = Inf)
-max_char_lengths(hashed)
-DBI::dbAppendTable(con, TARGET_TABLE, hashed)
+# tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
+#
+# hashed <- add_row_hash(data, PRIMARY_KEY, tracked_cols) |>
+#   mutate(
+#     bronze_load_ts = as.POSIXct(task_start, tz = "UTC"),
+#     bronze_batch_id = BATCH_ID
+#   )
+#
+# str(hashed, max.level = 2, vec.len = 0, list.len = Inf)
+# max_char_lengths(hashed)
+# DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
 etl_error <- NULL
 
@@ -238,7 +244,7 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "fl_status_pobc"
+        status_col = NULL
       )
     },
     error = function(e) {
