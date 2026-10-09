@@ -69,7 +69,61 @@ test <- archibus_dp |>
 set1 <- test[1, ]
 set2 <- test[2, ]
 set3 <- test[3, ]
-df <- data.frame(Row_1 = t(set1), Row_2 = t(set2), Row_3 = t(set3)) |>
+set4 <- test[4, ]
+
+df <- data.frame(
+  Row_1 = t(set1),
+  Row_2 = t(set2),
+  Row_3 = t(set3),
+  Row_4 = t(set4)
+) |>
+  filter(Row_1 != Row_2)
+
+set1 <- test[5, ]
+set2 <- test[6, ]
+set3 <- test[7, ]
+set4 <- test[8, ]
+
+df <- data.frame(
+  Row_1 = t(set1),
+  Row_2 = t(set2),
+  Row_3 = t(set3),
+  Row_4 = t(set4)
+) |>
+  filter(Row_1 != Row_2)
+
+repeating_group <- archibus_dp |>
+  group_by(dp_dv_id, dp_dp_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  select(
+    dp_name,
+    dp_customer_category,
+    dp_dv_id,
+    dp_dp_id,
+    dp_status,
+    dp_option2
+  ) |>
+  distinct()
+
+# archibus_costsheet_v ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_costsheet_v")
+archibus_costsheet_v <- dbFetch(query, n = -1)
+dbClearResult(query)
+
+test <- archibus_costsheet_v |>
+  group_by(costsheet_v_ls_id) |>
+  mutate(count = n()) |>
+  filter(count > 1) |>
+  arrange(costsheet_v_ls_id, bronze_load_ts)
+
+set1 <- test[5, ]
+set2 <- test[6, ]
+
+df <- data.frame(
+  Row_1 = t(set1),
+  Row_2 = t(set2)
+) |>
   filter(Row_1 != Row_2)
 
 # archibus_fl ####
