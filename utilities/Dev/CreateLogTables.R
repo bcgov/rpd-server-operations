@@ -30,13 +30,14 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     "CREATE TABLE
     {SCHEMA_NAME}.{TABLE_NAME}
     (
-      load_ts                       DATETIME2(3) NOT NULL,
-      batch_id                      BIGINT       NOT NULL,
-      source_system                 VARCHAR(200) NOT NULL,
-      source_table                  VARCHAR(200) NOT NULL,
-      New                           INT          NOT NULL,
-      Changed                       INT          NOT NULL,
-      Unchanged                     INT          NOT NULL
+      load_ts                       DATETIME2(3)  NOT NULL,
+      batch_id                      BIGINT        NOT NULL,
+      source_system                 VARCHAR(200)  NOT NULL,
+      source_table                  VARCHAR(200)  NOT NULL,
+      New                           INT           NOT NULL,
+      Changed                       INT           NOT NULL,
+      Unchanged                     INT           NOT NULL,
+      Duration                      DECIMAL(10,2) NOT NULL
     );"
   )
   dbExecute(con, sql)
@@ -58,6 +59,28 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       last_status                   VARCHAR(50)  NULL,
       load_ts                       DATETIME2(3) NOT NULL,
       batch_id                      BIGINT       NOT NULL
+    );"
+  )
+  dbExecute(con, sql)
+}
+
+# ServerLogs.InfBronze ####
+SCHEMA_NAME = "ServerLogs"
+TABLE_NAME = "InfSilver"
+TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+# dbRemoveTable(con, TARGET_TABLE)
+if (!dbExistsTable(con, TARGET_TABLE)) {
+  sql <- glue::glue(
+    "CREATE TABLE
+    {SCHEMA_NAME}.{TABLE_NAME}
+    (
+      load_ts                       DATETIME2(3)  NOT NULL,
+      batch_id                      BIGINT        NOT NULL,
+      source_system                 VARCHAR(200)  NOT NULL,
+      source_table                  VARCHAR(200)  NOT NULL,
+      output_table                  VARCHAR(200)  NOT NULL,
+      data_rows                     INT           NOT NULL,
+      duration                      DECIMAL(10,2) NOT NULL
     );"
   )
   dbExecute(con, sql)
