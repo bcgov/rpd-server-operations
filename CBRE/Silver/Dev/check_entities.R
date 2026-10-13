@@ -33,4 +33,4 @@ entities <- resp |>
   dplyr::arrange(entity)
 
 result <- entities |>
-  dplyr::filter(if_any(-1, ~ stringr::str_detect(., "option")))
+  dplyr::filter(if_any(-1, ~ stringr::str_detect(., "option1")))
