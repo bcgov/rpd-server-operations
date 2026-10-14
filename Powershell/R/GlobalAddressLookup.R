@@ -62,7 +62,7 @@ AddressList <- output |>
     precision = ""
   )
 
-# Use geocoder to improve addresses
+# Query BC Address Geocoder ####
 if (is.null(etl_error)) {
   tryCatch(
     {
