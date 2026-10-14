@@ -93,8 +93,8 @@ if (is.null(etl_error)) {
       Lands <- LandData |>
         select(
           PropertyId = LAND_NUMBER,
-          lat,
-          lon,
+          lat = LATITUDE,
+          lon = LONGITUDE,
         ) |>
         group_by(PropertyId) |>
         summarise(
@@ -184,11 +184,11 @@ if (is.null(etl_error)) {
       BuildingDate,
       PropertyArea = TotalRentableLand
     ) |>
-    # left_join(Lands, by = join_by(PropertyId))
-    mutate(
-      lat = NA_real_,
-      lon = NA_real_
-    )
+    left_join(Lands, by = join_by(PropertyId))
+    # mutate(
+    #   lat = NA_real_,
+    #   lon = NA_real_
+    # )
 
   Table <- Building |>
     union(Property) |>
@@ -371,27 +371,26 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
-
 # Control database transaction to ensure all steps done together or not at all
 
-dbBegin(con)
+if(is.null(etl_error)){
+  dbBegin(con)
+  tryCatch(
+    {
+      if (dbExistsTable(con, TEMP_TABLE)) {
+        dbRemoveTable(con, TEMP_TABLE)
+      }
 
-tryCatch(
-  {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
-    }
-
-    # Create temp table to hold new data
-    dbExecute(
-      con,
-      paste0(
-        "
+      # Create temp table to hold new data
+      dbExecute(
+        con,
+        paste0(
+          "
     CREATE TABLE  ",
-        SCHEMA_NAME,
-        ".",
-        TEMP_TABLE,
-        " (
+          SCHEMA_NAME,
+          ".",
+          TEMP_TABLE,
+          " (
           RefreshDate             DATETIME2(3)    NOT NULL,
           Identifier              NVARCHAR(50)    NOT NULL,
           BuildingId              NVARCHAR(50)    NULL,
@@ -419,36 +418,36 @@ tryCatch(
           lon                     DECIMAL(9,6)    NULL
           );
   "
+        )
       )
-    )
 
-    dbWriteTable(
-      con,
-      name = TEMP_TABLE,
-      value = FacilityDetail,
-      append = TRUE,
-      overwrite = FALSE
-    )
-
-    dbExecute(
-      con,
-      paste0(
-        "DELETE FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        ";"
+      dbWriteTable(
+        con,
+        name = TEMP_TABLE,
+        value = FacilityDetail,
+        append = TRUE,
+        overwrite = FALSE
       )
-    )
 
-    n_inserted <- dbExecute(
-      con,
-      paste0(
-        "INSERT INTO ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        "(
+      dbExecute(
+        con,
+        paste0(
+          "DELETE FROM ",
+          SCHEMA_NAME,
+          ".",
+          TABLE_NAME,
+          ";"
+        )
+      )
+
+      n_inserted <- dbExecute(
+        con,
+        paste0(
+          "INSERT INTO ",
+          SCHEMA_NAME,
+          ".",
+          TABLE_NAME,
+          "(
         RefreshDate,
         Identifier,
         BuildingId,
@@ -476,24 +475,25 @@ tryCatch(
         lon
       )
       SELECT * FROM ",
-        TEMP_TABLE,
-        ";"
+          TEMP_TABLE,
+          ";"
+        )
       )
-    )
 
-    # Complete the transaction
-    dbCommit(con)
-    #     n_deleted <<- n_deleted
-    n_inserted <<- n_inserted
-    cat("ETL complete — inserted:", n_inserted, "\n")
-    #     n_updated <<- n_updated
-    # rollback transaction on fail, completion of error handling
-  },
-  error = function(e) {
-    dbRollback(con)
-    etl_error <<- e
-  }
-)
+      # Complete the transaction
+      dbCommit(con)
+      #     n_deleted <<- n_deleted
+      n_inserted <<- n_inserted
+      cat("ETL complete — inserted:", n_inserted, "\n")
+      #     n_updated <<- n_updated
+      # rollback transaction on fail, completion of error handling
+    },
+    error = function(e) {
+      dbRollback(con)
+      etl_error <<- e
+    }
+  )
+}
 
 task_end <- Sys.time()
 task_duration <- interval(task_start, task_end) / dseconds()
