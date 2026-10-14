@@ -1,263 +1,334 @@
 # For server logging
 # Begin timer
 task_start <- Sys.time()
+etl_error <- NULL
 
 # Setup necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "FacilityDetail"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "FacilityDetail"
-API_NAME <- "BC Geocoder"
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      ETL_STATUS <- "DEV"
+      SQL_SERVER <- if (ETL_STATUS == "PROD") {
+        "dynamo.idir.bcgov\\CA_PRD"
+      } else {
+        "windfarm.idir.bcgov\\CA_TST"
+      }
+      DB_NAME <- "BuildingIntelligence"
+      SCHEMA_NAME <- "RealProperty"
+      TABLE_NAME <- "FacilityDetail"
+      TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+      TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+      SCRIPT_NAME <- "FacilityDetail"
+      API_NAME <- "BC Geocoder"
 
-options(scipen = 999)
-options(digits = 7)
+      options(scipen = 999)
+      options(digits = 7)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "setup_variables",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 # Connect to SQL database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      con <- dbConnect(
+        odbc(),
+        driver = "ODBC Driver 17 for SQL Server",
+        server = SQL_SERVER,
+        database = DB_NAME,
+        Trusted_Connection = "Yes"
+      )
 
-dynamo <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = "dynamo.idir.bcgov\\CA_PRD",
-  database = "RPD",
-  Trusted_Connection = "Yes"
-)
-
-# Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_bl")
-BuildingData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_rm")
-RoomTotalData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_property")
-PropertyData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-# query <- dbSendQuery(dynamo, "SELECT * FROM DATA_OWNER.RPD_LAND")
-# LandData <- dbFetch(query, n = -1)
-# dbClearResult(query)
-#
-# Lands <- LandData |>
-#   select(
-#     PropertyId = LAND_NUMBER,
-#     lat,
-#     lon,
-#   ) |>
-#   group_by(PropertyId) |>
-#   summarise(
-#     lat = first(lat),
-#     lon = first(lon)
-#   )
-
-Building <- BuildingData |>
-  filter(PobcStatus == "Active") |>
-  filter(BuildingId != "TBD") |>
-  filter(linkAddress != "Dummy Building") |>
-  mutate(Identifier = BuildingId, PropertyArea = NA) |>
-  mutate(
-    across(
-      c(
-        bl_area_usable,
-        bl_area_rentable
-      ),
-      as.double
-    )
-  ) |>
-  mutate(
-    across(
-      c(
-        BuildingDate
-      ),
-      as.POSIXct
-    )
-  ) |>
-  select(
-    Identifier,
-    BuildingId,
-    PropertyId,
-    SiteId,
-    Name,
-    linkAddress,
-    linkCity,
-    Tenure,
-    PrimaryUse,
-    FacilityType,
-    StrategicClassification,
-    BuildingUsableArea = bl_area_usable,
-    BuildingRentableArea = bl_area_rentable,
-    BuildingDate,
-    PropertyArea,
-    lat = bl_lat,
-    lon = bl_lon
+      dynamo <- dbConnect(
+        odbc(),
+        driver = "ODBC Driver 17 for SQL Server",
+        server = "dynamo.idir.bcgov\\CA_PRD",
+        database = "RPD",
+        Trusted_Connection = "Yes"
+      )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "database_connection",
+        condition = e
+      )
+      etl_error <<- e
+    }
   )
-
-Property <- PropertyData |>
-  mutate(
-    Identifier = PropertyId,
-    BuildingId = NA,
-    FacilityType = NA,
-    BuildingUsableArea = NA,
-    BuildingRentableArea = NA,
-    BuildingDate = NA
-  ) |>
-  select(
-    Identifier,
-    BuildingId,
-    PropertyId,
-    SiteId,
-    Name,
-    linkAddress,
-    linkCity,
-    Tenure,
-    PrimaryUse,
-    FacilityType,
-    StrategicClassification,
-    BuildingUsableArea,
-    BuildingRentableArea,
-    BuildingDate,
-    PropertyArea = TotalRentableLand
-  ) |>
-  # left_join(Lands, by = join_by(PropertyId))
-  mutate(
-    lat = NA_real_,
-    lon = NA_real_
-  )
-
-Table <- Building |>
-  union(Property) |>
-  mutate(
-    PropertyId = case_when(
-      startsWith(BuildingId, "N") & is.na(PropertyId) ~ BuildingId,
-      .default = PropertyId
-    )
-  ) |>
-  group_by(PropertyId) |>
-  tidyr::fill(PropertyArea, .direction = "updown") |>
-  ungroup()
-
-AddressList <- Table |>
-  select(linkAddress, linkCity) |>
-  distinct() |>
-  mutate(
-    geo_name = "",
-    score = "",
-    precision = ""
-  )
-
-# Use geocoder to improve addresses
-API_KEY <- keyring::key_get(service = "BCGEOCODER_API")
-
-query_url = 'https://geocoder.api.gov.bc.ca/addresses.geojson?addressString='
-
-for (ii in 1:nrow(AddressList)) {
-  location <- paste0(
-    stringr::str_replace_all(AddressList[ii, "linkAddress"], " ", "%20"),
-    "%20",
-    stringr::str_replace_all(AddressList[ii, "linkCity"], " ", "%20")
-  )
-  req <- request(paste0(query_url, location)) |>
-    req_headers(API_KEY = API_KEY) |>
-    req_timeout(30) |>
-    # req_options(resolve = "geocoder.api.gov.bc.ca:443:142.34.229.4") |>
-    # req_retry(
-    #   max_tries = 3,
-    #   backoff = ~ 10,
-    #   is_transient = \(resp) resp_status(resp) %in% c(429, 500, 502, 503, 504)
-    # ) |>
-    # req_perform(verbosity = 3)
-    req_perform()
-  resp <- req |> resp_body_json()
-  AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
-  AddressList$precision[ii] <- resp$features[[1]]$properties$precisionPoints
-  AddressList$score[ii] <- resp$features[[1]]$properties$score
 }
 
-AddressListFinal <- AddressList |>
-  separate_wider_delim(
-    geo_name,
-    delim = ",",
-    names = c("geoAddress", "geoCity", "Province"),
-    too_few = "align_start"
-  ) |>
-  mutate(
-    geoAddress = trimws(geoAddress),
-    geoCity = trimws(geoCity),
-    Province = trimws(Province),
-    score = as.numeric(score),
-    precision = as.numeric(precision)
-  ) |>
-  mutate(
-    geoAddress = gsub("--", "-", geoAddress),
-  ) |>
-  mutate(
-    Address = case_when(
-      score >= 85 & precision >= 99 ~ geoAddress,
-      .default = linkAddress
-    ),
-    City = case_when(
-      score >= 85 & precision >= 99 ~ geoCity,
-      .default = linkCity
-    ),
-    GeoFlag = case_when(
-      score >= 85 & precision >= 99 ~ TRUE,
-      .default = FALSE
-    )
-  )
+# Query SQL Datasets ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_bl")
+      BuildingData <- dbFetch(query, n = -1)
+      dbClearResult(query)
 
-FacilityDetail <- Table |>
-  left_join(AddressListFinal, by = join_by(linkAddress, linkCity)) |>
-  mutate(
-    RefreshDate = as.POSIXct(Sys.time())
-  ) |>
-  select(
-    RefreshDate,
-    Identifier,
-    BuildingId,
-    PropertyId,
-    SiteId,
-    Name,
-    GeoFlag,
-    Address,
-    City,
-    Tenure,
-    PrimaryUse,
-    FacilityType,
-    StrategicClassification,
-    BuildingUsableArea,
-    BuildingRentableArea,
-    BuildingDate,
-    PropertyArea,
-    linkAddress,
-    linkCity,
-    geoAddress,
-    geoCity,
-    Precision = precision,
-    Score = score,
-    lat,
-    lon
-  ) |>
-  group_by(Identifier) |>
-  mutate(count = n()) |>
-  ungroup() |>
-  filter(count == 1 | (count == 2 & !is.na(BuildingId))) |>
-  select(-count)
+      query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_rm")
+      RoomTotalData <- dbFetch(query, n = -1)
+      dbClearResult(query)
+
+      query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_property")
+      PropertyData <- dbFetch(query, n = -1)
+      dbClearResult(query)
+
+      query <- dbSendQuery(dynamo, "SELECT * FROM DATA_OWNER.RPD_LAND")
+      LandData <- dbFetch(query, n = -1)
+      dbClearResult(query)
+
+      Lands <- LandData |>
+        select(
+          PropertyId = LAND_NUMBER,
+          lat = LATITUDE,
+          lon = LONGITUDE,
+        ) |>
+        group_by(PropertyId) |>
+        summarise(
+          lat = first(lat),
+          lon = first(lon)
+        )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "query_datasets",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
+
+if (is.null(etl_error)) {
+  Building <- BuildingData |>
+    filter(PobcStatus == "Active") |>
+    filter(BuildingId != "TBD") |>
+    filter(linkAddress != "Dummy Building") |>
+    mutate(Identifier = BuildingId, PropertyArea = NA) |>
+    mutate(
+      across(
+        c(
+          bl_area_usable,
+          bl_area_rentable
+        ),
+        as.double
+      )
+    ) |>
+    mutate(
+      across(
+        c(
+          BuildingDate
+        ),
+        as.POSIXct
+      )
+    ) |>
+    select(
+      Identifier,
+      BuildingId,
+      PropertyId,
+      SiteId,
+      Name,
+      linkAddress,
+      linkCity,
+      Tenure,
+      PrimaryUse,
+      FacilityType,
+      StrategicClassification,
+      BuildingUsableArea = bl_area_usable,
+      BuildingRentableArea = bl_area_rentable,
+      BuildingDate,
+      PropertyArea,
+      lat = bl_lat,
+      lon = bl_lon
+    )
+
+  Property <- PropertyData |>
+    mutate(
+      Identifier = PropertyId,
+      BuildingId = NA,
+      FacilityType = NA,
+      BuildingUsableArea = NA,
+      BuildingRentableArea = NA,
+      BuildingDate = NA
+    ) |>
+    select(
+      Identifier,
+      BuildingId,
+      PropertyId,
+      SiteId,
+      Name,
+      linkAddress,
+      linkCity,
+      Tenure,
+      PrimaryUse,
+      FacilityType,
+      StrategicClassification,
+      BuildingUsableArea,
+      BuildingRentableArea,
+      BuildingDate,
+      PropertyArea = TotalRentableLand
+    ) |>
+    left_join(Lands, by = join_by(PropertyId))
+    # mutate(
+    #   lat = NA_real_,
+    #   lon = NA_real_
+    # )
+
+  Table <- Building |>
+    union(Property) |>
+    mutate(
+      PropertyId = case_when(
+        startsWith(BuildingId, "N") & is.na(PropertyId) ~ BuildingId,
+        .default = PropertyId
+      )
+    ) |>
+    group_by(PropertyId) |>
+    tidyr::fill(PropertyArea, .direction = "updown") |>
+    ungroup()
+
+  AddressList <- Table |>
+    select(linkAddress, linkCity) |>
+    distinct() |>
+    mutate(
+      geo_name = "",
+      score = "",
+      precision = ""
+    )
+}
+
+# Query BC Geocoder ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      API_KEY <- keyring::key_get(service = "BCGEOCODER_API")
+
+      query_url = 'https://geocoder.api.gov.bc.ca/addresses.geojson?addressString='
+
+      for (ii in 1:nrow(AddressList)) {
+        location <- paste0(
+          stringr::str_replace_all(AddressList[ii, "linkAddress"], " ", "%20"),
+          "%20",
+          stringr::str_replace_all(AddressList[ii, "linkCity"], " ", "%20")
+        )
+        req <- request(paste0(query_url, location)) |>
+          req_headers(API_KEY = API_KEY) |>
+          req_timeout(30) |>
+          # req_options(resolve = "geocoder.api.gov.bc.ca:443:142.34.229.4") |>
+          # req_retry(
+          #   max_tries = 3,
+          #   backoff = ~ 10,
+          #   is_transient = \(resp) resp_status(resp) %in% c(429, 500, 502, 503, 504)
+          # ) |>
+          # req_perform(verbosity = 3)
+          req_perform()
+        resp <- req |> resp_body_json()
+        AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
+        AddressList$precision[ii] <- resp$features[[
+          1
+        ]]$properties$precisionPoints
+        AddressList$score[ii] <- resp$features[[1]]$properties$score
+      }
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "BC_Geocoder",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
+
+if (is.null(etl_error)) {
+  AddressListFinal <- AddressList |>
+    separate_wider_delim(
+      geo_name,
+      delim = ",",
+      names = c("geoAddress", "geoCity", "Province"),
+      too_few = "align_start"
+    ) |>
+    mutate(
+      geoAddress = trimws(geoAddress),
+      geoCity = trimws(geoCity),
+      Province = trimws(Province),
+      score = as.numeric(score),
+      precision = as.numeric(precision)
+    ) |>
+    mutate(
+      geoAddress = gsub("--", "-", geoAddress),
+    ) |>
+    mutate(
+      Address = case_when(
+        score >= 85 & precision >= 99 ~ geoAddress,
+        .default = linkAddress
+      ),
+      City = case_when(
+        score >= 85 & precision >= 99 ~ geoCity,
+        .default = linkCity
+      ),
+      GeoFlag = case_when(
+        score >= 85 & precision >= 99 ~ TRUE,
+        .default = FALSE
+      )
+    )
+
+  FacilityDetail <- Table |>
+    left_join(AddressListFinal, by = join_by(linkAddress, linkCity)) |>
+    mutate(
+      RefreshDate = as.POSIXct(Sys.time())
+    ) |>
+    select(
+      RefreshDate,
+      Identifier,
+      BuildingId,
+      PropertyId,
+      SiteId,
+      Name,
+      GeoFlag,
+      Address,
+      City,
+      Tenure,
+      PrimaryUse,
+      FacilityType,
+      StrategicClassification,
+      BuildingUsableArea,
+      BuildingRentableArea,
+      BuildingDate,
+      PropertyArea,
+      linkAddress,
+      linkCity,
+      geoAddress,
+      geoCity,
+      Precision = precision,
+      Score = score,
+      lat,
+      lon
+    ) |>
+    group_by(Identifier) |>
+    mutate(count = n()) |>
+    ungroup() |>
+    filter(count == 1 | (count == 2 & !is.na(BuildingId))) |>
+    select(-count)
+}
 
 # dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
 if (!dbExistsTable(con, TARGET_TABLE)) {
@@ -300,28 +371,26 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
-etl_start_time <- Sys.time()
-
-etl_error <- NULL
 # Control database transaction to ensure all steps done together or not at all
-dbBegin(con)
 
-tryCatch(
-  {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
-    }
+if(is.null(etl_error)){
+  dbBegin(con)
+  tryCatch(
+    {
+      if (dbExistsTable(con, TEMP_TABLE)) {
+        dbRemoveTable(con, TEMP_TABLE)
+      }
 
-    # Create temp table to hold new data
-    dbExecute(
-      con,
-      paste0(
-        "
+      # Create temp table to hold new data
+      dbExecute(
+        con,
+        paste0(
+          "
     CREATE TABLE  ",
-        SCHEMA_NAME,
-        ".",
-        TEMP_TABLE,
-        " (
+          SCHEMA_NAME,
+          ".",
+          TEMP_TABLE,
+          " (
           RefreshDate             DATETIME2(3)    NOT NULL,
           Identifier              NVARCHAR(50)    NOT NULL,
           BuildingId              NVARCHAR(50)    NULL,
@@ -349,36 +418,36 @@ tryCatch(
           lon                     DECIMAL(9,6)    NULL
           );
   "
+        )
       )
-    )
 
-    dbWriteTable(
-      con,
-      name = TEMP_TABLE,
-      value = FacilityDetail,
-      append = TRUE,
-      overwrite = FALSE
-    )
-
-    dbExecute(
-      con,
-      paste0(
-        "DELETE FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        ";"
+      dbWriteTable(
+        con,
+        name = TEMP_TABLE,
+        value = FacilityDetail,
+        append = TRUE,
+        overwrite = FALSE
       )
-    )
 
-    n_inserted <- dbExecute(
-      con,
-      paste0(
-        "INSERT INTO ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        "(
+      dbExecute(
+        con,
+        paste0(
+          "DELETE FROM ",
+          SCHEMA_NAME,
+          ".",
+          TABLE_NAME,
+          ";"
+        )
+      )
+
+      n_inserted <- dbExecute(
+        con,
+        paste0(
+          "INSERT INTO ",
+          SCHEMA_NAME,
+          ".",
+          TABLE_NAME,
+          "(
         RefreshDate,
         Identifier,
         BuildingId,
@@ -406,24 +475,25 @@ tryCatch(
         lon
       )
       SELECT * FROM ",
-        TEMP_TABLE,
-        ";"
+          TEMP_TABLE,
+          ";"
+        )
       )
-    )
 
-    # Complete the transaction
-    dbCommit(con)
-    #     n_deleted <<- n_deleted
-    n_inserted <<- n_inserted
-    cat("ETL complete — inserted:", n_inserted, "\n")
-    #     n_updated <<- n_updated
-    # rollback transaction on fail, completion of error handling
-  },
-  error = function(e) {
-    dbRollback(con)
-    stop(e)
-  }
-)
+      # Complete the transaction
+      dbCommit(con)
+      #     n_deleted <<- n_deleted
+      n_inserted <<- n_inserted
+      cat("ETL complete — inserted:", n_inserted, "\n")
+      #     n_updated <<- n_updated
+      # rollback transaction on fail, completion of error handling
+    },
+    error = function(e) {
+      dbRollback(con)
+      etl_error <<- e
+    }
+  )
+}
 
 task_end <- Sys.time()
 task_duration <- interval(task_start, task_end) / dseconds()
