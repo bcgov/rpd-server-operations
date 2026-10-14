@@ -1,26 +1,45 @@
 # For server logging
 # Begin timer
 task_start <- Sys.time()
+etl_error <- NULL
 
 # Setup necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
-}
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "FacilityDetail"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "FacilityDetail"
-API_NAME <- "BC Geocoder"
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+    ETL_STATUS <- "DEV"
+    SQL_SERVER <- if (ETL_STATUS == "PROD") {
+      "dynamo.idir.bcgov\\CA_PRD"
+    } else {
+      "windfarm.idir.bcgov\\CA_TST"
+    }
+    DB_NAME <- "BuildingIntelligence"
+    SCHEMA_NAME <- "RealProperty"
+    TABLE_NAME <- "FacilityDetail"
+    TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+    TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+    SCRIPT_NAME <- "FacilityDetail"
+    API_NAME <- "BC Geocoder"
 
-options(scipen = 999)
-options(digits = 7)
+    options(scipen = 999)
+    options(digits = 7)
+  },
+  error = function(e) {
+    log_etl_error(
+      api_name = API_NAME,
+      script_name = SCRIPT_NAME,
+      table_name = TABLE_NAME,
+      step = "setup_variables",
+      condition = e
+    )
+    etl_error <<- e
+  })
+}
 
 # Connect to SQL database
+if (is.null(etl_error)) {
+  tryCatch(
+    {
 con <- dbConnect(
   odbc(),
   driver = "ODBC Driver 17 for SQL Server",
@@ -36,6 +55,18 @@ dynamo <- dbConnect(
   database = "RPD",
   Trusted_Connection = "Yes"
 )
+    },
+error = function(e) {
+  log_etl_error(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    step = "database_connection",
+    condition = e
+  )
+  etl_error <<- e
+})
+}
 
 # Query SQL Datasets ####
 query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_bl")
@@ -162,6 +193,8 @@ AddressList <- Table |>
   )
 
 # Use geocoder to improve addresses
+tryCatch(
+  {
 API_KEY <- keyring::key_get(service = "BCGEOCODER_API")
 
 query_url = 'https://geocoder.api.gov.bc.ca/addresses.geojson?addressString='
@@ -188,6 +221,19 @@ for (ii in 1:nrow(AddressList)) {
   AddressList$precision[ii] <- resp$features[[1]]$properties$precisionPoints
   AddressList$score[ii] <- resp$features[[1]]$properties$score
 }
+  },
+error = function(e) {
+  log_etl_error(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    step = "BC_Geocoder",
+    condition = e
+  )
+  # etl_error <<- e
+}
+)
+
 
 AddressListFinal <- AddressList |>
   separate_wider_delim(

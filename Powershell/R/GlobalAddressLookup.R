@@ -1,6 +1,7 @@
 # For server logging
 # Begin timer
 task_start <- Sys.time()
+etl_error <- NULL
 
 # Load helper functions
 source(here::here("renv/activate.R"))
@@ -62,7 +63,8 @@ AddressList <- output |>
   )
 
 # Use geocoder to improve addresses
-
+tryCatch(
+  {
 api_key <- keyring::key_get(
   service = "BCGEOCODER_API",
   keyring = NULL
@@ -106,6 +108,18 @@ for (ii in 1:nrow(AddressList)) {
   AddressList$precision[ii] <- resp$features[[1]]$properties$precisionPoints
   AddressList$score[ii] <- resp$features[[1]]$properties$score
 }
+  },
+error = function(e) {
+  log_etl_error(
+    api_name = API_NAME,
+    script_name = SCRIPT_NAME,
+    table_name = TABLE_NAME,
+    step = "BC_Geocoder",
+    condition = e
+  )
+  etl_error <<- e
+}
+)
 
 AddressListFinal <- AddressList |>
   separate_wider_delim(

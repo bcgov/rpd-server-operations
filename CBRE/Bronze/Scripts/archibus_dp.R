@@ -202,6 +202,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 etl_error <- NULL
 
 # Hash and Classify Data ####
+if (is.null(etl_error)) {
 tryCatch(
   {
     data <- raw_data |>
@@ -235,6 +236,7 @@ tryCatch(
     etl_error <<- e
   }
 )
+}
 
 # Check for Existing Data not in current API pull ####
 if (is.null(etl_error)) {
