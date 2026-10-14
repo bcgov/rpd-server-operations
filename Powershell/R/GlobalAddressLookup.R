@@ -1,10 +1,10 @@
+source(here::here("renv/activate.R"))
 # For server logging
 # Begin timer
 task_start <- Sys.time()
 etl_error <- NULL
 
 # Load helper functions
-source(here::here("renv/activate.R"))
 source(here::here("utilities/utilities.R"))
 
 # Load libraries
@@ -63,159 +63,165 @@ AddressList <- output |>
   )
 
 # Use geocoder to improve addresses
-tryCatch(
-  {
-api_key <- keyring::key_get(
-  service = "BCGEOCODER_API",
-  keyring = NULL
-)
-
-query_url = 'https://geocoder.api.gov.bc.ca/addresses.geojson?addressString='
-
-for (ii in 1:nrow(AddressList)) {
-  location <- paste0(
-    stringr::str_replace_all(
-      AddressList[ii, "linkAddress"],
-      c(
-        "#" = "",
-        "@" = "",
-        ";" = "",
-        "’" = "",
-        "–" = "",
-        "[|]" = "",
-        "[P][O][\\s+][B][Oo][Xx][\\s+][0-9]+[\\s+][Ss][Tt][Nn][\\s+][Pp][Rr][Oo][Vv][\\s+][Gg][Oo][Vv][Tt]*" = "",
-        "\\s+" = "%20"
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      api_key <- keyring::key_get(
+        service = "BCGEOCODER_API",
+        keyring = NULL
       )
-    ),
-    "%20",
-    stringr::str_replace_all(
-      AddressList[ii, "linkCity"],
-      c(
-        ";" = "",
-        "’" = "",
-        "–" = "",
-        "[|]" = "",
-        "\\s+" = "%20"
+
+      query_url = 'https://geocoder.api.gov.bc.ca/addresses.geojson?addressString='
+
+      for (ii in 1:nrow(AddressList)) {
+        location <- paste0(
+          stringr::str_replace_all(
+            AddressList[ii, "linkAddress"],
+            c(
+              "#" = "",
+              "@" = "",
+              ";" = "",
+              "’" = "",
+              "–" = "",
+              "[|]" = "",
+              "[P][O][\\s+][B][Oo][Xx][\\s+][0-9]+[\\s+][Ss][Tt][Nn][\\s+][Pp][Rr][Oo][Vv][\\s+][Gg][Oo][Vv][Tt]*" = "",
+              "\\s+" = "%20"
+            )
+          ),
+          "%20",
+          stringr::str_replace_all(
+            AddressList[ii, "linkCity"],
+            c(
+              ";" = "",
+              "’" = "",
+              "–" = "",
+              "[|]" = "",
+              "\\s+" = "%20"
+            )
+          )
+        )
+
+        req <- request(paste0(query_url, location)) |>
+          req_headers(API_KEY = api_key) |>
+          req_perform()
+        resp <- req |> resp_body_json()
+        AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
+        AddressList$precision[ii] <- resp$features[[
+          1
+        ]]$properties$precisionPoints
+        AddressList$score[ii] <- resp$features[[1]]$properties$score
+      }
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "BC_Geocoder",
+        condition = e
       )
-    )
+      etl_error <<- e
+    }
   )
-
-  req <- request(paste0(query_url, location)) |>
-    req_headers(API_KEY = api_key) |>
-    req_perform()
-  resp <- req |> resp_body_json()
-  AddressList$geo_name[ii] <- resp$features[[1]]$properties$fullAddress
-  AddressList$precision[ii] <- resp$features[[1]]$properties$precisionPoints
-  AddressList$score[ii] <- resp$features[[1]]$properties$score
 }
-  },
-error = function(e) {
-  log_etl_error(
-    api_name = API_NAME,
-    script_name = SCRIPT_NAME,
-    table_name = TABLE_NAME,
-    step = "BC_Geocoder",
-    condition = e
-  )
-  etl_error <<- e
-}
-)
 
-AddressListFinal <- AddressList |>
-  separate_wider_delim(
-    geo_name,
-    delim = ",",
-    names = c("geoAddress", "geoCity", "Province"),
-    too_few = "align_start"
-  ) |>
-  mutate(
-    geoAddress = trimws(geoAddress),
-    geoCity = trimws(geoCity),
-    Province = trimws(Province),
-    score = as.numeric(score),
-    precision = as.numeric(precision)
-  ) |>
-  mutate(
-    geoAddress = gsub("--", "-", geoAddress),
-  ) |>
-  mutate(
-    Address = case_when(
-      score >= 85 & precision >= 99 ~ geoAddress,
-      .default = linkAddress
-    ),
-    City = case_when(
-      score >= 85 & precision >= 99 ~ geoCity,
-      .default = linkCity
-    ),
-    GeoFlag = case_when(
-      score >= 85 & precision >= 99 ~ TRUE,
-      .default = FALSE
-    ),
-    Prefix = case_when(
-      stringr::str_detect(
-        Address,
-        "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]*[A-Z]?[\\s]?[-][\\s]"
-      ) ~ stringr::str_extract(
-        Address,
-        "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]+[A-Z]?"
+if (is.null(etl_error)) {
+  AddressListFinal <- AddressList |>
+    separate_wider_delim(
+      geo_name,
+      delim = ",",
+      names = c("geoAddress", "geoCity", "Province"),
+      too_few = "align_start"
+    ) |>
+    mutate(
+      geoAddress = trimws(geoAddress),
+      geoCity = trimws(geoCity),
+      Province = trimws(Province),
+      score = as.numeric(score),
+      precision = as.numeric(precision)
+    ) |>
+    mutate(
+      geoAddress = gsub("--", "-", geoAddress),
+    ) |>
+    mutate(
+      Address = case_when(
+        score >= 85 & precision >= 99 ~ geoAddress,
+        .default = linkAddress
       ),
-      .default = NA
-    ),
-    Address = case_when(
-      stringr::str_detect(
-        Address,
-        "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]*[A-Z]?[\\s]?[-][\\s]"
-      ) ~ stringr::str_replace(
-        Address,
-        "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]*[A-Z]?[\\s]?[-][\\s]",
-        ""
+      City = case_when(
+        score >= 85 & precision >= 99 ~ geoCity,
+        .default = linkCity
       ),
-      .default = Address
+      GeoFlag = case_when(
+        score >= 85 & precision >= 99 ~ TRUE,
+        .default = FALSE
+      ),
+      Prefix = case_when(
+        stringr::str_detect(
+          Address,
+          "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]*[A-Z]?[\\s]?[-][\\s]"
+        ) ~ stringr::str_extract(
+          Address,
+          "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]+[A-Z]?"
+        ),
+        .default = NA
+      ),
+      Address = case_when(
+        stringr::str_detect(
+          Address,
+          "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]*[A-Z]?[\\s]?[-][\\s]"
+        ) ~ stringr::str_replace(
+          Address,
+          "(FLR|RM|UNIT|SUITE)[\\s][A-Z]?[0-9]*[A-Z]?[\\s]?[-][\\s]",
+          ""
+        ),
+        .default = Address
+      )
+    ) |>
+    relocate(Prefix, .before = Address)
+
+  GlobalAddressLookup <- output |>
+    left_join(
+      AddressListFinal,
+      by = join_by(streetaddress == linkAddress, l == linkCity, postalcode)
+    ) |>
+    mutate(RefreshDate = as.POSIXct(Sys.time())) |>
+    mutate(
+      GeoFlag = as.integer(GeoFlag)
+    ) |>
+    select(
+      RefreshDate,
+      FirstName = givenname,
+      LastName = sn,
+      Company = company,
+      Department = department,
+      Office = physicaldeliveryofficename,
+      JobTitle = title,
+      Displayname = displayname,
+      EmailAddress = mail,
+      EmployeeId = employeeid,
+      GeoFlag,
+      Prefix,
+      Address,
+      City,
+      Score = score,
+      Precision = precision,
+      LinkAddress = streetaddress,
+      linkCity = l,
+      linkPostalCode = postalcode,
+      bcgovaccountstatus,
+      bcgovaccounttype,
+      bcgovemploymenttype,
+      bcgovhrcity,
+      bcgovhrdepartmentid,
+      bcgovhrpositionnumber,
+      bcgovhrstatus,
+      bcgovhrcompany,
+      bcgovhrbusinessunit,
+      bcgovhrlocationcode,
+      mailboxorgcode
     )
-  ) |>
-  relocate(Prefix, .before = Address)
-
-GlobalAddressLookup <- output |>
-  left_join(
-    AddressListFinal,
-    by = join_by(streetaddress == linkAddress, l == linkCity, postalcode)
-  ) |>
-  mutate(RefreshDate = as.POSIXct(Sys.time())) |>
-  mutate(
-    GeoFlag = as.integer(GeoFlag)
-  ) |>
-  select(
-    RefreshDate,
-    FirstName = givenname,
-    LastName = sn,
-    Company = company,
-    Department = department,
-    Office = physicaldeliveryofficename,
-    JobTitle = title,
-    Displayname = displayname,
-    EmailAddress = mail,
-    EmployeeId = employeeid,
-    GeoFlag,
-    Prefix,
-    Address,
-    City,
-    Score = score,
-    Precision = precision,
-    LinkAddress = streetaddress,
-    linkCity = l,
-    linkPostalCode = postalcode,
-    bcgovaccountstatus,
-    bcgovaccounttype,
-    bcgovemploymenttype,
-    bcgovhrcity,
-    bcgovhrdepartmentid,
-    bcgovhrpositionnumber,
-    bcgovhrstatus,
-    bcgovhrcompany,
-    bcgovhrbusinessunit,
-    bcgovhrlocationcode,
-    mailboxorgcode
-  )
+}
 
 # dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
 if (!dbExistsTable(con, TARGET_TABLE)) {
@@ -263,27 +269,27 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 }
 
 # Database Transaction ####
-etl_error <- NULL
 
 # Control database transaction to ensure all steps done together or not at all
-dbBegin(con)
+if (is.null(etl_error)) {
+  dbBegin(con)
 
-tryCatch(
-  {
-    if (dbExistsTable(con, TEMP_TABLE)) {
-      dbRemoveTable(con, TEMP_TABLE)
-    }
+  tryCatch(
+    {
+      if (dbExistsTable(con, TEMP_TABLE)) {
+        dbRemoveTable(con, TEMP_TABLE)
+      }
 
-    # Create temp table to hold new data
-    dbExecute(
-      con,
-      paste0(
-        "
+      # Create temp table to hold new data
+      dbExecute(
+        con,
+        paste0(
+          "
     CREATE TABLE  ",
-        SCHEMA_NAME,
-        ".",
-        TEMP_TABLE,
-        " (
+          SCHEMA_NAME,
+          ".",
+          TEMP_TABLE,
+          " (
         RefreshDate               DATETIME2(3)    NOT NULL,
         FirstName                 NVARCHAR(100)   NOT NULL,
         LastName                  NVARCHAR(100)   NOT NULL,
@@ -316,36 +322,36 @@ tryCatch(
         mailboxorgcode            NVARCHAR(10)    NULL
     );
   "
+        )
       )
-    )
 
-    dbWriteTable(
-      con,
-      name = TEMP_TABLE,
-      value = GlobalAddressLookup,
-      append = TRUE,
-      overwrite = FALSE
-    )
-
-    dbExecute(
-      con,
-      paste0(
-        "DELETE FROM ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        ";"
+      dbWriteTable(
+        con,
+        name = TEMP_TABLE,
+        value = GlobalAddressLookup,
+        append = TRUE,
+        overwrite = FALSE
       )
-    )
 
-    n_inserted <- dbExecute(
-      con,
-      paste0(
-        "INSERT INTO ",
-        SCHEMA_NAME,
-        ".",
-        TABLE_NAME,
-        "(
+      dbExecute(
+        con,
+        paste0(
+          "DELETE FROM ",
+          SCHEMA_NAME,
+          ".",
+          TABLE_NAME,
+          ";"
+        )
+      )
+
+      n_inserted <- dbExecute(
+        con,
+        paste0(
+          "INSERT INTO ",
+          SCHEMA_NAME,
+          ".",
+          TABLE_NAME,
+          "(
         RefreshDate,
         FirstName,
         LastName,
@@ -378,24 +384,25 @@ tryCatch(
         mailboxorgcode
       )
        SELECT * FROM ",
-        TEMP_TABLE,
-        ";"
+          TEMP_TABLE,
+          ";"
+        )
       )
-    )
 
-    # Complete the transaction
-    dbCommit(con)
-    #     n_deleted <<- n_deleted
-    n_inserted <<- n_inserted
-    #     n_updated <<- n_updated
-    #     # Rollback transaction on failure
-  },
-  error = function(e) {
-    dbRollback(con)
-    etl_error <<- e
-    # stop(e)
-  }
-)
+      # Complete the transaction
+      dbCommit(con)
+      #     n_deleted <<- n_deleted
+      n_inserted <<- n_inserted
+      #     n_updated <<- n_updated
+      #     # Rollback transaction on failure
+    },
+    error = function(e) {
+      dbRollback(con)
+      etl_error <<- e
+      # stop(e)
+    }
+  )
+}
 
 task_end <- Sys.time()
 task_duration <- interval(task_start, task_end) / dseconds()

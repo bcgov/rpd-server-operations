@@ -212,7 +212,7 @@ if (is.null(etl_error)) {
     )
 }
 
-# Use geocoder to improve addresses
+# Query BC Geocoder ####
 if (is.null(etl_error)) {
   tryCatch(
     {
