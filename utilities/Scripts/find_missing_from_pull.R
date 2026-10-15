@@ -93,7 +93,7 @@ find_missing_from_pull <- function(
     )
 
     new_tombstones <- missing |>
-      anti_join(current_tombstones)
+      anti_join(current_tombstones, by = join_by(source_key_values))
 
     if (nrow(new_tombstones) > 0) {
       DBI::dbAppendTable(
@@ -101,19 +101,27 @@ find_missing_from_pull <- function(
         DBI::Id(schema = "ServerLogs", table = "Tombstones"),
         new_tombstones
       )
-      write.csv(
-        new_tombstones,
-        here::here(paste0(
-          "logs/missing/",
-          Sys.Date(),
-          "-",
-          table,
-          "-missing.csv"
-        )),
-        row.names = FALSE
-      )
+      # write.csv(
+      #   new_tombstones,
+      #   here::here(paste0(
+      #     "logs/missing/",
+      #     Sys.Date(),
+      #     "-",
+      #     table,
+      #     "-missing.csv"
+      #   )),
+      #   row.names = FALSE
+      # )
+    } else {
+      cat("No New Tombstones", "\n")
     }
   }
+
+  if (nrow(missing) == 0) {
+    cat("No Missing Values", "\n")
+  }
+
+  return(missing)
 
   # write an else statement to do something if nrow(missing) == 0 or if nrow(new_tombstones) == 0
 }

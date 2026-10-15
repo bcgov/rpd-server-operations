@@ -44,6 +44,10 @@ query <- dbSendQuery(con, "SELECT * FROM ServerLogs.InfSilver")
 InfSilver_logs <- dbFetch(query, n = -1)
 dbClearResult(query)
 
+query <- dbSendQuery(con, "SELECT * FROM ServerLogs.Tombstones")
+InfTombstones_logs <- dbFetch(query, n = -1)
+dbClearResult(query)
+
 
 # archibus_bl ####
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_bl")
@@ -131,6 +135,11 @@ repeating_group <- archibus_dp |>
   distinct()
 
 table(archibus_dp$dp_option1)
+
+# archibus_dp ####
+query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_dv")
+archibus_dv <- dbFetch(query, n = -1)
+dbClearResult(query)
 
 # archibus_costsheet_v ####
 query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_costsheet_v")

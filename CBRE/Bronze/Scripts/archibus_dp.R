@@ -203,39 +203,39 @@ etl_error <- NULL
 
 # Hash and Classify Data ####
 if (is.null(etl_error)) {
-tryCatch(
-  {
-    data <- raw_data |>
-      purrr::pluck("data")
+  tryCatch(
+    {
+      data <- raw_data |>
+        purrr::pluck("data")
 
-    tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
+      tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
 
-    hashed <- data |>
-      add_row_hash(PRIMARY_KEY, tracked_cols) |>
-      mutate(
-        bronze_load_ts = as.POSIXct(task_start, tz = "UTC"),
-        bronze_batch_id = BATCH_ID
+      hashed <- data |>
+        add_row_hash(PRIMARY_KEY, tracked_cols) |>
+        mutate(
+          bronze_load_ts = as.POSIXct(task_start, tz = "UTC"),
+          bronze_batch_id = BATCH_ID
+        )
+
+      classified_data <- classify_incoming(
+        hashed,
+        con,
+        SCHEMA_NAME,
+        TABLE_NAME,
+        PRIMARY_KEY
       )
-
-    classified_data <- classify_incoming(
-      hashed,
-      con,
-      SCHEMA_NAME,
-      TABLE_NAME,
-      PRIMARY_KEY
-    )
-  },
-  error = function(e) {
-    log_etl_error(
-      api_name = API_NAME,
-      script_name = SCRIPT_NAME,
-      table_name = TABLE_NAME,
-      step = "hash_classify",
-      condition = e
-    )
-    etl_error <<- e
-  }
-)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "hash_classify",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
 }
 
 # Check for Existing Data not in current API pull ####
@@ -248,7 +248,9 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "dp_status"
+        status_col = "dp_status",
+        task_start,
+        BATCH_ID
       )
     },
     error = function(e) {
