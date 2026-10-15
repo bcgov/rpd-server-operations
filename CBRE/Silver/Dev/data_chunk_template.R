@@ -27,10 +27,17 @@ CBRE_TABLE_NAME <- "es_fact_allocated_invoice_calendarized_vw"
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
-  start_time = "2010-06-01T00:00:00Z",
-  end_time = "2020-06-01T00:00:00Z"
+  start_time = "2020-05-01T00:00:00Z",
+  end_time = "2023-06-01T00:00:00Z"
 )
 
+chunk_2 <- call_cbre_api(
+  CBRE_TABLE_NAME,
+  start_time = "2023-06-01T00:00:00Z",
+  end_time = "2024-06-01T00:00:00Z"
+)
+
+openxlsx2::write_xlsx(raw_data, "C:/Projects/es_fact_invoice_sample.xlsx")
 raw_data <- chunk_1 |>
   purrr::pluck("data")
 
