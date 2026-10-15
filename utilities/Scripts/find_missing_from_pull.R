@@ -18,8 +18,18 @@ find_missing_from_pull <- function(
   batch_id,
   key_sep = "|"
 ) {
+  # Assign variables for testing.
+  # incoming <- hashed
+  # schema <- SCHEMA_NAME
+  # table <- TABLE_NAME
+  # primary_key <- PRIMARY_KEY
+  # status_col = NULL
+  # load_ts <- task_start
+  # batch_id <- BATCH_ID
+  # key_sep = "|"
   pk_cols <- paste(primary_key, collapse = ", ")
   select_cols <- paste(c(primary_key, status_col), collapse = ", ")
+  source_key_value <- paste(primary_key, collapse = key_sep)
 
   last_known <- DBI::dbGetQuery(
     con,
@@ -52,13 +62,13 @@ find_missing_from_pull <- function(
   missing <- last_known |>
     anti_join(incoming, by = primary_key) |>
     tidyr::unite(
-      "tombstone_id",
+      "source_key",
       dplyr::all_of(primary_key),
       sep = key_sep,
       remove = TRUE
     ) |>
     dplyr::mutate(
-      key_column = paste(primary_key, collapse = key_sep),
+      source_key_values = paste(primary_key, collapse = key_sep),
       .before = last_status
     ) |>
     dplyr::mutate(
@@ -67,6 +77,43 @@ find_missing_from_pull <- function(
       load_ts = as.POSIXct(load_ts, tz = "UTC"),
       batch_id = batch_id
     )
-#
-#   if(nrow(missing) > 0){
-# }
+
+  if (nrow(missing) > 0) {
+    current_tombstones <- DBI::dbGetQuery(
+      con,
+      glue::glue(
+        "
+    SELECT
+    tombstone_id,
+    source_key_values
+    FROM ServerLogs.Tombstones
+    WHERE source_key_values = '{source_key_value}'
+  "
+      )
+    )
+
+    new_tombstones <- missing |>
+      anti_join(current_tombstones)
+
+    if (nrow(new_tombstones) > 0) {
+      DBI::dbAppendTable(
+        con,
+        DBI::Id(schema = "ServerLogs", table = "Tombstones"),
+        new_tombstones
+      )
+      write.csv(
+        new_tombstones,
+        here::here(paste0(
+          "logs/missing/",
+          Sys.Date(),
+          "-",
+          table,
+          "-missing.csv"
+        )),
+        row.names = FALSE
+      )
+    }
+  }
+
+  # write an else statement to do something if nrow(missing) == 0 or if nrow(new_tombstones) == 0
+}

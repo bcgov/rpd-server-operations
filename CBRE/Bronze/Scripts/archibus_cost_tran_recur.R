@@ -91,7 +91,7 @@ if (raw_data$status == "no_data") {
 }
 
 EXCLUDED_FROM_HASH <- c(
-  "cost_tran_recur_cost_tran_recur_id_key", # composite key value — not a "value" to hash
+  PRIMARY_KEY, # composite key value — not a "value" to hash
   "md5_hash", # partner-supplied hash — not used
   "edp_last_updated_timestamp",
   "edp_update_ts",
