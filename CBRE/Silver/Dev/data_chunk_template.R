@@ -22,13 +22,13 @@ source(here::here("utilities/utilities.R"))
 "archibus_op"
 "archibus_ls_comm"
 "archibus_commtype"
-CBRE_TABLE_NAME <- "archibus_ls_comm"
+CBRE_TABLE_NAME <- "es_fact_allocated_invoice_calendarized_vw"
 
 # Query API
 chunk_1 <- call_cbre_api(
   CBRE_TABLE_NAME,
   start_time = "2010-06-01T00:00:00Z",
-  end_time = paste0(Sys.Date() + 1, "T00:00:00Z")
+  end_time = "2020-06-01T00:00:00Z"
 )
 
 raw_data <- chunk_1 |>

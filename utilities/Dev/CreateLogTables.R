@@ -54,8 +54,10 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     {SCHEMA_NAME}.{TABLE_NAME}
     (
       tombstone_id                  BIGINT IDENTITY(1,1) PRIMARY KEY,
-      source_system                 VARCHAR(200) NOT NULL,
-      source_table                  VARCHAR(200) NOT NULL,
+      source_key                    VARCHAR(900) NOT NULL,
+      source_key_values             VARCHAR(900) NOT NULL,
+      source_system                 VARCHAR(900) NOT NULL,
+      source_table                  VARCHAR(900) NOT NULL,
       last_status                   VARCHAR(50)  NULL,
       load_ts                       DATETIME2(3) NOT NULL,
       batch_id                      BIGINT       NOT NULL

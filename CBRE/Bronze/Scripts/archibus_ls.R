@@ -333,7 +333,9 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "ls_status"
+        status_col = "ls_status",
+        task_start,
+        BATCH_ID
       )
     },
     error = function(e) {

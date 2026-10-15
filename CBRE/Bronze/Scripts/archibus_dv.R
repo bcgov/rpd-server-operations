@@ -155,7 +155,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 #
 # str(hashed, max.level = 2, vec.len = 0, list.len = Inf)
 # max_char_lengths(hashed)
-DBI::dbAppendTable(con, TARGET_TABLE, hashed)
+# DBI::dbAppendTable(con, TARGET_TABLE, hashed)
 
 etl_error <- NULL
 
@@ -204,7 +204,9 @@ if (is.null(etl_error)) {
         SCHEMA_NAME,
         TABLE_NAME,
         PRIMARY_KEY,
-        status_col = "dv_status"
+        status_col = "dv_status",
+        task_start,
+        BATCH_ID
       )
     },
     error = function(e) {
