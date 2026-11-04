@@ -286,6 +286,7 @@ status_cols <- c(
   "InProgress",
   "Open",
   "Reopened",
+  "WaitingforApproval",
   "WaitingforCustomer",
   "OnHold"
 )
@@ -315,7 +316,7 @@ tryCatch(
       mutate(DueDate = as.Date(DueDate, format = "%Y-%m-%d")) |>
       mutate(NumberOfSpaces = as.integer(NumberOfSpaces)) |>
       mutate(across(
-        c(Closed, InProgress, Open, Reopened, WaitingforCustomer, OnHold),
+        c(Closed, InProgress, Open, Reopened, WaitingforApproval, WaitingforCustomer, OnHold),
         ~ ifelse(is.finite(.x), .x, NA_real_)
       )) |>
       mutate(RefreshDate = Sys.time(), .before = everything())
@@ -372,6 +373,7 @@ if (!dbExistsTable(con, target_table)) {
       InProgress           DECIMAL(18,6)   NULL,
       [Open]               DECIMAL(18,6)   NULL,
       Reopened             DECIMAL(18,6)   NULL,
+      WaitingforApproval   DECIMAL(18,6)   NULL,
       WaitingforCustomer   DECIMAL(18,6)   NULL,
       OnHold               DECIMAL(18,6)   NULL
     );"
@@ -427,6 +429,7 @@ tryCatch(
           InProgress           DECIMAL(18,6)   NULL,
           [Open]               DECIMAL(18,6)   NULL,
           Reopened             DECIMAL(18,6)   NULL,
+          WaitingforApproval   DECIMAL(18,6)   NULL,
           WaitingforCustomer   DECIMAL(18,6)   NULL,
           OnHold               DECIMAL(18,6)   NULL
         );
@@ -501,6 +504,7 @@ tryCatch(
       tgt.InProgress           = src.InProgress,
       tgt.[Open]               = src.[Open],
       tgt.Reopened             = src.Reopened,
+      tgt.WaitingforApproval   = src.WaitingforApproval,
       tgt.WaitingforCustomer   = src.WaitingforCustomer,
       tgt.OnHold               = src.OnHold
     FROM ",
@@ -552,6 +556,7 @@ tryCatch(
           InProgress,
           [Open],
           Reopened,
+          WaitingforApproval,
           WaitingforCustomer,
           OnHold
         )
@@ -584,6 +589,7 @@ tryCatch(
           src.InProgress,
           src.[Open],
           src.Reopened,
+          src.WaitingforApproval,
           src.WaitingforCustomer,
           src.OnHold
         FROM ",
