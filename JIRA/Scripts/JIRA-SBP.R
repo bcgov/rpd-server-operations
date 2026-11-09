@@ -218,6 +218,26 @@ tryCatch(
       ) |>
       # I'm unsure if this area down to the ungroup() line are necessary let alone doing anything useful
       # row_number isn't set after arranging by date and order would matter here.
+      # group_by(IssueKey) |>
+      # mutate(rowNum = row_number()) |>
+      # mutate(
+      #   created = case_when(
+      #     !any(item_field == "status") & rowNum == 1 ~ timestamp,
+      #     .default = created),
+      #   item_toString = case_when(
+      #     !any(item_field == "status") & rowNum == 1 ~ "No-Change",
+      #     .default = item_toString
+      #   ),
+      #   item_fromString = case_when(
+      #     !any(item_field == "status") & rowNum == 1 ~ "Open",
+      #     .default = item_fromString
+      #   ),
+      #   item_field = case_when(
+      #     !any(item_field == "status") & rowNum == 1 ~ "status",
+      #     .default = item_field
+      #   )
+      # ) |>
+      # WORK AREA
       group_by(IssueKey) |>
       arrange(IssueKey, created) |>
       mutate(rowNum = row_number()) |>
@@ -233,6 +253,8 @@ tryCatch(
         ),
         # edit the item_toString and item_fromString to reflect the beginning of the ticket
         # Not sure if "No-Change" is the ideal here.
+
+        # Does this value even persist? Curious what happens to it down the line.
         item_toString = case_when(
           !any(item_field == "status") & rowNum == 1 ~ "No-Change",
           .default = item_toString
@@ -251,17 +273,17 @@ tryCatch(
       ungroup() #|>
 
     # lets see what is going on for the 4th condition
-    check <- StatusChange |>
-      group_by(IssueKey) |>
-      filter(!any(item_field == "status")) |>
-      mutate(rowNum = row_number()) |>
-      mutate(
-        created = case_when(
-          !any(item_field == "status") & rowNum == 1 ~ timestamp,
-          .default = created
-        )
-      )
-
+    # check <- StatusChange |>
+    #   group_by(IssueKey) |>
+    #   filter(!any(item_field == "status")) |>
+    #   mutate(rowNum = row_number()) |>
+    #   mutate(
+    #     created = case_when(
+    #       !any(item_field == "status") & rowNum == 1 ~ timestamp,
+    #       .default = created
+    #     )
+    #   )
+    # END WORK AREA
     filter(item_field == "status") |>
       select(-c(items, rowNum)) |>
       mutate(
