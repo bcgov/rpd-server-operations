@@ -32,8 +32,32 @@ api_key <- keyring::key_get(
   keyring = NULL
 )
 
+# Check timezone
+warned <- FALSE
+msg <- NA_character_
+lt <- withCallingHandlers(
+  as.POSIXlt(Sys.time()),
+  warning = function(w) {
+    warned <<- TRUE
+    msg <<- conditionMessage(w)
+    invokeRestart("muffleWarning")
+  }
+)
+
+if (warned) {
+  Sys.setenv(TZ = "Etc/GMT+7")
+  log_etl_warning(
+    api_name = "Jira",
+    script_name = "Jira_Orchestrator",
+    table_name = "NA",
+    step = "Timezone Check",
+    message = msg
+  )
+}
+
 # Encode token
 token <- base64encode(charToRaw(paste0(email, ":", api_key)))
+
 token_string <- paste("Basic", token)
 
 base_url <- "https://citz-inf.atlassian.net/rest/api/3/"

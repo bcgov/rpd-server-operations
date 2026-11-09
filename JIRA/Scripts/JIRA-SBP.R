@@ -216,13 +216,23 @@ tryCatch(
         item_toString = list("toString"),
         .remove = FALSE
       ) |>
+      # I'm unsure if this area down to the ungroup() line are necessary let alone doing anything useful
+      # row_number isn't set after arranging by date and order would matter here.
       group_by(IssueKey) |>
+      arrange(IssueKey, created) |>
       mutate(rowNum = row_number()) |>
       mutate(
+        # make sure at least one entry per group has an item_field == "status"
+        # in case where changelog has no status items, create one from what does exist.
+        # edit the item_field to be a status ticket, as the first status ticket will be from Open to in Progress.
         created = case_when(
-          !any(item_field == "status") & rowNum == 1 ~ timestamp,
+          !any(item_field == "status") &
+            is.na(created) &
+            rowNum == 1 ~ TicketCreated,
           .default = created
         ),
+        # edit the item_toString and item_fromString to reflect the beginning of the ticket
+        # Not sure if "No-Change" is the ideal here.
         item_toString = case_when(
           !any(item_field == "status") & rowNum == 1 ~ "No-Change",
           .default = item_toString
@@ -231,13 +241,28 @@ tryCatch(
           !any(item_field == "status") & rowNum == 1 ~ "Open",
           .default = item_fromString
         ),
+
+        # this should occur last as other steps will check that there is no status value either
         item_field = case_when(
           !any(item_field == "status") & rowNum == 1 ~ "status",
           .default = item_field
         )
       ) |>
-      ungroup() |>
-      filter(item_field == "status") |>
+      ungroup() #|>
+
+    # lets see what is going on for the 4th condition
+    check <- StatusChange |>
+      group_by(IssueKey) |>
+      filter(!any(item_field == "status")) |>
+      mutate(rowNum = row_number()) |>
+      mutate(
+        created = case_when(
+          !any(item_field == "status") & rowNum == 1 ~ timestamp,
+          .default = created
+        )
+      )
+
+    filter(item_field == "status") |>
       select(-c(items, rowNum)) |>
       mutate(
         TicketCreated = ymd_hms(TicketCreated),
@@ -300,6 +325,13 @@ if (length(missing_cols) > 0) {
   )
 
   # would be a good place to add a warning message to log whenever this occurs
+  log_etl_warning(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = table_name,
+    step = "StatusChange Missing Columns check",
+    message = "Length missing columns greater than zero, autofilling with NA_real_"
+  )
 }
 
 
