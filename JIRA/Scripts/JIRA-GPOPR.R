@@ -228,7 +228,7 @@ if (!dbExistsTable(con, target_table)) {
         Organization         NVARCHAR(100)    NULL,
         City                 NVARCHAR(200)    NULL,
         RequestType          NVARCHAR(100)    NULL,
-        RequestParticipants  NVARCHAR(100)    NULL,
+        RequestParticipants  NVARCHAR(500)    NULL,
         Summary              NVARCHAR(1000)   NULL
       );
       "
@@ -236,6 +236,10 @@ if (!dbExistsTable(con, target_table)) {
   dbExecute(con, sql)
 }
 
+# One off fix to handle an increase in column size required
+# sql <- paste0("ALTER TABLE ", schema_name, ".", dashboard_id,
+# " ALTER COLUMN RequestParticipants NVARCHAR(500) NULL;")
+# dbExecute(con, sql)
 
 etl_error <- NULL
 
@@ -270,7 +274,7 @@ tryCatch(
           Organization         NVARCHAR(100)    NULL,
           City                 NVARCHAR(200)    NULL,
           RequestType          NVARCHAR(100)    NULL,
-          RequestParticipants  NVARCHAR(100)    NULL,
+          RequestParticipants  NVARCHAR(500)    NULL,
           Summary              NVARCHAR(1000)   NULL
           );
           "
