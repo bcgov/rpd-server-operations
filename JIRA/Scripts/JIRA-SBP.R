@@ -298,6 +298,8 @@ if (length(missing_cols) > 0) {
     StatusChange,
     !!!set_names(rep(list(NA_real_), length(missing_cols)), missing_cols)
   )
+
+  # would be a good place to add a warning message to log whenever this occurs
 }
 
 
@@ -316,7 +318,15 @@ tryCatch(
       mutate(DueDate = as.Date(DueDate, format = "%Y-%m-%d")) |>
       mutate(NumberOfSpaces = as.integer(NumberOfSpaces)) |>
       mutate(across(
-        c(Closed, InProgress, Open, Reopened, WaitingforApproval, WaitingforCustomer, OnHold),
+        c(
+          Closed,
+          InProgress,
+          Open,
+          Reopened,
+          WaitingforApproval,
+          WaitingforCustomer,
+          OnHold
+        ),
         ~ ifelse(is.finite(.x), .x, NA_real_)
       )) |>
       mutate(RefreshDate = Sys.time(), .before = everything())
