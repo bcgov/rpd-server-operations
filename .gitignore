@@ -7,6 +7,8 @@
 
 .Rproj.user/
 
+.Rhistory
+
 # Remove tracking files for SSMS studio vs plugin
 .vs/
 
