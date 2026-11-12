@@ -1,3 +1,42 @@
+log_etl_warning <- function(
+  api_name,
+  script_name,
+  table_name = NA_character_,
+  step = NA_character_,
+  severity = "WARNING",
+  message,
+  etl_env = Sys.getenv("ETL_ENV", unset = "UNKNOWN")
+) {
+  log_dir <- here::here("logs", "warning")
+  if (!dir.exists(log_dir)) {
+    dir.create(log_dir, recursive = TRUE)
+  }
+
+  log_file <- file.path(log_dir, paste0("etl_warning_log_", Sys.Date(), ".csv"))
+
+  log_row <- tibble::tibble(
+    run_timestamp = format(
+      lubridate::with_tz(Sys.time(), tzone = "America/Vancouver"),
+      "%Y-%m-%d %H:%M:%S"
+    ),
+    etl_env = etl_env,
+    host = Sys.info()[["nodename"]],
+    api_name = api_name,
+    script_name = script_name,
+    table_name = table_name,
+    step = step,
+    severity = severity,
+    message = message
+  )
+
+  if (!file.exists(log_file)) {
+    readr::write_csv(log_row, log_file)
+  } else {
+    readr::write_csv(log_row, log_file, append = TRUE)
+  }
+
+  invisible(log_row)
+}
 #' Handles the logging of error, warning, and condition messages during ETL
 #'
 #' @param api_name A character vector naming the source API of incoming Bronze-bound records

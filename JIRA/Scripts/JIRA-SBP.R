@@ -216,7 +216,13 @@ tryCatch(
         item_toString = list("toString"),
         .remove = FALSE
       ) |>
+      # in the following section we setup to calculate the time elapsed.
+      # time elapsed is counted as the time interval between the created column for each status update
+      # except in the case where there are no status updates, one entry is converted to a status update
+      # The first status changelog entry is always from Open to Close, so for tickets set as just Open, there is no status
+      # Thus use the timestamp variable to supplement in the system time to show how long its been Open for.
       group_by(IssueKey) |>
+      # row number just makes sure the next mutate statement is always referencing the same row when creating a status row
       mutate(rowNum = row_number()) |>
       mutate(
         created = case_when(
@@ -236,7 +242,6 @@ tryCatch(
           .default = item_field
         )
       ) |>
-      ungroup() |>
       filter(item_field == "status") |>
       select(-c(items, rowNum)) |>
       mutate(
@@ -245,6 +250,7 @@ tryCatch(
       ) |>
       arrange(IssueKey, created) |>
       group_by(IssueKey) |>
+      # calculate time elapsed between status changes or between ticket creation and current system time.
       mutate(
         TimeElapsed = as.numeric(difftime(
           created,
@@ -258,6 +264,7 @@ tryCatch(
         item_fromString = gsub(" ", "", tools::toTitleCase(item_fromString))
       ) |> # deal with variable capitalization
       group_by(IssueKey, item_fromString) |>
+      # sum up the time spent in each status (in case of moving back and forth between statuses)
       summarise(
         TimeElapsed = sum(TimeElapsed, na.rm = TRUE),
         .groups = "drop_last"
@@ -298,6 +305,15 @@ if (length(missing_cols) > 0) {
     StatusChange,
     !!!set_names(rep(list(NA_real_), length(missing_cols)), missing_cols)
   )
+
+  # would be a good place to add a warning message to log whenever this occurs
+  log_etl_warning(
+    api_name = api_name,
+    script_name = script_name,
+    table_name = table_name,
+    step = "StatusChange Missing Columns check",
+    message = "Length missing columns greater than zero, autofilling with NA_real_"
+  )
 }
 
 
@@ -316,7 +332,15 @@ tryCatch(
       mutate(DueDate = as.Date(DueDate, format = "%Y-%m-%d")) |>
       mutate(NumberOfSpaces = as.integer(NumberOfSpaces)) |>
       mutate(across(
-        c(Closed, InProgress, Open, Reopened, WaitingforApproval, WaitingforCustomer, OnHold),
+        c(
+          Closed,
+          InProgress,
+          Open,
+          Reopened,
+          WaitingforApproval,
+          WaitingforCustomer,
+          OnHold
+        ),
         ~ ifelse(is.finite(.x), .x, NA_real_)
       )) |>
       mutate(RefreshDate = Sys.time(), .before = everything())
