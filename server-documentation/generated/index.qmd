@@ -1,0 +1,10 @@
+---
+title: "ETL Documentation"
+---
+
+Generated from the `#'` headers in each ETL script. Do not edit these pages by hand; edit the script headers and re-run `build_docs.R`.
+
+| Layer | Tables | Description |
+|---|---|---|
+| [Gold layer](InfGold.qmd) | 8 | Reporting tables built from the Silver layer and consumed by Power BI. |
+

@@ -1,0 +1,35 @@
+# One entry per documented folder. build_docs.R generates generated/<name>.qmd
+# for each. Paths are relative to the repo root (the parent of
+# Server-Documentation/).
+#
+# run_order is hard-coded from the orchestrator. Script names are file names
+# without .R. Scripts found in scripts_dir but missing from run_order are
+# appended at the end with a warning; names listed here but missing on disk
+# produce a warning too.
+
+layers:
+  - name: InfGold
+    title: Gold layer
+    path: InfGold
+    scripts_dir: Scripts
+    orchestrator: INF-GOLD-ORCHESTRATOR.R
+    description: >
+      Reporting tables built from the Silver layer and consumed by Power BI.
+    run_order:
+      - ActivityCodeReport
+      - FacilityDetail
+      - ORG2000
+      - PORT_ProjectCosts
+      - PORT_WorkOrders
+      - PRR2015
+      - SpaceAllocation
+      # add the remaining gold scripts here, in orchestrator order
+
+  # Later:
+  # - name: InfSilver
+  #   title: Silver layer
+  #   path: InfSilver
+  #   scripts_dir: Scripts
+  #   orchestrator: INF-SILVER-ORCHESTRATOR.R
+  #   description: ...
+  #   run_order: []

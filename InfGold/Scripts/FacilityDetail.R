@@ -1,3 +1,60 @@
+#' @title Facility Detail Report
+#'
+#' @description
+#' Gathers information on all real estate assets within the Real Property portfolio.
+#' Covers location, name, and usage information on assets.
+#' Assets are geolocated using the BC Address Geocoder as a quality check on the stored addresses.
+#'
+#' TODO: confirm and expand this description (intended use, who relies on it).
+#'
+#' @database  BuildingIntelligence
+#' @schema    RealProperty
+#' @table     FacilityDetail
+#'
+#' @source    CbreSilver.archibus_bl Archibus building information
+#' @source    CbreSilver.archibus_rm Archibus room information
+#' @source    CbreSilver.archibus_property Archibus property information
+#' @source    DATA_OWNER.RPD_LAND lat/lon information for properties
+#'
+#' @load_type Full reload
+#' @grain     One row per building/property
+#'
+#' @filters   Only active status buildings and properties
+#' @filters   Only actual properties, remove any internal dummy locations for financial processing
+#'
+#' @consumers TODO main report or dashboard this table was built for
+#'
+#' @column    RefreshDate  Time the table was last reloaded
+#' @column    Identifier
+#' @column    BuildingId
+#' @column    PropertyId
+#' @column    SiteId
+#' @column    Name
+#' @column    GeoFlag
+#' @column    Address
+#' @column    City
+#' @column    Tenure
+#' @column    PrimaryUse
+#' @column    FacilityType
+#' @column    StrategicClassification
+#' @column    BuildingUsableArea
+#' @column    BuildingRentableArea
+#' @column    BuildingDate
+#' @column    PropertyArea
+#' @column    linkAddress
+#' @column    linkCity
+#' @column    geoAddress
+#' @column    geoCity
+#' @column    Precision
+#' @column    Score
+#' @column    lat
+#' @column    lon
+#'
+#' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+#'
+#' @owner    David Rattray
+#' @last_reviewed TODO
+#'
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -185,10 +242,10 @@ if (is.null(etl_error)) {
       PropertyArea = TotalRentableLand
     ) |>
     left_join(Lands, by = join_by(PropertyId))
-    # mutate(
-    #   lat = NA_real_,
-    #   lon = NA_real_
-    # )
+  # mutate(
+  #   lat = NA_real_,
+  #   lon = NA_real_
+  # )
 
   Table <- Building |>
     union(Property) |>
@@ -373,7 +430,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # Database Transaction ####
 # Control database transaction to ensure all steps done together or not at all
 
-if(is.null(etl_error)){
+if (is.null(etl_error)) {
   dbBegin(con)
   tryCatch(
     {

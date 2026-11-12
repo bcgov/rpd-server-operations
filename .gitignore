@@ -9,6 +9,10 @@
 
 .Rhistory
 
+# for quarto documentation files
+_site/
+*_files/
+
 # Remove tracking files for SSMS studio vs plugin
 .vs/
 

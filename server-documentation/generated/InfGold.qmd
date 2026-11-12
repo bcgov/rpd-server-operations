@@ -1,0 +1,604 @@
+---
+title: "Gold layer"
+---
+
+Reporting tables built from the Silver layer and consumed by Power BI.
+
+## Run order
+
+| # | Script | Target table | Load type |
+|---|---|---|---|
+| 1 | `ActivityCodeReport.R` | `RealProperty.ActivityCodeReport` | Full reload |
+| 2 | `FacilityDetail.R` | `RealProperty.FacilityDetail` | Full reload |
+| 3 | `ORG2000.R` | `RealProperty.ORG2000` | Full reload |
+| 4 | `PORT_ProjectCosts.R` | `RealProperty.PORT_ProjectCosts` | Full reload |
+| 5 | `PORT_WorkOrders.R` | `RealProperty.ActivityCodeReport` | Full reload |
+| 6 | `PRR2015.R` | `RealProperty.ActivityCodeReport` | Full reload |
+| 7 | `SpaceAllocation.R` | `RealProperty.ActivityCodeReport` | Full reload |
+| 8 | `PORT_PRR2015.R` | `RealProperty.ActivityCodeReport` | Full reload |
+
+## Lineage
+
+```{mermaid}
+flowchart LR
+  n_RealProperty_ActivityCodeReport[("RealProperty.ActivityCodeReport")]
+  n_RealProperty_FacilityDetail[("RealProperty.FacilityDetail")]
+  n_RealProperty_ORG2000[("RealProperty.ORG2000")]
+  n_RealProperty_PORT_ProjectCosts[("RealProperty.PORT_ProjectCosts")]
+  n_RealProperty_ActivityCodeReport[("RealProperty.ActivityCodeReport")]
+  n_RealProperty_ActivityCodeReport[("RealProperty.ActivityCodeReport")]
+  n_RealProperty_ActivityCodeReport[("RealProperty.ActivityCodeReport")]
+  n_RealProperty_ActivityCodeReport[("RealProperty.ActivityCodeReport")]
+  n_CbreSilver_pjm_fact_project_activity["CbreSilver.pjm_fact_project_activity"]
+  n_CbreSilver_pjm_fact_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_activity["CbreSilver.pjm_dim_project_activity"]
+  n_CbreSilver_pjm_dim_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project["CbreSilver.pjm_fact_project"]
+  n_CbreSilver_pjm_fact_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project["CbreSilver.pjm_dim_project"]
+  n_CbreSilver_pjm_dim_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_role["CbreSilver.pjm_fact_project_role"]
+  n_CbreSilver_pjm_fact_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_role["CbreSilver.pjm_dim_project_role"]
+  n_CbreSilver_pjm_dim_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_contact["CbreSilver.pjm_dim_contact"]
+  n_CbreSilver_pjm_dim_contact --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_archibus_bl["CbreSilver.archibus_bl"]
+  n_CbreSilver_archibus_bl --> n_RealProperty_FacilityDetail
+  n_CbreSilver_archibus_rm["CbreSilver.archibus_rm"]
+  n_CbreSilver_archibus_rm --> n_RealProperty_FacilityDetail
+  n_CbreSilver_archibus_property["CbreSilver.archibus_property"]
+  n_CbreSilver_archibus_property --> n_RealProperty_FacilityDetail
+  n_DATA_OWNER_RPD_LAND["DATA_OWNER.RPD_LAND"]
+  n_DATA_OWNER_RPD_LAND --> n_RealProperty_FacilityDetail
+  n_CbreSilver_archibus_dp["CbreSilver.archibus_dp"]
+  n_CbreSilver_archibus_dp --> n_RealProperty_ORG2000
+  n_CbreSilver_archibus_dv["CbreSilver.archibus_dv"]
+  n_CbreSilver_archibus_dv --> n_RealProperty_ORG2000
+  n_RealProperty_FacilityDetail --> n_RealProperty_PORT_ProjectCosts
+  n_CbreSilver_pjm_dim_project --> n_RealProperty_PORT_ProjectCosts
+  n_CbreSilver_pjm_fact_project_activity --> n_RealProperty_PORT_ProjectCosts
+  n_CbreSilver_pjm_fact_project --> n_RealProperty_PORT_ProjectCosts
+  n_CbreSilver_pjm_fact_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_contact --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_contact --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_contact --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_activity --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_fact_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_project_role --> n_RealProperty_ActivityCodeReport
+  n_CbreSilver_pjm_dim_contact --> n_RealProperty_ActivityCodeReport
+```
+
+## Activity Code Report
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.ActivityCodeReport` |
+| Script | `InfGold/Scripts/ActivityCodeReport.R` |
+| Load type | Full reload |
+| Grain | One row per project and detail activity code |
+| Owner | TODO |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.pjm_fact_project_activity` - budget, cost, invoice and payment amounts
+- `CbreSilver.pjm_dim_project_activity` - activity code, type, parent code and description
+- `CbreSilver.pjm_fact_project` - project status and phase
+- `CbreSilver.pjm_dim_project` - project number and name
+- `CbreSilver.pjm_fact_project_role` - project manager role assignments
+- `CbreSilver.pjm_dim_project_role` - role names
+- `CbreSilver.pjm_dim_contact` - project manager name and email
+
+### Rules and filters
+
+- Only activity codes with code type `detail`
+- Where two or more detail codes share a project, parent code and characters 5-6 of the activity code, the one without characters 7-9 is dropped
+- Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted, Invoiced, Retained, Paid and Remaining are all zero are dropped
+- Project manager is taken from role records whose source_unique_id matches `<digit>_project_manager`
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `ProjectSkey` | NVARCHAR(50) | NOT NULL |  |
+| `ProjectNumber` | NVARCHAR(50) | NULL |  |
+| `ProjectName` | NVARCHAR(255) | NULL |  |
+| `ProjectStatus` | NVARCHAR(100) | NULL |  |
+| `ProjectManager` | NVARCHAR(255) | NULL | First and last name of the project's manager |
+| `ProjectManagerEmail` | NVARCHAR(255) | NULL |  |
+| `ParentCode` | NVARCHAR(50) | NULL |  |
+| `ActivityCode` | NVARCHAR(50) | NULL |  |
+| `CodeType` | NVARCHAR(50) | NULL |  |
+| `Description` | NVARCHAR(255) | NULL |  |
+| `PreliminaryBudget` | DECIMAL(18,2) | NULL |  |
+| `ApprovedBudget` | DECIMAL(18,2) | NULL |  |
+| `Adjustments` | DECIMAL(18,2) | NULL |  |
+| `ApprovedBudgetChanges` | DECIMAL(18,2) | NULL |  |
+| `CurrentBudget` | DECIMAL(18,2) | NULL | ApprovedBudget + Adjustments + ApprovedBudgetChanges |
+| `OriginalCommitted` | DECIMAL(18,2) | NULL |  |
+| `ApprovedChanges` | DECIMAL(18,2) | NULL |  |
+| `CurrentCommitted` | DECIMAL(18,2) | NULL |  |
+| `PendingCommitments` | DECIMAL(18,2) | NULL |  |
+| `PendingChanges` | DECIMAL(18,2) | NULL |  |
+| `ProjectedExposure` | DECIMAL(18,2) | NULL |  |
+| `AnticipatedFinalCost` | DECIMAL(18,2) | NULL | CurrentCommitted + ProjectedExposure |
+| `Variance` | DECIMAL(18,2) | NULL | AnticipatedFinalCost - CurrentBudget |
+| `VariancePercent` | DECIMAL(18,2) | NULL | Variance / CurrentBudget x 100; NULL where CurrentBudget is zero |
+| `Invoiced` | DECIMAL(18,2) | NULL |  |
+| `Retained` | DECIMAL(18,2) | NULL |  |
+| `Paid` | DECIMAL(18,2) | NULL |  |
+| `Remaining` | DECIMAL(18,2) | NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## Facility Detail Report
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.FacilityDetail` |
+| Script | `InfGold/Scripts/FacilityDetail.R` |
+| Load type | Full reload |
+| Grain | One row per building/property |
+| Owner | David Rattray |
+| Last reviewed | TODO |
+
+Gathers information on all real estate assets within the Real Property portfolio.
+Covers location, name, and usage information on assets.
+Assets are geolocated using the BC Address Geocoder as a quality check on the stored addresses.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.archibus_bl` - Archibus building information
+- `CbreSilver.archibus_rm` - Archibus room information
+- `CbreSilver.archibus_property` - Archibus property information
+- `DATA_OWNER.RPD_LAND` - lat/lon information for properties
+
+### Rules and filters
+
+- Only active status buildings and properties
+- Only actual properties, remove any internal dummy locations for financial processing
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `Identifier` | NVARCHAR(50) | NOT NULL |  |
+| `BuildingId` | NVARCHAR(50) | NULL |  |
+| `PropertyId` | NVARCHAR(50) | NULL |  |
+| `SiteId` | NVARCHAR(50) | NULL |  |
+| `Name` | NVARCHAR(255) | NULL |  |
+| `GeoFlag` | BIT | NULL |  |
+| `Address` | NVARCHAR(255) | NULL |  |
+| `City` | NVARCHAR(100) | NULL |  |
+| `Tenure` | NVARCHAR(50) | NULL |  |
+| `PrimaryUse` | NVARCHAR(100) | NULL |  |
+| `FacilityType` | NVARCHAR(100) | NULL |  |
+| `StrategicClassification` | NVARCHAR(100) | NULL |  |
+| `BuildingUsableArea` | DECIMAL(18,2) | NULL |  |
+| `BuildingRentableArea` | DECIMAL(18,2) | NULL |  |
+| `BuildingDate` | DATETIME2(3) | NULL |  |
+| `PropertyArea` | DECIMAL(18,2) | NULL |  |
+| `linkAddress` | NVARCHAR(255) | NULL |  |
+| `linkCity` | NVARCHAR(100) | NULL |  |
+| `geoAddress` | NVARCHAR(255) | NULL |  |
+| `geoCity` | NVARCHAR(100) | NULL |  |
+| `Precision` | DECIMAL(5,2) | NULL |  |
+| `Score` | DECIMAL(5,2) | NULL |  |
+| `lat` | DECIMAL(9,6) | NULL |  |
+| `lon` | DECIMAL(9,6) | NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## ORG2000 Report
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.ORG2000` |
+| Script | `InfGold/Scripts/ORG2000.R` |
+| Load type | Full reload |
+| Grain | One row per department |
+| Owner | David Rattray |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.archibus_dp` - Archibus information about the department
+- `CbreSilver.archibus_dv` - Archibus information about the division
+
+### Rules and filters
+
+- No filter conditions
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `Division` | NVARCHAR(100) | NULL |  |
+| `Department` | NVARCHAR(200) | NULL |  |
+| `OrgType` | NVARCHAR(20) | NULL |  |
+| `Status` | NVARCHAR(20) | NULL |  |
+| `SalesRepresentative` | NVARCHAR(50) | NULL |  |
+| `Collector` | NVARCHAR(50) | NULL |  |
+| `FeeRecovery` | NVARCHAR(10) | NULL |  |
+| `Reconcile` | NVARCHAR(10) | NULL |  |
+| `ParticipatesInPAM` | NVARCHAR(10) | NULL |  |
+| `DivisionId` | NVARCHAR(20) | NULL |  |
+| `DepartmentId` | NVARCHAR(50) | NULL |  |
+| `CustomerType` | NVARCHAR(50) | NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## PORT_ProjectCosts
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.PORT_ProjectCosts` |
+| Script | `InfGold/Scripts/PORT_ProjectCosts.R` |
+| Load type | Full reload |
+| Grain | TODO |
+| Owner | David Rattray |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `RealProperty.FacilityDetail`
+- `CbreSilver.pjm_dim_project`
+- `CbreSilver.pjm_fact_project_activity`
+- `CbreSilver.pjm_fact_project`
+
+### Rules and filters
+
+- TODO
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `Identifier` | NVARCHAR(50) | NOT NULL |  |
+| `Name` | NVARCHAR(255) | NULL |  |
+| `Address` | NVARCHAR(255) | NULL |  |
+| `City` | NVARCHAR(100) | NULL |  |
+| `Region` | NVARCHAR(100) | NULL |  |
+| `ProjectCount` | INT | NULL |  |
+| `TotalPaid` | DECIMAL(18,2) | NULL |  |
+| `BuildingRentableArea` | DECIMAL(18,2) | NULL |  |
+| `PropertyArea` | DECIMAL(18,4) | NULL |  |
+| `CostPerSqM` | DECIMAL(18,2) | NULL |  |
+| `CostPerHA` | DECIMAL(18,2) | NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## PORT_WorkOrders
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.ActivityCodeReport` |
+| Script | `InfGold/Scripts/PORT_WorkOrders.R` |
+| Load type | Full reload |
+| Grain | One row per project and detail activity code |
+| Owner | TODO |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.pjm_fact_project_activity` - budget, cost, invoice and payment amounts
+- `CbreSilver.pjm_dim_project_activity` - activity code, type, parent code and description
+- `CbreSilver.pjm_fact_project` - project status and phase
+- `CbreSilver.pjm_dim_project` - project number and name
+- `CbreSilver.pjm_fact_project_role` - project manager role assignments
+- `CbreSilver.pjm_dim_project_role` - role names
+- `CbreSilver.pjm_dim_contact` - project manager name and email
+
+### Rules and filters
+
+- Only activity codes with code type `detail`
+- Where two or more detail codes share a project, parent code and characters 5-6 of the activity code, the one without characters 7-9 is dropped
+- Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted, Invoiced, Retained, Paid and Remaining are all zero are dropped
+- Project manager is taken from role records whose source_unique_id matches `<digit>_project_manager`
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `property_skey` | NVARCHAR(20) | NOT NULL |  |
+| `Identifier` | NVARCHAR(50) | NOT NULL |  |
+| `FYCreation` | NVARCHAR(25) | NOT NULL |  |
+| `WorkOrderCount` | INT | NOT NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## PRR2015
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.ActivityCodeReport` |
+| Script | `InfGold/Scripts/PRR2015.R` |
+| Load type | Full reload |
+| Grain | One row per project and detail activity code |
+| Owner | TODO |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.pjm_fact_project_activity` - budget, cost, invoice and payment amounts
+- `CbreSilver.pjm_dim_project_activity` - activity code, type, parent code and description
+- `CbreSilver.pjm_fact_project` - project status and phase
+- `CbreSilver.pjm_dim_project` - project number and name
+- `CbreSilver.pjm_fact_project_role` - project manager role assignments
+- `CbreSilver.pjm_dim_project_role` - role names
+- `CbreSilver.pjm_dim_contact` - project manager name and email
+
+### Rules and filters
+
+- Only activity codes with code type `detail`
+- Where two or more detail codes share a project, parent code and characters 5-6 of the activity code, the one without characters 7-9 is dropped
+- Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted, Invoiced, Retained, Paid and Remaining are all zero are dropped
+- Project manager is taken from role records whose source_unique_id matches `<digit>_project_manager`
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `ContractName` | NVARCHAR(20) | NOT NULL |  |
+| `PrimaryLocation` | NVARCHAR(20) | NOT NULL |  |
+| `FiscalYear` | NVARCHAR(10) | NOT NULL |  |
+| `PricingMethod` | NVARCHAR(50) | NULL |  |
+| `City` | NVARCHAR(50) | NULL |  |
+| `RentableArea` | DECIMAL(18,5) | NULL |  |
+| `ParkingStalls` | INT | NULL |  |
+| `BaseRent` | DECIMAL(18,2) | NULL |  |
+| `OperationsMaintenance` | DECIMAL(18,2) | NULL |  |
+| `Utilities` | DECIMAL(18,2) | NULL |  |
+| `LLOperationsMaintenance` | DECIMAL(18,2) | NULL |  |
+| `PropertyTax` | DECIMAL(18,2) | NULL |  |
+| `Parking` | DECIMAL(18,2) | NULL |  |
+| `AdminFee` | DECIMAL(18,2) | NULL |  |
+| `LLAdminFee` | DECIMAL(18,2) | NULL |  |
+| `TaxAdmin` | DECIMAL(18,2) | NULL |  |
+| `OMAdmin` | DECIMAL(18,2) | NULL |  |
+| `UtilityAdmin` | DECIMAL(18,2) | NULL |  |
+| `TotalAdmin` | DECIMAL(18,2) | NULL |  |
+| `TotalCost` | DECIMAL(18,2) | NULL |  |
+| `CostRate` | DECIMAL(18,4) | NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## Activity Code Report
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.ActivityCodeReport` |
+| Script | `InfGold/Scripts/SpaceAllocation.R` |
+| Load type | Full reload |
+| Grain | One row per project and detail activity code |
+| Owner | TODO |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.pjm_fact_project_activity` - budget, cost, invoice and payment amounts
+- `CbreSilver.pjm_dim_project_activity` - activity code, type, parent code and description
+- `CbreSilver.pjm_fact_project` - project status and phase
+- `CbreSilver.pjm_dim_project` - project number and name
+- `CbreSilver.pjm_fact_project_role` - project manager role assignments
+- `CbreSilver.pjm_dim_project_role` - role names
+- `CbreSilver.pjm_dim_contact` - project manager name and email
+
+### Rules and filters
+
+- Only activity codes with code type `detail`
+- Where two or more detail codes share a project, parent code and characters 5-6 of the activity code, the one without characters 7-9 is dropped
+- Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted, Invoiced, Retained, Paid and Remaining are all zero are dropped
+- Project manager is taken from role records whose source_unique_id matches `<digit>_project_manager`
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Columns
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `RefreshDate` | DATETIME2(3) | NOT NULL | Time the table was last reloaded |
+| `BuildingLandKey` | NVARCHAR(50) | NULL |  |
+| `Tenure` | NVARCHAR(20) | NULL |  |
+| `BCPNumber` | NVARCHAR(50) | NULL |  |
+| `DataIntegrityFlag` | NVARCHAR(20) | NULL |  |
+| `BuildingId` | NVARCHAR(50) | NULL |  |
+| `PropertyId` | NVARCHAR(50) | NULL |  |
+| `SiteId` | NVARCHAR(50) | NULL |  |
+| `GeoFlag` | BIT | NULL |  |
+| `Address` | NVARCHAR(150) | NULL |  |
+| `City` | NVARCHAR(100) | NULL |  |
+| `PrimaryUse` | NVARCHAR(50) | NULL |  |
+| `StrategicClassification` | NVARCHAR(50) | NULL |  |
+| `TotalRentableArea` | DECIMAL(18,5) | NULL |  |
+| `TotalChargableArea` | DECIMAL(18,5) | NULL |  |
+| `TotalUsableArea` | DECIMAL(18,5) | NULL |  |
+| `TotalParkingStalls` | INT | NULL |  |
+| `TotalRentableLand` | DECIMAL(18,5) | NULL |  |
+| `SpaceStatus` | NVARCHAR(10) | NULL |  |
+| `RmTotalLease` | NVARCHAR(50) | NULL |  |
+| `LeaseStatus` | NVARCHAR(25) | NULL |  |
+| `ContractCode` | NVARCHAR(50) | NULL |  |
+| `ParentLease` | NVARCHAR(50) | NULL |  |
+| `Option1` | NVARCHAR(50) | NULL |  |
+| `LeaseType` | NVARCHAR(25) | NULL |  |
+| `AgreementType` | NVARCHAR(50) | NULL |  |
+| `LeaseExpiryDate` | DATETIME2(3) | NULL |  |
+| `LeaseVersion` | NVARCHAR(10) | NULL |  |
+| `LeaseMultiTenant` | NVARCHAR(10) | NULL |  |
+| `LeaseOptionCostType` | NVARCHAR(10) | NULL |  |
+| `LeaseNonStandard` | NVARCHAR(10) | NULL |  |
+| `LeaseAreaNegotiated` | DECIMAL(18,5) | NULL |  |
+| `LeaseParkingAppropriated` | DECIMAL(18,5) | NULL |  |
+| `AllocatedChargableArea` | DECIMAL(18,5) | NULL |  |
+| `PercentAreaAllocated` | DECIMAL(10,2) | NULL |  |
+| `AllocatedParkingStalls` | INT | NULL |  |
+| `PercentParkingAllocated` | DECIMAL(10,2) | NULL |  |
+| `LeaseLandAppropriated` | DECIMAL(18,5) | NULL |  |
+| `PercentLandAllocated` | DECIMAL(10,2) | NULL |  |
+| `CustomerCategory` | NVARCHAR(100) | NULL |  |
+| `DivisionName` | NVARCHAR(100) | NULL |  |
+| `DepartmentName` | NVARCHAR(100) | NULL |  |
+| `lat` | NVARCHAR(30) | NULL |  |
+| `lon` | NVARCHAR(30) | NULL |  |
+| `Precision` | DECIMAL(5,2) | NULL |  |
+| `Score` | DECIMAL(5,2) | NULL |  |
+| `linkAddress` | NVARCHAR(150) | NULL |  |
+| `linkCity` | NVARCHAR(100) | NULL |  |
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+
+## PORT_PRR2015
+
+| Property | Value |
+|---|---|
+| Target table | `BuildingIntelligence.RealProperty.ActivityCodeReport` |
+| Script | `InfGold/Scripts/PORT_PRR2015.R` |
+| Load type | Full reload |
+| Grain | One row per project and detail activity code |
+| Owner | TODO |
+| Last reviewed | TODO |
+
+Project cost report at activity-code level for CBRE project management
+data. For each project and detail activity code it brings together the
+budget, commitment, forecast and payment figures, calculates the variance
+against the current budget, and attaches the project manager.
+
+TODO: confirm and expand this description (intended use, who relies on it).
+
+### Sources
+
+- `CbreSilver.pjm_fact_project_activity` - budget, cost, invoice and payment amounts
+- `CbreSilver.pjm_dim_project_activity` - activity code, type, parent code and description
+- `CbreSilver.pjm_fact_project` - project status and phase
+- `CbreSilver.pjm_dim_project` - project number and name
+- `CbreSilver.pjm_fact_project_role` - project manager role assignments
+- `CbreSilver.pjm_dim_project_role` - role names
+- `CbreSilver.pjm_dim_contact` - project manager name and email
+
+### Rules and filters
+
+- Only activity codes with code type `detail`
+- Where two or more detail codes share a project, parent code and characters 5-6 of the activity code, the one without characters 7-9 is dropped
+- Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted, Invoiced, Retained, Paid and Remaining are all zero are dropped
+- Project manager is taken from role records whose source_unique_id matches `<digit>_project_manager`
+
+### Consumers
+
+- TODO main report or dashboard this table was built for
+
+### Notes
+
+Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+

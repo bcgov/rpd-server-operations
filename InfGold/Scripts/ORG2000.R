@@ -1,3 +1,46 @@
+#' @title ORG2000 Report
+#'
+#' @description
+#' Project cost report at activity-code level for CBRE project management
+#' data. For each project and detail activity code it brings together the
+#' budget, commitment, forecast and payment figures, calculates the variance
+#' against the current budget, and attaches the project manager.
+#'
+#' TODO: confirm and expand this description (intended use, who relies on it).
+#'
+#' @database  BuildingIntelligence
+#' @schema    RealProperty
+#' @table     ORG2000
+#'
+#' @source    CbreSilver.archibus_dp Archibus information about the department
+#' @source    CbreSilver.archibus_dv Archibus information about the division
+#'
+#' @load_type Full reload
+#' @grain     One row per department
+#'
+#' @filters   No filter conditions
+#'
+#' @consumers TODO main report or dashboard this table was built for
+#'
+#' @column    RefreshDate  Time the table was last reloaded
+#' @column    Division
+#' @column    Department
+#' @column    OrgType
+#' @column    Status
+#' @column    SalesRepresentative
+#' @column    Collector
+#' @column    FeeRecovery
+#' @column    Reconcile
+#' @column    ParticipatesInPAM
+#' @column    DivisionId
+#' @column    DepartmentId
+#' @column    CustomerType
+#'
+#' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+#'
+#' @owner    David Rattray
+#' @last_reviewed TODO
+#'
 # For server logging
 # Begin timer
 task_start <- Sys.time()
