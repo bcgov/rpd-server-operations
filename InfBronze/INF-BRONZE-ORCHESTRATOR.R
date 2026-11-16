@@ -40,6 +40,8 @@ scripts <- c(
   "InfBronze/Scripts/archibus_dv.R",
   "InfBronze/Scripts/archibus_fl.R",
   "InfBronze/Scripts/archibus_ls.R",
+  "InfBronze/Scripts/archibus_project.R",
+  "InfBronze/Scripts/archibus_projteam.R",
   "InfBronze/Scripts/archibus_property.R",
   "InfBronze/Scripts/archibus_rm.R",
   "InfBronze/Scripts/archibus_rmpct.R"

@@ -1,3 +1,48 @@
+#' @title Archibus Budget Asset Allocation
+#'
+#' @description
+#' Loads budget asset allocation records from the CBRE API into the Bronze
+#' layer. The script extracts budget allocations associated with real-property
+#' assets and cost categories, computes row-level hashes to detect changes,
+#' classifies incoming records as new, changed, or unchanged, and appends
+#' historical versions to support Bronze layer auditing and change tracking.
+#'
+#' @database BuildingIntelligence
+#' @schema InfBronze
+#' @table archibus_budget_asset_ar
+#'
+#' @source CBRE API archibus_budget_asset_ar entity
+#'
+#' @load_type Incremental append with hash-based change detection
+#' @grain One row per budget, asset, and cost-category allocation version per bronze load timestamp
+#'
+#' @filters Records are retrieved only for the configured ETL extraction window
+#' @filters Technical metadata fields are excluded from row-hash calculations
+#'   to avoid false-positive change detection
+#' @filters Missing records from the current source extract are identified and
+#'   logged separately for downstream processing
+#'
+#' @consumers TODO
+#'
+#' @column budget_asset_ar_budget_id Budget identifier
+#' @column budget_asset_ar_asset_id Asset identifier
+#' @column budget_asset_ar_ar_cost_cat Cost category associated with the allocation
+#' @column budget_asset_ar_amt_total Total allocated amount
+#' @column row_hash MD5 hash of tracked business attributes used for change detection
+#' @column bronze_batch_id ETL batch identifier for the load execution
+#' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
+#'
+#' @notes
+#' This entity allocates budgeted costs to individual assets, properties,
+#' buildings, leases, and cost categories.
+#'
+#' Historical versions are retained through the composite primary key of
+#' (budget_asset_ar_budget_id, budget_asset_ar_asset_id,
+#' budget_asset_ar_ar_cost_cat, bronze_load_ts).
+#'
+#' @owner David Rattray
+#' @last_reviewed TODO
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()

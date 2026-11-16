@@ -22,7 +22,7 @@ source(here::here("utilities/utilities.R"))
 "archibus_op"
 "archibus_ls_comm"
 "archibus_commtype"
-CBRE_TABLE_NAME <- "archibus_project"
+CBRE_TABLE_NAME <- "kahua_cashflow"
 
 # Query API
 chunk_1 <- call_cbre_api(

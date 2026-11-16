@@ -1,3 +1,49 @@
+#' @title Archibus Lease Cost Sheet
+#'
+#' @description
+#' Loads lease cost-sheet calculations from the CBRE API into the Bronze
+#' layer. The script extracts lease financial analysis metrics, computes
+#' row-level hashes to detect changes, classifies incoming records as new,
+#' changed, or unchanged, and appends historical versions to support Bronze
+#' layer auditing and change tracking.
+#'
+#' @database BuildingIntelligence
+#' @schema InfBronze
+#' @table archibus_costsheet_v
+#'
+#' @source CBRE API archibus_costsheet_v entity
+#'
+#' @load_type Incremental append with hash-based change detection
+#' @grain One row per lease cost-sheet version per bronze load timestamp
+#'
+#' @filters Records are retrieved only for the configured ETL extraction window
+#' @filters Technical metadata fields are excluded from row-hash calculations
+#'   to avoid false-positive change detection
+#' @filters Missing records from the current source extract are identified and
+#'   logged separately for downstream processing
+#'
+#' @consumers TODO
+#'
+#' @column costsheet_v_ls_id Lease identifier
+#' @column costsheet_v_net_effective_rate Net effective lease rate
+#' @column costsheet_v_total_est_cost Total estimated lease cost
+#' @column costsheet_v_gross_rent Gross rent amount
+#' @column costsheet_v_discountrate Discount rate used in calculations
+#' @column row_hash MD5 hash of tracked business attributes used for change detection
+#' @column bronze_batch_id ETL batch identifier for the load execution
+#' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
+#'
+#' @notes
+#' This entity contains lease cost-model outputs and financial calculations
+#' including present-value analysis, operating costs, taxes, incentives,
+#' escalation factors, parking costs, and effective lease-rate metrics.
+#'
+#' Historical versions are retained through the composite primary key of
+#' (costsheet_v_ls_id, bronze_load_ts).
+#'
+#' @owner David Rattray
+#' @last_reviewed TODO
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()

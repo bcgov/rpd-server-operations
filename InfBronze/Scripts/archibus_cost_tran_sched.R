@@ -1,3 +1,49 @@
+#' @title Archibus Scheduled Cost Transaction
+#'
+#' @description
+#' Loads scheduled cost transaction records from the CBRE API into the Bronze
+#' layer. The script extracts planned and payable financial transactions,
+#' computes row-level hashes to detect changes, classifies incoming records as
+#' new, changed, or unchanged, and appends historical versions to support
+#' Bronze layer auditing and change tracking.
+#'
+#' @database BuildingIntelligence
+#' @schema InfBronze
+#' @table archibus_cost_tran_sched
+#'
+#' @source CBRE API archibus_cost_tran_sched entity
+#'
+#' @load_type Incremental append with hash-based change detection
+#' @grain One row per scheduled cost transaction version per bronze load timestamp
+#'
+#' @filters Records are retrieved only for the configured ETL extraction window
+#' @filters Technical metadata fields are excluded from row-hash calculations
+#'   to avoid false-positive change detection
+#' @filters Missing records from the current source extract are identified and
+#'   logged separately for downstream processing
+#'
+#' @consumers TODO
+#'
+#' @column cost_tran_sched_cost_tran_sched_id Scheduled transaction identifier
+#' @column cost_tran_sched_cost_tran_recur_id Related recurring transaction identifier
+#' @column cost_tran_sched_date_due Scheduled payment due date
+#' @column cost_tran_sched_amount_expense Scheduled expense amount
+#' @column cost_tran_sched_amount_income Scheduled income amount
+#' @column row_hash MD5 hash of tracked business attributes used for change detection
+#' @column bronze_batch_id ETL batch identifier for the load execution
+#' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
+#'
+#' @notes
+#' This entity represents individual scheduled occurrences of recurring
+#' financial transactions, including due dates, payment amounts, taxation,
+#' funding sources, and accounting references.
+#'
+#' Historical versions are retained through the composite primary key of
+#' (cost_tran_sched_cost_tran_sched_id, bronze_load_ts).
+#'
+#' @owner David Rattray
+#' @last_reviewed TODO
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()

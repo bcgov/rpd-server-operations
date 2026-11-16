@@ -1,3 +1,47 @@
+#' @title Archibus Company
+#'
+#' @description
+#' Loads company and vendor records from the CBRE API into the Bronze layer.
+#' The script extracts organization reference data, computes row-level hashes
+#' to detect changes, classifies incoming records as new, changed, or
+#' unchanged, and appends historical versions to support Bronze layer auditing
+#' and change tracking.
+#'
+#' @database BuildingIntelligence
+#' @schema InfBronze
+#' @table archibus_company
+#'
+#' @source CBRE API archibus_company entity
+#'
+#' @load_type Incremental append with hash-based change detection
+#' @grain One row per company record version per bronze load timestamp
+#'
+#' @filters Records are retrieved only for the configured ETL extraction window
+#' @filters Technical metadata fields are excluded from row-hash calculations
+#'   to avoid false-positive change detection
+#' @filters Missing records from the current source extract are identified and
+#'   logged separately for downstream processing
+#'
+#' @consumers TODO
+#'
+#' @column company_company_key Unique company identifier
+#' @column company_name Company name
+#' @column company_vendor Vendor identifier or reference
+#' @column company_email Primary company email address
+#' @column row_hash MD5 hash of tracked business attributes used for change detection
+#' @column bronze_batch_id ETL batch identifier for the load execution
+#' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
+#'
+#' @notes
+#' This entity contains organization, vendor, supplier, and contact reference
+#' information used throughout the Archibus real-property platform.
+#'
+#' Historical versions are retained through the composite primary key of
+#' (company_company_key, bronze_load_ts).
+#'
+#' @owner David Rattray
+#' @last_reviewed TODO
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
