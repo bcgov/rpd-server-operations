@@ -33,3 +33,11 @@ layers:
   #   orchestrator: INF-SILVER-ORCHESTRATOR.R
   #   description: ...
   #   run_order: []
+
+  - name: InfBronze
+    title: Bronze layer
+    path: InfBronze
+    scripts_dir: Scripts
+    orchestrator: INF-BRONZE-ORCHESTRATOR.R
+    description: ...
+    run_order: []
