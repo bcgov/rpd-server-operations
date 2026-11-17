@@ -23,3 +23,7 @@ _site/
 # Prevent any logging files from being tracked
 /logs/
 
+# for quarto documentation files
+_site/
+*_files/
+.quarto/
