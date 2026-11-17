@@ -310,7 +310,7 @@ if (length(missing_cols) > 0) {
   log_etl_warning(
     api_name = api_name,
     script_name = script_name,
-    table_name = table_name,
+    table_name = dashboard_id,
     step = "StatusChange Missing Columns check",
     message = "Length missing columns greater than zero, autofilling with NA_real_"
   )
