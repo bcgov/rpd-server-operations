@@ -11,7 +11,11 @@ library(lubridate)
 library(readr)
 library(AzureAuth)
 
-recipient <- c("david.rattray@gov.bc.ca", "kara.locke@gov.bc.ca", "evan.kneip@gov.bc.ca")
+recipient <- c(
+  "david.rattray@gov.bc.ca",
+  "kara.locke@gov.bc.ca",
+  "steven.pal@gov.bc.ca"
+)
 
 # 1. Load & classify log rows ####
 
@@ -268,7 +272,9 @@ subject <- glue::glue(
   "ETL Daily Digest — {run_date} [{if(!any_failure) 'OK' else 'FAILURES'}]"
 )
 
-request(glue::glue("https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail")) |>
+request(glue::glue(
+  "https://graph.microsoft.com/v1.0/users/{mailbox}/sendMail"
+)) |>
   req_headers(
     Authorization = paste("Bearer", access_token),
     `Content-Type` = "application/json"
