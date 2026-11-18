@@ -11,7 +11,11 @@ library(lubridate)
 library(readr)
 library(AzureAuth)
 
-recipient <- c("david.rattray@gov.bc.ca", "kara.locke@gov.bc.ca")
+recipient <- c(
+  "david.rattray@gov.bc.ca",
+  "kara.locke@gov.bc.ca",
+  "steven.pal@gov.bc.ca"
+)
 
 # 1. Load & classify log rows ####
 
