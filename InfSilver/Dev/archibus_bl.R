@@ -14,7 +14,8 @@ SCHEMA_NAME <- "InfSilver"
 TABLE_NAME <- "ArchibusBuilding"
 SOURCE_SCHEMA <- "InfBronze"
 SOURCE_TABLE <- "archibus_bl"
-PRIMARY_KEY <- c("bl_bl_id_key")
+SOURCE_PRIMARY_KEY <- c("bl_bl_id_key")
+TARGET_PRIMARY_KEY <- c("BuildingId")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
@@ -41,7 +42,7 @@ con <- dbConnect(
 # BuildingData <- dbFetch(query, n = -1)
 # dbClearResult(query)
 # archibus_bl
-pk_cols <- paste(PRIMARY_KEY, collapse = ", ")
+pk_cols <- paste(SOURCE_PRIMARY_KEY, collapse = ", ")
 query <- dbSendQuery(
   con,
   glue::glue(
@@ -117,27 +118,68 @@ query <- dbSendQuery(
   )
 )
 
-archibus_bl <- dbFetch(query, n = -1)
+bronze_data <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-data <- archibus_bl |>
+data <- bronze_data |>
   select(-c(rn)) |>
   # mutate(across(everything(), trimws)) |> # I haven't noticed any need to trim whitespace but maybe need at some point
   mutate(
-    BuildingId = fl_bl_id,
-    FloorId = fl_fl_id,
-    FloorName = fl_name,
-    FloorStatus = fl_status_pobc,
-    ExteriorWallArea = as.double(fl_area_ext_wall),
-    ExteriorGrossArea = as.double(fl_area_gross_ext),
-    InteriorGrossArea = as.double(fl_area_gross_int),
-    AreaRentable = as.double(fl_area_rentable),
-    AreaUsable = as.double(fl_area_usable),
-    DateStart = as.Date(fl_date_start_pobc),
-    DateEnd = as.Date(fl_date_end_pobc),
+    BuildingId = bl_bl_id_key,
+    PropertyId = bl_pr_id,
+    SiteId = bl_site_id,
+    Address = bl_address1,
+    City = bl_city_id,
+    Province = bl_state_id,
+    PostalCode = bl_zip,
+    Name = bl_name,
+    Tenure = bl_status,
+    PoBCStatus = bl_status_pobc,
+    FacilityType = bl_facility_type,
+    PrimaryUse = bl_primary_use,
+    StrategicClass = bl_strategic_class,
+    OccupancyStatus = bl_occ_status,
+    PricingMethod = bl_pricing_method,
+    AreaCommonUnoccupied = as.double(bl_area_bl_comn_nocup),
+    AreaCommonService = as.double(bl_area_bl_comn_serv),
+    AreaExteriorWall = as.double(bl_area_ext_wall),
+    AreaGrossInternal = as.double(bl_area_gross_int),
+    AreaLeaseNegotiated = as.double(bl_area_ls_negotiated),
+    AreaUnoccupied = as.double(bl_area_nocup),
+    AreaUnoccupiedCommon = as.double(bl_area_nocup_comn),
+    AreaUnoccupied_dp = as.double(bl_area_nocup_dp),
+    AreaOccupied = as.double(bl_area_ocup),
+    AreaOccupiedCommon = as.double(bl_area_ocup_comn),
+    AreaRemain = as.double(bl_area_remain),
+    AreaRentable = as.double(bl_area_rentable),
+    AreaRoom = as.double(bl_area_rm),
+    AreaRoomCommon = as.double(bl_area_rm_comn),
+    AreaRoom_dp = as.double(bl_area_rm_dp),
+    AreaService = as.double(bl_area_serv),
+    AreaUsable = as.double(bl_area_usable),
+    AreaVerticalPen = as.double(bl_area_vert_pen),
+    Comments = bl_comments,
+    Condition = bl_condition,
+    ConstructionType = bl_construction_type,
+    DateBuilding = as.POSIXct(bl_date_bl, tz = "UTC"),
+    DateBookValue = as.POSIXct(bl_date_book_val, tz = "UTC"),
+    BookValue = as.double(bl_value_book),
+    DateCostsStart = as.POSIXct(bl_date_costs_start, tz = "UTC"),
+    DateCostsEnd = as.POSIXct(bl_date_costs_end, tz = "UTC"),
+    DateEndPoBC = as.POSIXct(bl_date_end_pobc, tz = "UTC"),
+    DateStartPoBC = as.POSIXct(bl_date_start_pobc, tz = "UTC"),
+    DateMarketValue = as.POSIXct(bl_date_market_val, tz = "UTC"),
+    MarketValue = as.double(bl_value_market),
+    lat = as.double(bl_lat),
+    lon = as.double(bl_lon),
+    Option1 = bl_option1,
+    ExpectedLife = bl_qty_life_expect,
+    MamPredomUse = bl_mam_predom_use,
+    ServiceProvider = bl_serv_provider,
     BronzeBatchId = as.numeric(bronze_batch_id),
     BronzeLoadTs = as.POSIXct(bronze_load_ts, tz = "UTC"),
-    .keep = "unused"
+    .keep = "none",
+    .before = everything()
   )
 
 # dbRemoveTable(con, TARGET_TABLE)
@@ -146,20 +188,60 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     "CREATE TABLE
     {SCHEMA_NAME}.{TABLE_NAME}
     (
-      BuildingId               VARCHAR(50)   NOT NULL,
-      FloorId                  VARCHAR(50)   NOT NULL,
-      FloorName                VARCHAR(200)  NULL,
-      FloorStatus              VARCHAR(50)   NULL,
-      ExteriorWallArea         DECIMAL(18,2) NULL,
-      ExteriorGrossArea        DECIMAL(18,2) NULL,
-      InteriorGrossArea        DECIMAL(18,2) NULL,
+      BuildingId               VARCHAR(20)   NOT NULL,
+      PropertyId               VARCHAR(20)   NULL,
+      SiteId                   VARCHAR(20)   NULL,
+      Address                  VARCHAR(100)  NULL,
+      City                     VARCHAR(100)  NULL,
+      Province                 VARCHAR(10)   NULL,
+      PostalCode               VARCHAR(20)   NULL,
+      Name                     VARCHAR(100)  NULL,
+      Tenure                   VARCHAR(20)   NULL,
+      PoBCStatus               VARCHAR(20)   NULL,
+      FacilityType             VARCHAR(50)   NULL,
+      PrimaryUse               VARCHAR(50)   NULL,
+      StrategicClass           VARCHAR(50)   NULL,
+      OccupancyStatus          VARCHAR(20)   NULL,
+      PricingMethod            VARCHAR(50)   NULL,
+      AreaCommonUnoccupied     DECIMAL(18,2) NULL,
+      AreaCommonService        DECIMAL(18,2) NULL,
+      AreaExteriorWall         DECIMAL(18,2) NULL,
+      AreaGrossInternal        DECIMAL(18,2) NULL,
+      AreaLeaseNegotiated      DECIMAL(18,2) NULL,
+      AreaUnoccupied           DECIMAL(18,2) NULL,
+      AreaUnoccupiedCommon     DECIMAL(18,2) NULL,
+      AreaUnoccupied_dp        DECIMAL(18,2) NULL,
+      AreaOccupied             DECIMAL(18,2) NULL,
+      AreaOccupiedCommon       DECIMAL(18,2) NULL,
+      AreaRemain               DECIMAL(18,2) NULL,
       AreaRentable             DECIMAL(18,2) NULL,
+      AreaRoom                 DECIMAL(18,2) NULL,
+      AreaRoomCommon           DECIMAL(18,2) NULL,
+      AreaRoom_dp              DECIMAL(18,2) NULL,
+      AreaService              DECIMAL(18,2) NULL,
       AreaUsable               DECIMAL(18,2) NULL,
-      DateStart                DATETIME2     NULL,
-      DateEnd                  DATETIME2     NULL,
+      AreaVerticalPen          DECIMAL(18,2) NULL,
+      Comments                 VARCHAR(100)  NULL,
+      Condition                VARCHAR(20)   NULL,
+      ConstructionType         VARCHAR(20)   NULL,
+      DateBuilding             DATETIME2     NULL,
+      DateBookValue            DATETIME2     NULL,
+      BookValue                DECIMAL(18,2) NULL,
+      DateCostsStart           DATETIME2     NULL,
+      DateCostsEnd             DATETIME2     NULL,
+      DateEndPoBC              DATETIME2     NULL,
+      DateStartPoBC            DATETIME2     NULL,
+      DateMarketValue          DATETIME2     NULL,
+      MarketValue              DECIMAL(12,2) NULL,
+      lat                      DECIMAL(12,8) NULL,
+      lon                      DECIMAL(12,8) NULL,
+      Option1                  VARCHAR(20)   NULL,
+      ExpectedLife             VARCHAR(20)   NULL,
+      MamPredomUse             VARCHAR(20)   NULL,
+      ServiceProvider          VARCHAR(50)   NULL,
       BronzeBatchId            BIGINT        NOT NULL,
       BronzeLoadTs             DATETIME2(0)  NOT NULL,
-      CONSTRAINT PK_silver_floor PRIMARY KEY (BuildingId, FloorId)
+      CONSTRAINT PK_silver_building PRIMARY KEY ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
     );"
   )
   dbExecute(con, sql)

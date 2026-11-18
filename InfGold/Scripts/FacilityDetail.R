@@ -8,12 +8,12 @@
 #' TODO: confirm and expand this description (intended use, who relies on it).
 #'
 #' @database  BuildingIntelligence
-#' @schema    RealProperty
+#' @schema    InfGold
 #' @table     FacilityDetail
 #'
-#' @source    CbreSilver.archibus_bl Archibus building information
-#' @source    CbreSilver.archibus_rm Archibus room information
-#' @source    CbreSilver.archibus_property Archibus property information
+#' @source    InfSilver.ArchibusBuilding Archibus building information
+#' @source    InfSilver.ArchibusRoom Archibus room information
+#' @source    InfSilver.ArchibusProperty Archibus property information
 #' @source    DATA_OWNER.RPD_LAND lat/lon information for properties
 #'
 #' @load_type Full reload
@@ -22,7 +22,7 @@
 #' @filters   Only active status buildings and properties
 #' @filters   Only actual properties, remove any internal dummy locations for financial processing
 #'
-#' @consumers TODO main report or dashboard this table was built for
+#' @consumers Space Allocation and other reports that want cleaned up address information
 #'
 #' @column    RefreshDate  Time the table was last reloaded
 #' @column    Identifier
@@ -53,14 +53,14 @@
 #' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
 #'
 #' @owner    David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-18
 #'
 # For server logging
 # Begin timer
 task_start <- Sys.time()
 etl_error <- NULL
 
-# Setup necessary variables
+# Setup necessary variables ####
 if (is.null(etl_error)) {
   tryCatch(
     {
@@ -71,7 +71,7 @@ if (is.null(etl_error)) {
         "windfarm.idir.bcgov\\CA_TST"
       }
       DB_NAME <- "BuildingIntelligence"
-      SCHEMA_NAME <- "RealProperty"
+      SCHEMA_NAME <- "InfGold"
       TABLE_NAME <- "FacilityDetail"
       TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
       TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
@@ -94,7 +94,7 @@ if (is.null(etl_error)) {
   )
 }
 
-# Connect to SQL database
+# Connect to SQL database ####
 if (is.null(etl_error)) {
   tryCatch(
     {
@@ -131,15 +131,15 @@ if (is.null(etl_error)) {
 if (is.null(etl_error)) {
   tryCatch(
     {
-      query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_bl")
+      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusBuilding")
       BuildingData <- dbFetch(query, n = -1)
       dbClearResult(query)
 
-      query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_rm")
+      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusRoom")
       RoomTotalData <- dbFetch(query, n = -1)
       dbClearResult(query)
 
-      query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_property")
+      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusProperty")
       PropertyData <- dbFetch(query, n = -1)
       dbClearResult(query)
 
@@ -174,45 +174,45 @@ if (is.null(etl_error)) {
 
 if (is.null(etl_error)) {
   Building <- BuildingData |>
-    filter(PobcStatus == "Active") |>
+    filter(PoBCStatus == "Active") |>
     filter(BuildingId != "TBD") |>
-    filter(linkAddress != "Dummy Building") |>
+    filter(Address != "Dummy Building") |>
     mutate(Identifier = BuildingId, PropertyArea = NA) |>
-    mutate(
-      across(
-        c(
-          bl_area_usable,
-          bl_area_rentable
-        ),
-        as.double
-      )
-    ) |>
-    mutate(
-      across(
-        c(
-          BuildingDate
-        ),
-        as.POSIXct
-      )
-    ) |>
+    # mutate(
+    #   across(
+    #     c(
+    #       bl_area_usable,
+    #       bl_area_rentable
+    #     ),
+    #     as.double
+    #   )
+    # ) |>
+    # mutate(
+    #   across(
+    #     c(
+    #       BuildingDate
+    #     ),
+    #     as.POSIXct
+    #   )
+    # ) |>
     select(
       Identifier,
       BuildingId,
       PropertyId,
       SiteId,
       Name,
-      linkAddress,
-      linkCity,
+      Address,
+      City,
       Tenure,
       PrimaryUse,
       FacilityType,
-      StrategicClassification,
-      BuildingUsableArea = bl_area_usable,
-      BuildingRentableArea = bl_area_rentable,
-      BuildingDate,
+      StrategicClass,
+      BuildingUsableArea = AreaUsable,
+      BuildingRentableArea = AreaRentable,
+      DateBuilding,
       PropertyArea,
-      lat = bl_lat,
-      lon = bl_lon
+      lat,
+      lon
     )
 
   Property <- PropertyData |>
@@ -222,24 +222,24 @@ if (is.null(etl_error)) {
       FacilityType = NA,
       BuildingUsableArea = NA,
       BuildingRentableArea = NA,
-      BuildingDate = NA
+      DateBuilding = NA
     ) |>
     select(
       Identifier,
       BuildingId,
       PropertyId,
       SiteId,
-      Name,
-      linkAddress,
-      linkCity,
+      Name = PropertyName,
+      Address,
+      City,
       Tenure,
       PrimaryUse,
       FacilityType,
-      StrategicClassification,
+      StrategicClass,
       BuildingUsableArea,
       BuildingRentableArea,
-      BuildingDate,
-      PropertyArea = TotalRentableLand
+      DateBuilding,
+      PropertyArea = LandArea
     ) |>
     left_join(Lands, by = join_by(PropertyId))
   # mutate(
@@ -260,7 +260,7 @@ if (is.null(etl_error)) {
     ungroup()
 
   AddressList <- Table |>
-    select(linkAddress, linkCity) |>
+    select(Address, City) |>
     distinct() |>
     mutate(
       geo_name = "",
@@ -279,9 +279,9 @@ if (is.null(etl_error)) {
 
       for (ii in 1:nrow(AddressList)) {
         location <- paste0(
-          stringr::str_replace_all(AddressList[ii, "linkAddress"], " ", "%20"),
+          stringr::str_replace_all(AddressList[ii, "Address"], " ", "%20"),
           "%20",
-          stringr::str_replace_all(AddressList[ii, "linkCity"], " ", "%20")
+          stringr::str_replace_all(AddressList[ii, "City"], " ", "%20")
         )
         req <- request(paste0(query_url, location)) |>
           req_headers(API_KEY = API_KEY) |>
@@ -315,76 +315,95 @@ if (is.null(etl_error)) {
   )
 }
 
+# Assemble FacilityDetail ####
 if (is.null(etl_error)) {
-  AddressListFinal <- AddressList |>
-    separate_wider_delim(
-      geo_name,
-      delim = ",",
-      names = c("geoAddress", "geoCity", "Province"),
-      too_few = "align_start"
-    ) |>
-    mutate(
-      geoAddress = trimws(geoAddress),
-      geoCity = trimws(geoCity),
-      Province = trimws(Province),
-      score = as.numeric(score),
-      precision = as.numeric(precision)
-    ) |>
-    mutate(
-      geoAddress = gsub("--", "-", geoAddress),
-    ) |>
-    mutate(
-      Address = case_when(
-        score >= 85 & precision >= 99 ~ geoAddress,
-        .default = linkAddress
-      ),
-      City = case_when(
-        score >= 85 & precision >= 99 ~ geoCity,
-        .default = linkCity
-      ),
-      GeoFlag = case_when(
-        score >= 85 & precision >= 99 ~ TRUE,
-        .default = FALSE
-      )
-    )
+  tryCatch(
+    {
+      AddressListFinal <- AddressList |>
+        separate_wider_delim(
+          geo_name,
+          delim = ",",
+          names = c("geoAddress", "geoCity", "Province"),
+          too_few = "align_start"
+        ) |>
+        mutate(
+          geoAddress = trimws(geoAddress),
+          geoCity = trimws(geoCity),
+          Province = trimws(Province),
+          score = as.numeric(score),
+          precision = as.numeric(precision)
+        ) |>
+        mutate(
+          geoAddress = gsub("--", "-", geoAddress),
+        ) |>
+        mutate(
+          BestAddress = case_when(
+            score >= 85 & precision >= 99 ~ geoAddress,
+            .default = Address
+          ),
+          BestCity = case_when(
+            score >= 85 & precision >= 99 ~ geoCity,
+            .default = City
+          ),
+          GeoFlag = case_when(
+            score >= 85 & precision >= 99 ~ TRUE,
+            .default = FALSE
+          )
+        )
 
-  FacilityDetail <- Table |>
-    left_join(AddressListFinal, by = join_by(linkAddress, linkCity)) |>
-    mutate(
-      RefreshDate = as.POSIXct(Sys.time())
-    ) |>
-    select(
-      RefreshDate,
-      Identifier,
-      BuildingId,
-      PropertyId,
-      SiteId,
-      Name,
-      GeoFlag,
-      Address,
-      City,
-      Tenure,
-      PrimaryUse,
-      FacilityType,
-      StrategicClassification,
-      BuildingUsableArea,
-      BuildingRentableArea,
-      BuildingDate,
-      PropertyArea,
-      linkAddress,
-      linkCity,
-      geoAddress,
-      geoCity,
-      Precision = precision,
-      Score = score,
-      lat,
-      lon
-    ) |>
-    group_by(Identifier) |>
-    mutate(count = n()) |>
-    ungroup() |>
-    filter(count == 1 | (count == 2 & !is.na(BuildingId))) |>
-    select(-count)
+      FacilityDetail <- Table |>
+        left_join(AddressListFinal, by = join_by(Address, City)) |>
+        mutate(
+          RefreshDate = as.POSIXct(Sys.time()),
+          linkAddress = Address,
+          linkCity = City,
+          Address = BestAddress,
+          City = BestCity
+        ) |>
+        select(
+          RefreshDate,
+          Identifier,
+          BuildingId,
+          PropertyId,
+          SiteId,
+          Name,
+          GeoFlag,
+          Address,
+          City,
+          Tenure,
+          PrimaryUse,
+          FacilityType,
+          StrategicClassification = StrategicClass,
+          BuildingUsableArea,
+          BuildingRentableArea,
+          BuildingDate = DateBuilding,
+          PropertyArea,
+          linkAddress,
+          linkCity,
+          geoAddress,
+          geoCity,
+          Precision = precision,
+          Score = score,
+          lat,
+          lon
+        ) |>
+        group_by(Identifier) |>
+        mutate(count = n()) |>
+        ungroup() |>
+        filter(count == 1 | (count == 2 & !is.na(BuildingId))) |>
+        select(-count)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "BC_Geocoder",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
 }
 
 # dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))

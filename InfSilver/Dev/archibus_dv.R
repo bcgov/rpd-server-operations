@@ -38,9 +38,9 @@ con <- dbConnect(
 )
 
 # Query Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_dv")
-DivData <- dbFetch(query, n = -1)
-dbClearResult(query)
+# query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_dv")
+# DivData <- dbFetch(query, n = -1)
+# dbClearResult(query)
 # archibus_rm
 
 pk_cols <- paste(SOURCE_PRIMARY_KEY, collapse = ", ")
