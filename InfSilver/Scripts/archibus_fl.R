@@ -14,7 +14,8 @@ SCHEMA_NAME <- "InfSilver"
 TABLE_NAME <- "ArchibusFloors"
 SOURCE_SCHEMA <- "InfBronze"
 SOURCE_TABLE <- "archibus_fl"
-PRIMARY_KEY <- c("fl_bl_id", "fl_fl_id")
+SOURCE_PRIMARY_KEY <- c("fl_bl_id", "fl_fl_id")
+TARGET_PRIMARY_KEY <- c("BuildingId", "FloorId")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
@@ -38,7 +39,7 @@ con <- dbConnect(
 
 # Query Datasets ####
 # archibus_fl
-pk_cols <- paste(PRIMARY_KEY, collapse = ", ")
+pk_cols <- paste(SOURCE_PRIMARY_KEY, collapse = ", ")
 query <- dbSendQuery(
   con,
   glue::glue(
@@ -110,7 +111,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       DateEnd                  DATETIME2     NULL,
       BronzeBatchId            BIGINT        NOT NULL,
       BronzeLoadTs             DATETIME2(0)  NOT NULL,
-      CONSTRAINT PK_silver_floor PRIMARY KEY (BuildingId, FloorId)
+      CONSTRAINT PK_silver_floor PRIMARY KEY ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
     );"
   )
   dbExecute(con, sql)
