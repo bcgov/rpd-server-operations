@@ -9,18 +9,18 @@
 #' TODO: confirm and expand this description (intended use, who relies on it).
 #'
 #' @database  BuildingIntelligence
-#' @schema    RealProperty
+#' @schema    InfGold
 #' @table     ORG2000
 #'
-#' @source    CbreSilver.archibus_dp Archibus information about the department
-#' @source    CbreSilver.archibus_dv Archibus information about the division
+#' @source    InfSilver.ArchibusDepartment Archibus information about the department
+#' @source    InfSilver.ArchibusDivision Archibus information about the division
 #'
 #' @load_type Full reload
 #' @grain     One row per department
 #'
 #' @filters   No filter conditions
 #'
-#' @consumers TODO main report or dashboard this table was built for
+#' @consumers TODO main report or dashboard this table was built for, think it was some PDS stuff
 #'
 #' @column    RefreshDate  Time the table was last reloaded
 #' @column    Division
@@ -39,87 +39,153 @@
 #' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
 #'
 #' @owner    David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-18
 #'
 # For server logging
 # Begin timer
 task_start <- Sys.time()
+etl_error <- NULL
 
-# Setup necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
+# Setup necessary variables ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      ETL_STATUS <- "DEV"
+      SQL_SERVER <- if (ETL_STATUS == "PROD") {
+        "dynamo.idir.bcgov\\CA_PRD"
+      } else {
+        "windfarm.idir.bcgov\\CA_TST"
+      }
+      DB_NAME <- "BuildingIntelligence"
+      SCHEMA_NAME <- "InfGold"
+      TABLE_NAME <- "ORG2000"
+      TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+      TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+      SCRIPT_NAME <- "ORG2000"
+      API_NAME <- "None"
+
+      options(scipen = 999)
+      options(digits = 7)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "setup_variables",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
 }
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "ORG2000"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "ORG2000"
-API_NAME <- "None"
 
-options(scipen = 999)
-options(digits = 7)
-
-# Connect to SQL database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
+# Connect to SQL database ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      con <- dbConnect(
+        odbc(),
+        driver = "ODBC Driver 17 for SQL Server",
+        server = SQL_SERVER,
+        database = DB_NAME,
+        Trusted_Connection = "Yes"
+      )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "database_connection",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dp")
-DepartmentData <- dbFetch(query, n = -1)
-dbClearResult(query)
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusDepartment")
+      DepartmentData <- dbFetch(query, n = -1)
+      dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dv")
-DivisionData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-Org <- DivisionData |>
-  left_join(DepartmentData, by = join_by(dv_dv_id == dp_dv_id)) |>
-  mutate(
-    dp_status = case_when(
-      dp_status == "A" ~ "Active",
-      dp_status == "I" ~ "Inactive"
-    ),
-    dp_recovery_fee = case_when(
-      dp_recovery_fee == 0 ~ "No",
-      dp_recovery_fee == 1 ~ "Yes"
-    ),
-    dp_reconciled = case_when(
-      dp_reconciled == 0 ~ "No",
-      dp_reconciled == 1 ~ "Yes"
-    ),
-    dp_pam = case_when(
-      dp_pam == 0 ~ "No",
-      dp_pam == 1 ~ "Yes"
-    )
-  ) |>
-  select(
-    Division = dv_name,
-    Department = dp_name,
-    OrgType = dv_bu_id,
-    Status = dp_status,
-    SalesRepresentative = dp_sales_rep,
-    Collector = dp_collector,
-    FeeRecovery = dp_recovery_fee,
-    Reconcile = dp_reconciled,
-    ParticipatesInPAM = dp_pam,
-    DivisionId = dv_dv_id,
-    DepartmentId = dp_dp_id,
-    CustomerType = dp_customer_category,
-  ) |>
-  arrange(DivisionId, DepartmentId) |>
-  mutate(
-    RefreshDate = as.POSIXct(Sys.time(), tz = "UTC"),
-    .before = everything()
+      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusDivision")
+      DivisionData <- dbFetch(query, n = -1)
+      dbClearResult(query)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "query_datasets",
+        condition = e
+      )
+      etl_error <<- e
+    }
   )
+}
+
+# Data Wrangling ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      Org <- DivisionData |>
+        left_join(DepartmentData, by = join_by(dv_dv_id == dp_dv_id)) |>
+        mutate(
+          dp_status = case_when(
+            dp_status == "A" ~ "Active",
+            dp_status == "I" ~ "Inactive"
+          ),
+          dp_recovery_fee = case_when(
+            dp_recovery_fee == 0 ~ "No",
+            dp_recovery_fee == 1 ~ "Yes"
+          ),
+          dp_reconciled = case_when(
+            dp_reconciled == 0 ~ "No",
+            dp_reconciled == 1 ~ "Yes"
+          ),
+          dp_pam = case_when(
+            dp_pam == 0 ~ "No",
+            dp_pam == 1 ~ "Yes"
+          )
+        ) |>
+        select(
+          Division = dv_name,
+          Department = dp_name,
+          OrgType = dv_bu_id,
+          Status = dp_status,
+          SalesRepresentative = dp_sales_rep,
+          Collector = dp_collector,
+          FeeRecovery = dp_recovery_fee,
+          Reconcile = dp_reconciled,
+          ParticipatesInPAM = dp_pam,
+          DivisionId = dv_dv_id,
+          DepartmentId = dp_dp_id,
+          CustomerType = dp_customer_category,
+        ) |>
+        arrange(DivisionId, DepartmentId) |>
+        mutate(
+          RefreshDate = as.POSIXct(Sys.time(), tz = "UTC"),
+          .before = everything()
+        )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "data_wrangling",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 # dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
 if (!dbExistsTable(con, TARGET_TABLE)) {

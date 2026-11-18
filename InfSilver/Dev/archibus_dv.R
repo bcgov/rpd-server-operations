@@ -76,10 +76,10 @@ query <- dbSendQuery(
   )
 )
 
-archibus_dv <- dbFetch(query, n = -1)
+bronze_data <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-data <- archibus_dv |>
+data <- bronze_data |>
   select(-c(rn)) |>
   # mutate(across(everything(), trimws)) |> # I haven't noticed any need to trim whitespace but maybe need at some point
   mutate(

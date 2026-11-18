@@ -172,102 +172,118 @@ if (is.null(etl_error)) {
   )
 }
 
+# Data Wrangling ####
 if (is.null(etl_error)) {
-  Building <- BuildingData |>
-    filter(PoBCStatus == "Active") |>
-    filter(BuildingId != "TBD") |>
-    filter(Address != "Dummy Building") |>
-    mutate(Identifier = BuildingId, PropertyArea = NA) |>
-    # mutate(
-    #   across(
-    #     c(
-    #       bl_area_usable,
-    #       bl_area_rentable
-    #     ),
-    #     as.double
-    #   )
-    # ) |>
-    # mutate(
-    #   across(
-    #     c(
-    #       BuildingDate
-    #     ),
-    #     as.POSIXct
-    #   )
-    # ) |>
-    select(
-      Identifier,
-      BuildingId,
-      PropertyId,
-      SiteId,
-      Name,
-      Address,
-      City,
-      Tenure,
-      PrimaryUse,
-      FacilityType,
-      StrategicClass,
-      BuildingUsableArea = AreaUsable,
-      BuildingRentableArea = AreaRentable,
-      DateBuilding,
-      PropertyArea,
-      lat,
-      lon
-    )
+  tryCatch(
+    {
+      Building <- BuildingData |>
+        filter(PoBCStatus == "Active") |>
+        filter(BuildingId != "TBD") |>
+        filter(Address != "Dummy Building") |>
+        mutate(Identifier = BuildingId, PropertyArea = NA) |>
+        # mutate(
+        #   across(
+        #     c(
+        #       bl_area_usable,
+        #       bl_area_rentable
+        #     ),
+        #     as.double
+        #   )
+        # ) |>
+        # mutate(
+        #   across(
+        #     c(
+        #       BuildingDate
+        #     ),
+        #     as.POSIXct
+        #   )
+        # ) |>
+        select(
+          Identifier,
+          BuildingId,
+          PropertyId,
+          SiteId,
+          Name,
+          Address,
+          City,
+          Tenure,
+          PrimaryUse,
+          FacilityType,
+          StrategicClass,
+          BuildingUsableArea = AreaUsable,
+          BuildingRentableArea = AreaRentable,
+          DateBuilding,
+          PropertyArea,
+          lat,
+          lon
+        )
 
-  Property <- PropertyData |>
-    mutate(
-      Identifier = PropertyId,
-      BuildingId = NA,
-      FacilityType = NA,
-      BuildingUsableArea = NA,
-      BuildingRentableArea = NA,
-      DateBuilding = NA
-    ) |>
-    select(
-      Identifier,
-      BuildingId,
-      PropertyId,
-      SiteId,
-      Name = PropertyName,
-      Address,
-      City,
-      Tenure,
-      PrimaryUse,
-      FacilityType,
-      StrategicClass,
-      BuildingUsableArea,
-      BuildingRentableArea,
-      DateBuilding,
-      PropertyArea = LandArea
-    ) |>
-    left_join(Lands, by = join_by(PropertyId))
-  # mutate(
-  #   lat = NA_real_,
-  #   lon = NA_real_
-  # )
+      Property <- PropertyData |>
+        mutate(
+          Identifier = PropertyId,
+          BuildingId = NA,
+          FacilityType = NA,
+          BuildingUsableArea = NA,
+          BuildingRentableArea = NA,
+          DateBuilding = NA
+        ) |>
+        select(
+          Identifier,
+          BuildingId,
+          PropertyId,
+          SiteId,
+          Name = PropertyName,
+          Address,
+          City,
+          Tenure,
+          PrimaryUse,
+          FacilityType,
+          StrategicClass,
+          BuildingUsableArea,
+          BuildingRentableArea,
+          DateBuilding,
+          PropertyArea = LandArea
+        ) |>
+        left_join(Lands, by = join_by(PropertyId))
+      # mutate(
+      #   lat = NA_real_,
+      #   lon = NA_real_
+      # )
 
-  Table <- Building |>
-    union(Property) |>
-    mutate(
-      PropertyId = case_when(
-        startsWith(BuildingId, "N") & is.na(PropertyId) ~ BuildingId,
-        .default = PropertyId
+      Table <- Building |>
+        union(Property) |>
+        mutate(
+          PropertyId = case_when(
+            startsWith(BuildingId, "N") & is.na(PropertyId) ~ BuildingId,
+            .default = PropertyId
+          )
+        ) |>
+        group_by(PropertyId) |>
+        tidyr::fill(PropertyArea, .direction = "updown") |>
+        ungroup()
+
+      AddressList <- Table |>
+        select(Address, City) |>
+        distinct() |>
+        mutate(
+          geo_name = "",
+          score = "",
+          precision = ""
+        )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "data_wrangling",
+        condition = e
       )
-    ) |>
-    group_by(PropertyId) |>
-    tidyr::fill(PropertyArea, .direction = "updown") |>
-    ungroup()
-
-  AddressList <- Table |>
-    select(Address, City) |>
-    distinct() |>
-    mutate(
-      geo_name = "",
-      score = "",
-      precision = ""
-    )
+      etl_error <<- e
+    }
+  )
 }
+
 
 # Query BC Geocoder ####
 if (is.null(etl_error)) {
