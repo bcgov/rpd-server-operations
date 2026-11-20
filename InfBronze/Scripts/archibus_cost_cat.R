@@ -41,7 +41,7 @@
 #' (cost_cat_cost_cat_id, bronze_load_ts).
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-20
 
 # For server logging
 # Begin timer

@@ -171,7 +171,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       dp_tax_code              VARCHAR(50)   NULL,
       BronzeBatchId            BIGINT        NOT NULL,
       BronzeLoadTs             DATETIME2(0)  NOT NULL,
-      CONSTRAINT PK_silver_department PRIMARY KEY ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
+      CONSTRAINT PK_silver_department PRIMARY KEY CLUSTERED ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
     );"
   )
   dbExecute(con, sql)

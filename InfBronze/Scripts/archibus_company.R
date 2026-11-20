@@ -26,6 +26,7 @@
 #'
 #' @column company_company_key Unique company identifier
 #' @column company_name Company name
+#' @column company_company usually just a repeat of company_company_key
 #' @column company_vendor Vendor identifier or reference
 #' @column company_email Primary company email address
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
@@ -40,7 +41,7 @@
 #' (company_company_key, bronze_load_ts).
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-20
 
 # For server logging
 # Begin timer

@@ -173,7 +173,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       TransferStatus           VARCHAR(10)   NULL,
       BronzeBatchId            BIGINT        NOT NULL,
       BronzeLoadTs             DATETIME2(0)  NOT NULL,
-      CONSTRAINT PK_silver_room PRIMARY KEY ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
+      CONSTRAINT PK_silver_room PRIMARY KEY CLUSTERED ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
     );"
   )
   dbExecute(con, sql)

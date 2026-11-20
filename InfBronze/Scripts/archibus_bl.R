@@ -1,7 +1,7 @@
 #' @title Archibus Building
 #'
 #' @description
-#' Loads building master records from the CBRE API archibus_bl entity into the Bronze
+#' Loads building records from the CBRE API archibus_bl entity into the Bronze
 #' layer. The script extracts the current batch of building records, computes
 #' row-level hashes to detect changes, classifies incoming records as new,
 #' changed or unchanged, and appends historical versions to support Bronze
@@ -22,7 +22,7 @@
 #' @filters Missing records from the current source extract are identified and
 #'   logged separately for downstream processing
 #'
-#' @consumers TODO
+#' @consumers InfSilver.ArchibusBuilding
 #'
 #' @column bl_bl_id_key Source-system building identifier and primary business key
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
@@ -41,7 +41,7 @@
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-20
 
 # For server logging
 # Begin timer

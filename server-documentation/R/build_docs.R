@@ -188,3 +188,6 @@ if ("--render" %in% args) {
   }
   message("Rendered HTML from ", out_dir)
 }
+
+# console override
+# system2("quarto", c("render", "Server-Documentation/generated"))

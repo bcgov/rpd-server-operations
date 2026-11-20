@@ -21,6 +21,8 @@
 #'   to avoid false-positive change detection
 #' @filters Missing records from the current source extract are identified and
 #'   logged separately for downstream processing
+#' @filters Missing records are identified solely by key comparison because
+#'   the source entity does not provide a status field for missing-record handling
 #'
 #' @consumers TODO
 #'
