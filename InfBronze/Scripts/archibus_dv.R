@@ -22,7 +22,7 @@
 #' @filters Missing records from the current source extract are identified and
 #'   logged separately for downstream processing
 #'
-#' @consumers TODO
+#' @consumers InfSilver.ArchibusDivision
 #'
 #' @column dv_dv_id Division identifier from the source system
 #' @column dv_name Division name
@@ -36,14 +36,14 @@
 #' table.
 #'
 #' A hash-gating process classifies rows as New, Changed, or Unchanged before
-#' loading. Historical versions are retained through the composite primary key
+#' loading. Historical versions are retained through the primary key
 #' of (dv_dv_id, bronze_load_ts).
 #'
 #' Missing records from the source extract are identified during processing and
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

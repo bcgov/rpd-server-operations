@@ -1,46 +1,54 @@
-#' @title ORG2000 Report
+#' @title ORG2000 Organization Reference Dataset
 #'
 #' @description
-#' Project cost report at activity-code level for CBRE project management
-#' data. For each project and detail activity code it brings together the
-#' budget, commitment, forecast and payment figures, calculates the variance
-#' against the current budget, and attaches the project manager.
+#' Produces an organizational reference dataset from Archibus division and
+#' department information. The table combines division and department
+#' hierarchies with customer classifications, fee-recovery attributes,
+#' reconciliation settings, PAM participation indicators, and organizational
+#' contacts to support reporting and operational analysis.
 #'
-#' TODO: confirm and expand this description (intended use, who relies on it).
+#' @database BuildingIntelligence
+#' @schema InfGold
+#' @table ORG2000
 #'
-#' @database  BuildingIntelligence
-#' @schema    InfGold
-#' @table     ORG2000
+#' @source InfSilver.ArchibusDepartment Current-state department information
+#' @source InfSilver.ArchibusDivision Current-state division information
 #'
-#' @source    InfSilver.ArchibusDepartment Archibus information about the department
-#' @source    InfSilver.ArchibusDivision Archibus information about the division
+#' @load_type Full refresh
+#' @grain One row per department within a division
 #'
-#' @load_type Full reload
-#' @grain     One row per department
+#' @filters No filter conditions
 #'
-#' @filters   No filter conditions
+#' @consumers TODO
 #'
-#' @consumers TODO main report or dashboard this table was built for, think it was some PDS stuff
+#' @column RefreshDate Timestamp when the dataset was refreshed
+#' @column Division Division name
+#' @column Department Department name
+#' @column OrgType Organizational business-unit classification
+#' @column DepartmentStatus Department status
+#' @column SalesRepresentative Assigned sales representative
+#' @column Collector Assigned collector
+#' @column FeeRecovery Indicates whether fee recovery is enabled
+#' @column Reconcile Indicates whether reconciliation is enabled
+#' @column ParticipatesInPAM Indicates participation in PAM
+#' @column DivisionId Division identifier
+#' @column DepartmentId Department identifier
+#' @column CustomerType Customer category classification
 #'
-#' @column    RefreshDate  Time the table was last reloaded
-#' @column    Division
-#' @column    Department
-#' @column    OrgType
-#' @column    Status
-#' @column    SalesRepresentative
-#' @column    Collector
-#' @column    FeeRecovery
-#' @column    Reconcile
-#' @column    ParticipatesInPAM
-#' @column    DivisionId
-#' @column    DepartmentId
-#' @column    CustomerType
+#' @notes
+#' Data is sourced from the current-state Silver layer and is intended for
+#' business reporting rather than operational processing.
 #'
-#' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+#' Organizational indicators stored as source-system codes are transformed into
+#' business-friendly values before publication.
 #'
-#' @owner    David Rattray
-#' @last_reviewed 2026-11-18
+#' Each run builds the result in a temporary table and replaces the target
+#' table inside a single database transaction. If the load fails, the
+#' previously published dataset remains unchanged.
 #'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -113,7 +121,10 @@ if (is.null(etl_error)) {
       DepartmentData <- dbFetch(query, n = -1)
       dbClearResult(query)
 
-      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusDivision")
+      query <- dbSendQuery(
+        con,
+        "SELECT DivisionId, DivisionName, BusinessId FROM InfSilver.ArchibusDivision"
+      )
       DivisionData <- dbFetch(query, n = -1)
       dbClearResult(query)
     },
@@ -135,11 +146,12 @@ if (is.null(etl_error)) {
   tryCatch(
     {
       Org <- DivisionData |>
-        left_join(DepartmentData, by = join_by(dv_dv_id == dp_dv_id)) |>
+        left_join(DepartmentData, by = join_by(DivisionId)) |>
         mutate(
-          dp_status = case_when(
-            dp_status == "A" ~ "Active",
-            dp_status == "I" ~ "Inactive"
+          DepartmentStatus = case_when(
+            DepartmentStatus == "A" ~ "Active",
+            DepartmentStatus == "I" ~ "Inactive",
+            TRUE ~ DepartmentStatus
           ),
           dp_recovery_fee = case_when(
             dp_recovery_fee == 0 ~ "No",
@@ -155,18 +167,18 @@ if (is.null(etl_error)) {
           )
         ) |>
         select(
-          Division = dv_name,
-          Department = dp_name,
-          OrgType = dv_bu_id,
-          Status = dp_status,
+          Division = DivisionName,
+          Department = DepartmentName,
+          OrgType = BusinessId,
+          DepartmentStatus,
           SalesRepresentative = dp_sales_rep,
           Collector = dp_collector,
           FeeRecovery = dp_recovery_fee,
           Reconcile = dp_reconciled,
           ParticipatesInPAM = dp_pam,
-          DivisionId = dv_dv_id,
-          DepartmentId = dp_dp_id,
-          CustomerType = dp_customer_category,
+          DivisionId,
+          DepartmentId,
+          CustomerType = CustomerCategory,
         ) |>
         arrange(DivisionId, DepartmentId) |>
         mutate(
@@ -199,7 +211,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     Division                NVARCHAR(100)   NULL,
     Department              NVARCHAR(200)   NULL,
     OrgType                 NVARCHAR(20)    NULL,
-    Status                  NVARCHAR(20)    NULL,
+    DepartmentStatus        NVARCHAR(20)    NULL,
     SalesRepresentative     NVARCHAR(50)    NULL,
     Collector               NVARCHAR(50)    NULL,
     FeeRecovery             NVARCHAR(10)    NULL,
@@ -242,7 +254,7 @@ tryCatch(
           Division                NVARCHAR(100)   NULL,
           Department              NVARCHAR(200)   NULL,
           OrgType                 NVARCHAR(20)    NULL,
-          Status                  NVARCHAR(20)    NULL,
+          DepartmentStatus        NVARCHAR(20)    NULL,
           SalesRepresentative     NVARCHAR(50)    NULL,
           Collector               NVARCHAR(50)    NULL,
           FeeRecovery             NVARCHAR(10)    NULL,
@@ -287,7 +299,7 @@ tryCatch(
         Division,
         Department,
         OrgType,
-        Status,
+        DepartmentStatus,
         SalesRepresentative,
         Collector,
         FeeRecovery,

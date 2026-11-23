@@ -1,7 +1,7 @@
 #' @title Archibus Scheduled Cost Transaction
 #'
 #' @description
-#' Loads scheduled cost transaction records from the CBRE API into the Bronze
+#' Loads scheduled occurrences of recurring cost transactions from the CBRE API into the Bronze
 #' layer. The script extracts planned and payable financial transactions,
 #' computes row-level hashes to detect changes, classifies incoming records as
 #' new, changed, or unchanged, and appends historical versions to support
@@ -25,7 +25,7 @@
 #' @consumers TODO
 #'
 #' @column cost_tran_sched_cost_tran_sched_id Scheduled transaction identifier
-#' @column cost_tran_sched_cost_tran_recur_id Related recurring transaction identifier
+#' @column cost_tran_sched_cost_tran_recur_id Associated recurring transaction identifier
 #' @column cost_tran_sched_date_due Scheduled payment due date
 #' @column cost_tran_sched_amount_expense Scheduled expense amount
 #' @column cost_tran_sched_amount_income Scheduled income amount
@@ -42,7 +42,7 @@
 #' (cost_tran_sched_cost_tran_sched_id, bronze_load_ts).
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer
@@ -235,10 +235,6 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
 # data <- raw_data |>
 #   purrr::pluck("data")
 #
-# test <- data |>
-#   group_by(cost_tran_recur_cost_tran_recur_id_key) |>
-#   mutate(count = n()) |>
-#   filter(count > 1)
 # tracked_cols <- get_tracked_cols(data, EXCLUDED_FROM_HASH)
 #
 # hashed <- add_row_hash(data, PRIMARY_KEY, tracked_cols) |>

@@ -1,7 +1,8 @@
 #' @title Archibus Lease Cost Sheet
 #'
 #' @description
-#' Loads lease cost-sheet calculations from the CBRE API into the Bronze
+#' This entity contains calculated lease cost-model outputs and financial analyses
+#' which are loaded from the CBRE API into the Bronze
 #' layer. The script extracts lease financial analysis metrics, computes
 #' row-level hashes to detect changes, classifies incoming records as new,
 #' changed, or unchanged, and appends historical versions to support Bronze
@@ -42,7 +43,7 @@
 #' (costsheet_v_ls_id, bronze_load_ts).
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

@@ -1,3 +1,61 @@
+#' @title Archibus Property
+#'
+#' @description
+#' Loads the current property inventory from InfBronze.archibus_property into
+#' the Silver layer. The script selects the latest version of each property
+#' record, applies business-friendly naming and data-type conversions, and
+#' publishes a current-state property dataset for reporting and analytical
+#' consumption.
+#'
+#' @database BuildingIntelligence
+#' @schema InfSilver
+#' @table ArchibusProperty
+#'
+#' @source InfBronze.archibus_property
+#'
+#' @load_type Full refresh from latest Bronze records
+#' @grain One row per property
+#'
+#' @filters Only the most recent Bronze record version is retained for each
+#'   property identifier
+#' @filters Records are excluded if no current version exists in Bronze
+#'
+#' @consumers TODO
+#'
+#' @column PropertyId Property identifier
+#' @column PropertyName Property name
+#' @column SiteId Associated site identifier
+#' @column Tenure Property ownership status
+#' @column Status Property lifecycle status
+#' @column Occupancy Current property occupancy status
+#' @column PrimaryUse Primary property use classification
+#' @column StrategicClass Strategic portfolio classification
+#' @column BuildingAreaRentable Rentable building area associated with the property
+#' @column LandArea Land area associated with the property
+#' @column MarketValue Current market value of the property
+#' @column BronzeBatchId Source Bronze batch identifier
+#' @column BronzeLoadTs Timestamp of the Bronze record version selected
+#'
+#' @notes
+#' Data is sourced from InfBronze.archibus_property.
+#'
+#' This table provides the current-state property inventory used for portfolio
+#' management, real-property reporting, valuation analysis, occupancy
+#' reporting, and strategic planning activities.
+#'
+#' Property ownership status and property lifecycle status are represented
+#' separately to distinguish portfolio tenure (for example Owned, Leased, or
+#' Managed) from operational lifecycle state (for example Active or Retired).
+#'
+#' Historical property versions are retained in the Bronze layer. Only the
+#' most recent version of each property record is published to Silver.
+#'
+#' Technical source-system attribute names are transformed into
+#' business-oriented field names and analytical data types where appropriate.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -121,8 +179,8 @@ data <- bronze_data |>
     Province = property_state_id,
     Country = property_ctry_id,
     PostalCode = property_zip,
-    Lat = property_lat,
-    Lon = property_lon,
+    Latitude = as.double(property_lat),
+    Longitude = as.double(property_lon),
     Tenure = property_status,
     Status = property_status_pobc,
     Occupancy = property_occ_status,
@@ -172,8 +230,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       Province                   VARCHAR(10)   NULL,
       Country                    VARCHAR(10)   NULL,
       PostalCode                 VARCHAR(20)   NULL,
-      Lat                        VARCHAR(30)   NULL,
-      Lon                        VARCHAR(30)   NULL,
+      Latitude                   DECIMAL(12,8) NULL,
+      Longitude                  DECIMAL(12,8) NULL,
       Tenure                     VARCHAR(20)   NULL,
       Status                     VARCHAR(20)   NULL,
       Occupancy                  VARCHAR(20)   NULL,

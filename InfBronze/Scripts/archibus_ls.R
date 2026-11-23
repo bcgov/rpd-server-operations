@@ -29,6 +29,7 @@
 #' @column ls_pr_id Associated property identifier
 #' @column ls_tn_name Tenant name
 #' @column ls_ld_name Landlord name
+#' @column ls_status Lease status (for example active, terminated, or other lifecycle state)
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
 #' @column bronze_batch_id ETL batch identifier for the load execution
 #' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
@@ -42,14 +43,13 @@
 #' and real property analysis.
 #'
 #' A hash-gating process classifies rows as New, Changed, or Unchanged before
-#' loading. Historical versions are retained through the composite primary key
-#' of (ls_ls_id, bronze_load_ts).
+#' loading. Historical versions are retained through versioned records keyed by (ls_ls_id, bronze_load_ts).
 #'
 #' Missing records from the source extract are identified during processing and
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

@@ -1,3 +1,57 @@
+#' @title Archibus Building
+#'
+#' @description
+#' Loads the current building inventory from InfBronze.archibus_bl into the
+#' Silver layer. The script selects the latest version of each building record,
+#' applies business-friendly naming and data-type conversions, and publishes a
+#' current-state building dataset for reporting and analytical consumption.
+#'
+#' @database BuildingIntelligence
+#' @schema InfSilver
+#' @table ArchibusBuilding
+#'
+#' @source InfBronze.archibus_bl
+#'
+#' @load_type Full refresh from latest Bronze records
+#' @grain One row per building
+#'
+#' @filters Only the most recent Bronze record version is retained for each
+#'   building identifier
+#' @filters Records are excluded if no current version exists in Bronze
+#'
+#' @consumers TODO
+#'
+#' @column BuildingId Building identifier
+#' @column PropertyId Associated property identifier
+#' @column Name Building name
+#' @column Tenure Building ownership or tenure status
+#' @column PoBCStatus Building lifecycle status
+#' @column FacilityType Facility classification
+#' @column PrimaryUse Primary building use classification
+#' @column StrategicClass Strategic property classification
+#' @column AreaRentable Rentable building area
+#' @column AreaUsable Usable building area
+#' @column MarketValue Current market value of the building
+#' @column BronzeBatchId Source Bronze batch identifier
+#' @column BronzeLoadTs Timestamp of the Bronze record version selected
+#'
+#' @notes
+#' Data is sourced from InfBronze.archibus_bl.
+#'
+#' This table represents the current-state inventory of buildings within the
+#' property portfolio and supports reporting, occupancy analysis, space
+#' planning, and asset-management activities.
+#'
+#' Technical source-system attribute names are transformed into
+#' business-oriented field names and key numeric and date fields are converted
+#' to analytical data types.
+#'
+#' Historical building versions are retained in the Bronze layer. Only the
+#' most recent version of each building record is published to Silver.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -170,8 +224,8 @@ data <- bronze_data |>
     DateStartPoBC = as.POSIXct(bl_date_start_pobc, tz = "UTC"),
     DateMarketValue = as.POSIXct(bl_date_market_val, tz = "UTC"),
     MarketValue = as.double(bl_value_market),
-    lat = as.double(bl_lat),
-    lon = as.double(bl_lon),
+    Latitude = as.double(bl_lat),
+    Longitude = as.double(bl_lon),
     Option1 = bl_option1,
     ExpectedLife = bl_qty_life_expect,
     MamPredomUse = bl_mam_predom_use,
@@ -233,8 +287,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       DateStartPoBC            DATETIME2     NULL,
       DateMarketValue          DATETIME2     NULL,
       MarketValue              DECIMAL(12,2) NULL,
-      lat                      DECIMAL(12,8) NULL,
-      lon                      DECIMAL(12,8) NULL,
+      Latitude                 DECIMAL(12,8) NULL,
+      Longitude                DECIMAL(12,8) NULL,
       Option1                  VARCHAR(20)   NULL,
       ExpectedLife             VARCHAR(20)   NULL,
       MamPredomUse             VARCHAR(20)   NULL,

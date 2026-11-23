@@ -29,6 +29,7 @@
 #' @column cost_tran_recur_ls_id Associated lease identifier
 #' @column cost_tran_recur_amount_expense Recurring expense amount
 #' @column cost_tran_recur_amount_income Recurring income amount
+#' @column cost_tran_recur_status_active Contains a numerical value 0-8, what exactly it indicates I'm not sure.
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
 #' @column bronze_batch_id ETL batch identifier for the load execution
 #' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
@@ -42,7 +43,7 @@
 #' (cost_tran_recur_cost_tran_recur_id_key, bronze_load_ts).
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

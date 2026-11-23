@@ -1,3 +1,55 @@
+#' @title Archibus Floors
+#'
+#' @description
+#' Loads the current floor inventory from InfBronze.archibus_fl into the Silver
+#' layer. The script selects the latest version of each floor record, applies
+#' business-friendly naming and data-type conversions, and publishes a
+#' current-state floor dataset for reporting and analytical consumption.
+#'
+#' @database BuildingIntelligence
+#' @schema InfSilver
+#' @table ArchibusFloors
+#'
+#' @source InfBronze.archibus_fl
+#'
+#' @load_type Full refresh from latest Bronze records
+#' @grain One row per building-floor combination
+#'
+#' @filters Only the most recent Bronze record version is retained for each
+#'   (fl_bl_id, fl_fl_id) key combination
+#' @filters Records are excluded if no current version exists in Bronze
+#'
+#' @consumers TODO
+#'
+#' @column BuildingId Building identifier
+#' @column FloorId Floor identifier within the building
+#' @column FloorName Floor name or description
+#' @column FloorStatus Floor lifecycle status
+#' @column ExteriorWallArea Exterior wall area
+#' @column ExteriorGrossArea Exterior gross floor area
+#' @column InteriorGrossArea Interior gross floor area
+#' @column AreaRentable Rentable floor area
+#' @column AreaUsable Usable floor area
+#' @column DateStart Floor activation/start date
+#' @column DateEnd Floor retirement/end date
+#' @column BronzeBatchId Source Bronze batch identifier
+#' @column BronzeLoadTs Timestamp of the Bronze record version selected
+#'
+#' @notes
+#' Data is sourced from InfBronze.archibus_fl.
+#'
+#' This table provides the current-state floor inventory for buildings managed
+#' within the Archibus platform.
+#'
+#' Historical floor versions are retained in the Bronze layer. Only the most
+#' recent version of each floor record is published to Silver.
+#'
+#' Numeric area fields are converted to DECIMAL values and date fields are
+#' converted to SQL DATETIME types for downstream analytical use.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -11,11 +63,11 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
 }
 DB_NAME <- "BuildingIntelligence"
 SCHEMA_NAME <- "InfSilver"
-TABLE_NAME <- "ArchibusDivision"
+TABLE_NAME <- "ArchibusFloors"
 SOURCE_SCHEMA <- "InfBronze"
-SOURCE_TABLE <- "archibus_dv"
-SOURCE_PRIMARY_KEY <- c("dv_dv_id")
-TARGET_PRIMARY_KEY <- c("DivisionId")
+SOURCE_TABLE <- "archibus_fl"
+SOURCE_PRIMARY_KEY <- c("fl_bl_id", "fl_fl_id")
+TARGET_PRIMARY_KEY <- c("BuildingId", "FloorId")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 API_NAME <- "CBRE"
@@ -38,11 +90,7 @@ con <- dbConnect(
 )
 
 # Query Datasets ####
-# query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_dv")
-# DivData <- dbFetch(query, n = -1)
-# dbClearResult(query)
-# archibus_rm
-
+# archibus_fl
 pk_cols <- paste(SOURCE_PRIMARY_KEY, collapse = ", ")
 query <- dbSendQuery(
   con,
@@ -52,18 +100,15 @@ query <- dbSendQuery(
     FROM (
       SELECT
       {pk_cols},
-      dv_area_rm,
-      dv_area_chargable,
-      dv_area_comn,
-      dv_area_comn_nocup,
-      dv_area_comn_ocup,
-      dv_area_ocup,
-      dv_bu_id,
-      dv_hpattern_acad,
-      dv_name,
-      dv_option1,
-      dv_status,
-      row_hash,
+      fl_name,
+      fl_status_pobc,
+      fl_area_ext_wall,
+      fl_area_gross_ext,
+      fl_area_gross_int,
+      fl_area_rentable,
+      fl_area_usable,
+      fl_date_start_pobc,
+      fl_date_end_pobc,
       bronze_batch_id,
       bronze_load_ts,
       ROW_NUMBER() OVER (
@@ -76,28 +121,27 @@ query <- dbSendQuery(
   )
 )
 
-bronze_data <- dbFetch(query, n = -1)
+archibus_fl <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-data <- bronze_data |>
+data <- archibus_fl |>
   select(-c(rn)) |>
   # mutate(across(everything(), trimws)) |> # I haven't noticed any need to trim whitespace but maybe need at some point
   mutate(
-    DivisionId = dv_dv_id,
-    Name = dv_name,
-    BusinessId = dv_bu_id,
-    Status = dv_status,
-    AreaRoom = as.double(dv_area_rm),
-    ChargableArea = as.double(dv_area_chargable),
-    AreaOccupied = as.double(dv_area_ocup),
-    CommonArea = as.double(dv_area_comn),
-    OccupiedCommonArea = as.double(dv_area_comn_ocup),
-    UnoccupiedCommonArea = as.double(dv_area_comn_nocup),
-    Hpattern_acad = dv_hpattern_acad,
+    BuildingId = fl_bl_id,
+    FloorId = fl_fl_id,
+    FloorName = fl_name,
+    FloorStatus = fl_status_pobc,
+    ExteriorWallArea = as.double(fl_area_ext_wall),
+    ExteriorGrossArea = as.double(fl_area_gross_ext),
+    InteriorGrossArea = as.double(fl_area_gross_int),
+    AreaRentable = as.double(fl_area_rentable),
+    AreaUsable = as.double(fl_area_usable),
+    DateStart = as.Date(fl_date_start_pobc),
+    DateEnd = as.Date(fl_date_end_pobc),
     BronzeBatchId = as.numeric(bronze_batch_id),
     BronzeLoadTs = as.POSIXct(bronze_load_ts, tz = "UTC"),
-    .keep = "none",
-    .before = everything()
+    .keep = "unused"
   )
 
 # dbRemoveTable(con, TARGET_TABLE)
@@ -106,20 +150,20 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     "CREATE TABLE
     {SCHEMA_NAME}.{TABLE_NAME}
     (
-      DivisionId               VARCHAR(20)   NOT NULL,
-      Name                     VARCHAR(100)  NULL,
-      BusinessId               VARCHAR(20)   NULL,
-      Status                   VARCHAR(10)   NULL,
-      AreaRoom                 DECIMAL(18,2) NULL,
-      ChargableArea            DECIMAL(18,2) NULL,
-      AreaOccupied             DECIMAL(18,2) NULL,
-      CommonArea               DECIMAL(18,2) NULL,
-      OccupiedCommonArea       DECIMAL(18,2) NULL,
-      UnoccupiedCommonArea     DECIMAL(18,2) NULL,
-      Hpattern_acad            VARCHAR(50)   NULL,
+      BuildingId               VARCHAR(50)   NOT NULL,
+      FloorId                  VARCHAR(50)   NOT NULL,
+      FloorName                VARCHAR(200)  NULL,
+      FloorStatus              VARCHAR(50)   NULL,
+      ExteriorWallArea         DECIMAL(18,2) NULL,
+      ExteriorGrossArea        DECIMAL(18,2) NULL,
+      InteriorGrossArea        DECIMAL(18,2) NULL,
+      AreaRentable             DECIMAL(18,2) NULL,
+      AreaUsable               DECIMAL(18,2) NULL,
+      DateStart                DATETIME2     NULL,
+      DateEnd                  DATETIME2     NULL,
       BronzeBatchId            BIGINT        NOT NULL,
       BronzeLoadTs             DATETIME2(0)  NOT NULL,
-      CONSTRAINT PK_silver_division PRIMARY KEY CLUSTERED ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
+      CONSTRAINT PK_silver_floor PRIMARY KEY ({paste(TARGET_PRIMARY_KEY, collapse = ', ')})
     );"
   )
   dbExecute(con, sql)

@@ -10,6 +10,7 @@
 .Rhistory
 
 # for quarto documentation files
+/generated/
 _site/
 *_files/
 

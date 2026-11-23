@@ -20,6 +20,29 @@ library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
+# Check timezone
+warned <- FALSE
+msg <- NA_character_
+lt <- withCallingHandlers(
+  as.POSIXlt(Sys.time()),
+  warning = function(w) {
+    warned <<- TRUE
+    msg <<- conditionMessage(w)
+    invokeRestart("muffleWarning")
+  }
+)
+
+if (warned) {
+  Sys.setenv(TZ = "Etc/GMT+7")
+  log_etl_warning(
+    api_name = "CBRE",
+    script_name = "INF-SILVER-Orchestrator",
+    table_name = "NA",
+    step = "Timezone Check",
+    message = msg
+  )
+}
+
 # Setup necessary variables
 orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "INF-BRONZE-ORCHESTRATOR"
@@ -34,7 +57,6 @@ scripts <- c(
   "InfBronze/Scripts/archibus_cost_cat.R",
   "InfBronze/Scripts/archibus_cost_tran_recur.R",
   "InfBronze/Scripts/archibus_cost_tran_sched.R",
-  # "InfBronze/Scripts/archibus_cost_tran.R",
   "InfBronze/Scripts/archibus_costsheet_v.R",
   "InfBronze/Scripts/archibus_dp.R",
   "InfBronze/Scripts/archibus_dv.R",

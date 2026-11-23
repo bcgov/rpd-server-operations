@@ -1,3 +1,53 @@
+#' @title Archibus Department
+#'
+#' @description
+#' Loads the current department inventory from InfBronze.archibus_dp into the
+#' Silver layer. The script selects the latest version of each department
+#' record, applies business-friendly naming and data-type conversions, and
+#' publishes a current-state department dataset for reporting and analytical
+#' consumption.
+#'
+#' @database BuildingIntelligence
+#' @schema InfSilver
+#' @table ArchibusDepartment
+#'
+#' @source InfBronze.archibus_dp
+#'
+#' @load_type Full refresh from latest Bronze records
+#' @grain One row per division-department combination
+#'
+#' @filters Only the most recent Bronze record version is retained for each
+#'   (dp_dv_id, dp_dp_id) key combination
+#' @filters Records are excluded if no current version exists in Bronze
+#'
+#' @consumers TODO
+#'
+#' @column DepartmentId Department identifier
+#' @column DepartmentName Department name
+#' @column DivisionId Associated division identifier
+#' @column CustomerCategory Customer category classification
+#' @column CustomerSegment Customer segment classification
+#' @column Status Current department status
+#' @column BronzeBatchId Source Bronze batch identifier
+#' @column BronzeLoadTs Timestamp of the Bronze record version selected
+#'
+#' @notes
+#' Data is sourced from InfBronze.archibus_dp.
+#'
+#' This table provides the current-state department inventory used for
+#' organizational reporting, occupancy allocation, customer-segment analysis,
+#' and departmental space-management activities.
+#'
+#' Historical department versions are retained in the Bronze layer. Only the
+#' most recent version of each department record is published to Silver.
+#'
+#' Frequently used business attributes are promoted to business-friendly
+#' column names, while less commonly consumed Archibus attributes retain their
+#' original source-system naming.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -68,7 +118,6 @@ query <- dbSendQuery(
       dp_customer_class,
       dp_customer_ref,
       dp_customer_segment,
-      dp_dv_id,
       dp_gl_code,
       dp_hpattern_acad,
       dp_mvpt_category,
@@ -106,7 +155,7 @@ data <- bronze_data |>
     DivisionId = dp_dv_id,
     CustomerCategory = dp_customer_category,
     CustomerSegment = dp_customer_segment,
-    Status = dp_status,
+    DepartmentStatus = dp_status,
     dp_address_ref = dp_address_ref,
     dp_area_chargable = as.double(dp_area_chargable),
     dp_area_comn = as.double(dp_area_comn),
@@ -146,7 +195,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
       DivisionId               VARCHAR(20)   NOT NULL,
       CustomerCategory         VARCHAR(100)  NULL,
       CustomerSegment          VARCHAR(100)  NULL,
-      Status                   VARCHAR(20)   NULL,
+      DepartmentStatus         VARCHAR(20)   NULL,
       dp_address_ref           VARCHAR(20)   NULL,
       dp_area_chargable        DECIMAL(18,2) NULL,
       dp_area_comn             DECIMAL(18,2) NULL,

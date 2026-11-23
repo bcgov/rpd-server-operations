@@ -27,7 +27,8 @@
 #' @column property_pr_id Property identifier from the source system
 #' @column property_name Property name
 #' @column property_primary_use Primary use classification of the property
-#' @column property_status Current property status
+#' @column property_status Property ownership status
+#' @column property_status_pobc Current property lifecycle status
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
 #' @column bronze_batch_id ETL batch identifier for the load execution
 #' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
@@ -41,14 +42,14 @@
 #' property data platform.
 #'
 #' A hash-gating process classifies rows as New, Changed, or Unchanged before
-#' loading. Historical versions are retained through the composite primary key
-#' of (property_pr_id, bronze_load_ts).
+#' loading. Historical versions are retained through versioned records
+#' keyed by (property_pr_id, bronze_load_ts).
 #'
 #' Missing records from the source extract are identified during processing and
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

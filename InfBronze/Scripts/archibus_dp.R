@@ -22,9 +22,10 @@
 #' @filters Missing records from the current source extract are identified and
 #'   logged separately for downstream processing
 #'
-#' @consumers TODO
+#' @consumers InfSilver.ArchibusDepartment
 #'
 #' @column dp_dp_id Department identifier from the source system
+#' @column dp_name Department name
 #' @column dp_dv_id Division identifier associated with the department
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
 #' @column bronze_batch_id ETL batch identifier for the load execution
@@ -42,7 +43,7 @@
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

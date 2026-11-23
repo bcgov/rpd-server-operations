@@ -1,3 +1,61 @@
+#' @title Archibus Project
+#'
+#' @description
+#' Loads project records from the CBRE API into the Bronze layer. The script
+#' extracts capital-planning, facility-improvement, and project-management
+#' data, computes row-level hashes to detect changes, classifies incoming
+#' records as new, changed, or unchanged, and appends historical versions to
+#' support Bronze layer auditing and change tracking.
+#'
+#' @database BuildingIntelligence
+#' @schema InfBronze
+#' @table archibus_project
+#'
+#' @source CBRE API archibus_project entity
+#'
+#' @load_type Incremental append with hash-based change detection
+#' @grain One row per project record version per bronze load timestamp
+#'
+#' @filters Records are retrieved only for the configured ETL extraction window
+#' @filters Technical metadata fields are excluded from row-hash calculations
+#'   to avoid false-positive change detection
+#' @filters Source update timestamps are excluded from hash calculations
+#'   because they may change without a material business-data change
+#' @filters Missing records from the current source extract are identified and
+#'   logged separately for downstream processing
+#'
+#' @consumers TODO
+#'
+#' @column project_project_id_key Unique project identifier
+#' @column project_project_name Project name or title
+#' @column project_project_num Business project number
+#' @column project_status Current project lifecycle status
+#' @column project_project_type Project classification or type
+#' @column project_bl_id Associated building identifier
+#' @column project_pr_id Associated property identifier
+#' @column row_hash MD5 hash of tracked business attributes used for change detection
+#' @column bronze_batch_id ETL batch identifier for the load execution
+#' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
+#'
+#' @notes
+#' Data is sourced from the CBRE API rather than directly from a database
+#' table.
+#'
+#' Project records contain planning, budgeting, approval, scheduling,
+#' property-association, and project-performance information used to manage
+#' real-property initiatives, capital improvements, tenant improvements,
+#' maintenance projects, and other facilities-related work.
+#'
+#' A hash-gating process classifies rows as New, Changed, or Unchanged before
+#' loading. Historical versions are retained through the primary key of
+#' (project_project_id_key, bronze_load_ts).
+#'
+#' Missing records from the source extract are identified during processing and
+#' recorded for downstream auditing and soft-delete workflows.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()

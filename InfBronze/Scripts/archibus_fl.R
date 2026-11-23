@@ -22,7 +22,7 @@
 #' @filters Missing records from the current source extract are identified and
 #'   logged separately for downstream processing
 #'
-#' @consumers TODO
+#' @consumers InfSilver.ArchibusFloors
 #'
 #' @column fl_bl_id Building identifier associated with the floor
 #' @column fl_fl_id Floor identifier within the building
@@ -43,7 +43,7 @@
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

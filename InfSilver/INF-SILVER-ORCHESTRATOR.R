@@ -24,12 +24,41 @@ library(openxlsx2, quietly = TRUE, warn.conflicts = FALSE)
 library(odbc, quietly = TRUE, warn.conflicts = FALSE)
 library(DBI, quietly = TRUE, warn.conflicts = FALSE)
 
+# Check timezone
+warned <- FALSE
+msg <- NA_character_
+lt <- withCallingHandlers(
+  as.POSIXlt(Sys.time()),
+  warning = function(w) {
+    warned <<- TRUE
+    msg <<- conditionMessage(w)
+    invokeRestart("muffleWarning")
+  }
+)
+
+if (warned) {
+  Sys.setenv(TZ = "Etc/GMT+7")
+  log_etl_warning(
+    api_name = "CBRE",
+    script_name = "INF-SILVER-Orchestrator",
+    table_name = "NA",
+    step = "Timezone Check",
+    message = msg
+  )
+}
+
 # Start orchestrator
 orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "INF-SILVER-ORCHESTRATOR"
 
+
 scripts <- c(
-  "InfSilver/Scripts/archibus_fl.R"
+  "InfSilver/Scripts/ArchibusBuilding.R",
+  "InfSilver/Scripts/ArchibusDepartment.R",
+  "InfSilver/Scripts/ArchibusDivision.R",
+  "InfSilver/Scripts/ArchibusFloors.R",
+  "InfSilver/Scripts/ArchibusProperty.R",
+  "InfSilver/Scripts/ArchibusRoom.R"
 )
 
 # -- Per-script result tracking --

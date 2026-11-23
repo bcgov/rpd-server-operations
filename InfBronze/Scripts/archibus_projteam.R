@@ -1,3 +1,57 @@
+#' @title Archibus Project Team Member
+#'
+#' @description
+#' Loads project team membership records from the CBRE API into the Bronze
+#' layer. The script extracts project-team assignments and contact
+#' information, computes row-level hashes to detect changes, classifies
+#' incoming records as new, changed, or unchanged, and appends historical
+#' versions to support Bronze layer auditing and change tracking.
+#'
+#' @database BuildingIntelligence
+#' @schema InfBronze
+#' @table archibus_projteam
+#'
+#' @source CBRE API archibus_projteam entity
+#'
+#' @load_type Incremental append with hash-based change detection
+#' @grain One row per project-team-member assignment version per bronze load timestamp
+#'
+#' @filters Records are retrieved only for the configured ETL extraction window
+#' @filters Technical metadata fields are excluded from row-hash calculations
+#'   to avoid false-positive change detection
+#' @filters Missing records from the current source extract are identified and
+#'   logged separately for downstream processing
+#'
+#' @consumers TODO
+#'
+#' @column projteam_project_id Associated project identifier
+#' @column projteam_member_id Project team member identifier
+#' @column projteam_member_type Project role or member classification
+#' @column projteam_name_first Team member first name
+#' @column projteam_name_last Team member last name
+#' @column projteam_email Team member email address
+#' @column row_hash MD5 hash of tracked business attributes used for change detection
+#' @column bronze_batch_id ETL batch identifier for the load execution
+#' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
+#'
+#' @notes
+#' Data is sourced from the CBRE API rather than directly from a database
+#' table.
+#'
+#' This entity links projects to assigned team members and stores associated
+#' contact information, organizational affiliation, member role, and project
+#' participation details.
+#'
+#' A hash-gating process classifies rows as New, Changed, or Unchanged before
+#' loading. Historical versions are retained through the composite primary key
+#' of (projteam_project_id, projteam_member_id, bronze_load_ts).
+#'
+#' Missing records from the source extract are identified during processing and
+#' recorded for downstream auditing and soft-delete workflows.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -95,9 +149,7 @@ EXCLUDED_FROM_HASH <- c(
   "edp_last_updated_timestamp",
   "edp_update_ts",
   "source_system",
-  "source_account_name",
-  "bl_source_time_update", # source-side update timestamp; can tick
-  "bl_source_date_update" # without any tracked field actually changing
+  "source_account_name"
 )
 
 

@@ -1,9 +1,11 @@
 #' @title Facility Detail Report
 #'
 #' @description
-#' Gathers information on all real estate assets within the Real Property portfolio.
-#' Covers location, name, and usage information on assets.
-#' Assets are geolocated using the BC Address Geocoder as a quality check on the stored addresses.
+#' Produces a consolidated inventory of buildings and properties within the
+#' Real Property portfolio. The table combines facility characteristics,
+#' location information, ownership attributes, and space metrics from the
+#' Silver layer and enriches address data using the BC Address Geocoder to
+#' validate and improve location quality.
 #'
 #' TODO: confirm and expand this description (intended use, who relies on it).
 #'
@@ -12,12 +14,11 @@
 #' @table     FacilityDetail
 #'
 #' @source    InfSilver.ArchibusBuilding Archibus building information
-#' @source    InfSilver.ArchibusRoom Archibus room information
 #' @source    InfSilver.ArchibusProperty Archibus property information
-#' @source    DATA_OWNER.RPD_LAND lat/lon information for properties
+#' @source    DATA_OWNER.RPD_LAND lat/lon information for properties from GIS Team
 #'
 #' @load_type Full reload
-#' @grain     One row per building/property
+#' @grain     One row per reportable facility identifier
 #'
 #' @filters   Only active status buildings and properties
 #' @filters   Only actual properties, remove any internal dummy locations for financial processing
@@ -30,7 +31,7 @@
 #' @column    PropertyId
 #' @column    SiteId
 #' @column    Name
-#' @column    GeoFlag
+#' @column    GeoFlag Indicates whether BC Geocoder results were accepted as the preferred address
 #' @column    Address
 #' @column    City
 #' @column    Tenure
@@ -45,16 +46,23 @@
 #' @column    linkCity
 #' @column    geoAddress
 #' @column    geoCity
-#' @column    Precision
-#' @column    Score
-#' @column    lat
-#' @column    lon
+#' @column    Precision BC Geocoder precision score
+#' @column    Score BC Geocoder match score
+#' @column    Latitude
+#' @column    Longitude
 #'
 #' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+#' Latitude and longitude values for properties are sourced from the GIS-managed
+#' DATA_OWNER.RPD_LAND dataset because geographic coordinates maintained in
+#' Archibus are not consistently populated. Building latitude and longitude is sourced from Archibus.
+#'
+#' Address quality is validated using the BC Address Geocoder. When geocoder
+#' confidence thresholds are met, corrected address values are published and
+#' the original source values are retained in linkAddress and linkCity.
 #'
 #' @owner    David Rattray
-#' @last_reviewed 2026-11-18
-#'
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -135,10 +143,6 @@ if (is.null(etl_error)) {
       BuildingData <- dbFetch(query, n = -1)
       dbClearResult(query)
 
-      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusRoom")
-      RoomTotalData <- dbFetch(query, n = -1)
-      dbClearResult(query)
-
       query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusProperty")
       PropertyData <- dbFetch(query, n = -1)
       dbClearResult(query)
@@ -150,13 +154,13 @@ if (is.null(etl_error)) {
       Lands <- LandData |>
         select(
           PropertyId = LAND_NUMBER,
-          lat = LATITUDE,
-          lon = LONGITUDE,
+          Latitude = LATITUDE,
+          Longitude = LONGITUDE,
         ) |>
         group_by(PropertyId) |>
         summarise(
-          lat = first(lat),
-          lon = first(lon)
+          Latitude = first(Latitude),
+          Longitude = first(Longitude)
         )
     },
     error = function(e) {
@@ -181,23 +185,6 @@ if (is.null(etl_error)) {
         filter(BuildingId != "TBD") |>
         filter(Address != "Dummy Building") |>
         mutate(Identifier = BuildingId, PropertyArea = NA) |>
-        # mutate(
-        #   across(
-        #     c(
-        #       bl_area_usable,
-        #       bl_area_rentable
-        #     ),
-        #     as.double
-        #   )
-        # ) |>
-        # mutate(
-        #   across(
-        #     c(
-        #       BuildingDate
-        #     ),
-        #     as.POSIXct
-        #   )
-        # ) |>
         select(
           Identifier,
           BuildingId,
@@ -214,8 +201,8 @@ if (is.null(etl_error)) {
           BuildingRentableArea = AreaRentable,
           DateBuilding,
           PropertyArea,
-          lat,
-          lon
+          Latitude,
+          Longitude
         )
 
       Property <- PropertyData |>
@@ -245,10 +232,6 @@ if (is.null(etl_error)) {
           PropertyArea = LandArea
         ) |>
         left_join(Lands, by = join_by(PropertyId))
-      # mutate(
-      #   lat = NA_real_,
-      #   lon = NA_real_
-      # )
 
       Table <- Building |>
         union(Property) |>
@@ -400,8 +383,8 @@ if (is.null(etl_error)) {
           geoCity,
           Precision = precision,
           Score = score,
-          lat,
-          lon
+          Latitude,
+          Longitude
         ) |>
         group_by(Identifier) |>
         mutate(count = n()) |>
@@ -453,8 +436,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     geoCity                 NVARCHAR(100)   NULL,
     Precision               DECIMAL(5,2)    NULL,
     Score                   DECIMAL(5,2)    NULL,
-    lat                     DECIMAL(9,6)    NULL,
-    lon                     DECIMAL(9,6)    NULL
+    Latitude                DECIMAL(9,6)    NULL,
+    Longitude               DECIMAL(9,6)    NULL
   );
   "
   )
@@ -506,8 +489,8 @@ if (is.null(etl_error)) {
           geoCity                 NVARCHAR(100)   NULL,
           Precision               DECIMAL(5,2)    NULL,
           Score                   DECIMAL(5,2)    NULL,
-          lat                     DECIMAL(9,6)    NULL,
-          lon                     DECIMAL(9,6)    NULL
+          Latitude                DECIMAL(9,6)    NULL,
+          Longitude               DECIMAL(9,6)    NULL
           );
   "
         )
@@ -563,8 +546,8 @@ if (is.null(etl_error)) {
         geoCity,
         Precision,
         Score,
-        lat,
-        lon
+        Latitude,
+        Longitude
       )
       SELECT * FROM ",
           TEMP_TABLE,

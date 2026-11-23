@@ -29,6 +29,7 @@
 #' @column rm_rm_id Room identifier within the floor
 #' @column rm_rm_type Room type classification
 #' @column rm_rm_use Intended room use classification
+#' @column rm_status_pobc Current room lifecycle status
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
 #' @column bronze_batch_id ETL batch identifier for the load execution
 #' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded
@@ -49,7 +50,7 @@
 #' recorded for downstream auditing and soft-delete workflows.
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

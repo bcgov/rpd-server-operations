@@ -1,3 +1,60 @@
+#' @title Archibus Room
+#'
+#' @description
+#' Loads the current room inventory from InfBronze.archibus_rm into the Silver
+#' layer. The script selects the latest version of each room record, applies
+#' business-friendly naming and data-type conversions, and publishes a
+#' current-state room dataset for reporting and analytical consumption.
+#'
+#' @database BuildingIntelligence
+#' @schema InfSilver
+#' @table ArchibusRoom
+#'
+#' @source InfBronze.archibus_rm
+#'
+#' @load_type Full refresh from latest Bronze records
+#' @grain One row per building-floor-room combination
+#'
+#' @filters Only the most recent Bronze record version is retained for each
+#'   (rm_bl_id, rm_fl_id, rm_rm_id) key combination
+#' @filters Records are excluded if no current version exists in Bronze
+#'
+#' @consumers TODO
+#'
+#' @column BuildingId Building identifier
+#' @column FloorId Floor identifier
+#' @column RoomId Room identifier
+#' @column Name Room name or description
+#' @column Category Room category classification
+#' @column Type Room type classification
+#' @column Status Room lifecycle status
+#' @column Area Room area
+#' @column AllocatedArea Allocated room area
+#' @column LeaseId Associated lease identifier
+#' @column DivisionId Associated division identifier
+#' @column DepartmentId Associated department identifier
+#' @column BronzeBatchId Source Bronze batch identifier
+#' @column BronzeLoadTs Timestamp of the Bronze record version selected
+#'
+#' @notes
+#' Data is sourced from InfBronze.archibus_rm.
+#'
+#' This table provides the current-state room inventory used for occupancy
+#' reporting, space allocation, departmental planning, lease analysis, and
+#' facilities-management activities.
+#'
+#' Historical room versions are retained in the Bronze layer. Only the most
+#' recent version of each room record is published to Silver.
+#'
+#' Technical source-system attribute names are transformed into
+#' business-oriented field names and analytical data types where appropriate.
+#'
+#' Boolean room characteristics such as PlugSpace and HandicapSpace are
+#' normalized into BIT values for downstream reporting and analytics.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -38,11 +95,6 @@ con <- dbConnect(
 )
 
 # Query Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM InfBronze.archibus_rm")
-RoomData <- dbFetch(query, n = -1)
-dbClearResult(query)
-# archibus_rm
-
 pk_cols <- paste(SOURCE_PRIMARY_KEY, collapse = ", ")
 query <- dbSendQuery(
   con,
@@ -95,10 +147,10 @@ query <- dbSendQuery(
   )
 )
 
-archibus_rm <- dbFetch(query, n = -1)
+bronze_data <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-data <- archibus_rm |>
+data <- bronze_data |>
   select(-c(rn)) |>
   # mutate(across(everything(), trimws)) |> # I haven't noticed any need to trim whitespace but maybe need at some point
   mutate(
