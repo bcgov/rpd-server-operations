@@ -20,6 +20,4 @@
 /logs/
 
 # for quarto documentation files
-_site/
-*_files/
-.quarto/
+*/generated/*
