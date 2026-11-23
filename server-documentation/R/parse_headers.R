@@ -3,12 +3,28 @@
 # definitions from its CREATE TABLE statement, and cross-checks the header
 # against the code. Base R only (no package dependencies).
 
-REQUIRED_TAGS   <- c("title", "description", "database", "schema", "table",
-                     "source", "load_type", "grain", "owner", "last_reviewed")
-REPEATABLE_TAGS <- c("source", "filters", "consumers", "depends_on",
-                     "column", "notes")
-MULTILINE_TAGS  <- c("description", "notes")   # keep line breaks
-KNOWN_TAGS      <- union(REQUIRED_TAGS, REPEATABLE_TAGS)
+REQUIRED_TAGS <- c(
+  "title",
+  "description",
+  "database",
+  "schema",
+  "table",
+  "source",
+  "load_type",
+  "grain",
+  "owner",
+  "last_reviewed"
+)
+REPEATABLE_TAGS <- c(
+  "source",
+  "filters",
+  "consumers",
+  "depends_on",
+  "column",
+  "notes"
+)
+MULTILINE_TAGS <- c("description", "notes") # keep line breaks
+KNOWN_TAGS <- union(REQUIRED_TAGS, REPEATABLE_TAGS)
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
@@ -18,12 +34,20 @@ parse_header <- function(path) {
   lines <- readLines(path, warn = FALSE, encoding = "UTF-8")
 
   i <- 1L
-  while (i <= length(lines) && !nzchar(trimws(lines[i]))) i <- i + 1L
+  while (i <= length(lines) && !nzchar(trimws(lines[i]))) {
+    i <- i + 1L
+  }
   start <- i
-  while (i <= length(lines) && grepl("^#'", lines[i])) i <- i + 1L
+  while (i <= length(lines) && grepl("^#'", lines[i])) {
+    i <- i + 1L
+  }
   if (i == start) {
-    return(list(found = FALSE, meta = list(), duplicate_tags = character(),
-                unknown_tags = character()))
+    return(list(
+      found = FALSE,
+      meta = list(),
+      duplicate_tags = character(),
+      unknown_tags = character()
+    ))
   }
 
   h <- sub("^#'[ ]?", "", lines[start:(i - 1L)])
@@ -40,24 +64,30 @@ parse_header <- function(path) {
   }
 
   meta <- list()
-  dup  <- character()
+  dup <- character()
   for (e in entries) {
     if (e$tag %in% MULTILINE_TAGS) {
       val <- trimws(paste(e$lines, collapse = "\n"))
     } else {
       keep <- trimws(e$lines)
-      val  <- paste(keep[nzchar(keep)], collapse = " ")
+      val <- paste(keep[nzchar(keep)], collapse = " ")
     }
     if (e$tag %in% REPEATABLE_TAGS) {
       meta[[e$tag]] <- c(meta[[e$tag]], val)
     } else {
-      if (!is.null(meta[[e$tag]])) dup <- c(dup, e$tag)
+      if (!is.null(meta[[e$tag]])) {
+        dup <- c(dup, e$tag)
+      }
       meta[[e$tag]] <- val
     }
   }
 
-  list(found = TRUE, meta = meta, duplicate_tags = unique(dup),
-       unknown_tags = setdiff(names(meta), KNOWN_TAGS))
+  list(
+    found = TRUE,
+    meta = meta,
+    duplicate_tags = unique(dup),
+    unknown_tags = setdiff(names(meta), KNOWN_TAGS)
+  )
 }
 
 # ---- Code inspection -----------------------------------------------------
@@ -65,33 +95,99 @@ parse_header <- function(path) {
 # Columns from the first CREATE TABLE statement in the script.
 parse_create_table <- function(code) {
   start <- grep("CREATE TABLE", code, ignore.case = TRUE)[1]
-  if (is.na(start) || start == length(code)) return(NULL)
+  if (is.na(start) || start == length(code)) {
+    return(NULL)
+  }
 
-  pat <- paste0("^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s+",
-                "([A-Za-z0-9_]+(\\s*\\([0-9, ]+\\))?)\\s*",
-                "(NOT NULL|NULL)?\\s*,?\\s*$")
+  pat <- paste0(
+    "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s+",
+    "([A-Za-z0-9_]+(\\s*\\([0-9, ]+\\))?)\\s*",
+    "(NOT NULL|NULL)?\\s*,?\\s*$"
+  )
   name <- type <- nullable <- character()
   for (ln in code[(start + 1L):length(code)]) {
-    if (grepl("\\)\\s*;", ln)) break
+    if (grepl("\\)\\s*;", ln)) {
+      break
+    }
     m <- regmatches(ln, regexec(pat, ln, ignore.case = TRUE))[[1]]
     if (length(m) == 5L) {
-      name     <- c(name, m[2])
-      type     <- c(type, toupper(gsub("\\s+", "", m[3])))
-      nullable <- c(nullable, if (toupper(m[5]) == "NOT NULL") "NOT NULL" else "NULL")
+      name <- c(name, m[2])
+      type <- c(type, toupper(gsub("\\s+", "", m[3])))
+      nullable <- c(
+        nullable,
+        if (toupper(m[5]) == "NOT NULL") "NOT NULL" else "NULL"
+      )
     }
   }
-  if (!length(name)) return(NULL)
-  data.frame(name = name, type = type, nullable = nullable,
-             stringsAsFactors = FALSE)
+  if (!length(name)) {
+    return(NULL)
+  }
+  data.frame(
+    name = name,
+    type = type,
+    nullable = nullable,
+    stringsAsFactors = FALSE
+  )
 }
 
 # Schema.Table names that follow FROM / JOIN in the code (comments ignored).
+# detect_sources <- function(code) {
+#   code <- code[!grepl("^\\s*#", code)]
+#   txt  <- paste(code, collapse = "\n")
+#   pat  <- "(?i)\\b(?:FROM|JOIN)\\s+([A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*)"
+#   hits <- regmatches(txt, gregexpr(pat, txt, perl = TRUE))[[1]]
+#   unique(sub("(?i)^(?:FROM|JOIN)\\s+", "", hits, perl = TRUE))
+# }
+
 detect_sources <- function(code) {
   code <- code[!grepl("^\\s*#", code)]
-  txt  <- paste(code, collapse = "\n")
-  pat  <- "(?i)\\b(?:FROM|JOIN)\\s+([A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*)"
-  hits <- regmatches(txt, gregexpr(pat, txt, perl = TRUE))[[1]]
-  unique(sub("(?i)^(?:FROM|JOIN)\\s+", "", hits, perl = TRUE))
+
+  txt <- paste(code, collapse = "\n")
+
+  out <- character()
+
+  # Existing FROM/JOIN detection
+  pat <- "(?i)\\b(?:FROM|JOIN)\\s+([A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*)"
+
+  hits <- regmatches(
+    txt,
+    gregexpr(pat, txt, perl = TRUE)
+  )[[1]]
+
+  out <- c(
+    out,
+    sub("(?i)^(?:FROM|JOIN)\\s+", "", hits, perl = TRUE)
+  )
+
+  # NEW: detect SOURCE_SCHEMA / SOURCE_TABLE
+
+  schema_match <- regmatches(
+    txt,
+    regexec(
+      'SOURCE_SCHEMA\\s*<-\\s*"([^"]+)"',
+      txt
+    )
+  )[[1]]
+
+  table_match <- regmatches(
+    txt,
+    regexec(
+      'SOURCE_TABLE\\s*<-\\s*"([^"]+)"',
+      txt
+    )
+  )[[1]]
+
+  if (
+    length(schema_match) == 2 &&
+      length(table_match) == 2
+  ) {
+    out <- c(
+      out,
+      paste(schema_match[2], table_match[2], sep = ".")
+    )
+  }
+
+  unique(out)
 }
 
 # Values of the DB_NAME / SCHEMA_NAME / TABLE_NAME constants.
@@ -102,32 +198,37 @@ detect_target <- function(code) {
     m <- m[lengths(m) == 2L]
     if (length(m)) m[[1]][2] else NA_character_
   }
-  list(database = get_var("DB_NAME"), schema = get_var("SCHEMA_NAME"),
-       table = get_var("TABLE_NAME"))
+  list(
+    database = get_var("DB_NAME"),
+    schema = get_var("SCHEMA_NAME"),
+    table = get_var("TABLE_NAME")
+  )
 }
 
 # First whitespace-delimited token of a @source value, and the remaining note.
 split_source <- function(x) {
-  tok  <- sub("\\s.*$", "", x)
+  tok <- sub("\\s.*$", "", x)
   note <- trimws(sub("^\\S+\\s*", "", x))
   list(table = tok, note = note)
 }
 
-is_schema_table <- function(x) grepl("^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$", x)
+is_schema_table <- function(x) {
+  grepl("^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$", x)
+}
 
 # ---- One script ----------------------------------------------------------
 
 parse_script <- function(path) {
   code <- readLines(path, warn = FALSE, encoding = "UTF-8")
-  hdr  <- parse_header(path)
+  hdr <- parse_header(path)
   list(
-    path    = path,
-    name    = tools::file_path_sans_ext(basename(path)),
-    header  = hdr,
-    meta    = hdr$meta,
+    path = path,
+    name = tools::file_path_sans_ext(basename(path)),
+    header = hdr,
+    meta = hdr$meta,
     columns = parse_create_table(code),
     code_sources = detect_sources(code),
-    code_target  = detect_target(code)
+    code_target = detect_target(code)
   )
 }
 
@@ -136,9 +237,13 @@ parse_script <- function(path) {
 
 validate_script <- function(s) {
   out <- list()
-  add <- function(sev, msg) out[[length(out) + 1L]] <<- list(script = s$name,
-                                                               severity = sev,
-                                                               message = msg)
+  add <- function(sev, msg) {
+    out[[length(out) + 1L]] <<- list(
+      script = s$name,
+      severity = sev,
+      message = msg
+    )
+  }
   m <- s$meta
 
   if (!s$header$found) {
@@ -146,39 +251,73 @@ validate_script <- function(s) {
   } else {
     for (tg in REQUIRED_TAGS) {
       v <- m[[tg]]
-      if (is.null(v) || !any(nzchar(v))) add("error", sprintf("Missing required tag @%s", tg))
+      if (is.null(v) || !any(nzchar(v))) {
+        add("error", sprintf("Missing required tag @%s", tg))
+      }
     }
     for (tg in names(m)) {
       if (any(grepl("TODO", m[[tg]], fixed = TRUE))) {
         add("warn", sprintf("@%s still contains TODO", tg))
       }
     }
-    for (tg in s$header$duplicate_tags) add("warn", sprintf("@%s given more than once (last one wins)", tg))
-    for (tg in s$header$unknown_tags)   add("warn", sprintf("Unknown tag @%s", tg))
+    for (tg in s$header$duplicate_tags) {
+      add("warn", sprintf("@%s given more than once (last one wins)", tg))
+    }
+    for (tg in s$header$unknown_tags) {
+      add("warn", sprintf("Unknown tag @%s", tg))
+    }
 
     lr <- m$last_reviewed
-    if (!is.null(lr) && !grepl("TODO", lr, fixed = TRUE) &&
-        !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", lr)) {
+    if (
+      !is.null(lr) &&
+        !grepl("TODO", lr, fixed = TRUE) &&
+        !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", lr)
+    ) {
       add("warn", "@last_reviewed should look like YYYY-MM-DD")
     }
 
     # Header vs. constants in the code
     for (f in c("database", "schema", "table")) {
-      hv <- m[[f]]; cv <- s$code_target[[f]]
+      hv <- m[[f]]
+      cv <- s$code_target[[f]]
       if (!is.null(hv) && !is.na(cv) && !identical(tolower(hv), tolower(cv))) {
         add("warn", sprintf("@%s is '%s' but the code sets '%s'", f, hv, cv))
       }
     }
 
     # Header @source vs. FROM/JOIN in the code (schema.table-style entries only)
-    hdr_src <- vapply(m$source %||% character(), function(x) split_source(x)$table, "")
+    hdr_src <- vapply(
+      m$source %||% character(),
+      function(x) split_source(x)$table,
+      ""
+    )
     hdr_tbl <- hdr_src[is_schema_table(hdr_src)]
-    target  <- if (!is.null(m$schema) && !is.null(m$table)) paste(m$schema, m$table, sep = ".") else ""
+    target <- if (!is.null(m$schema) && !is.null(m$table)) {
+      paste(m$schema, m$table, sep = ".")
+    } else {
+      ""
+    }
     code_tbl <- setdiff(s$code_sources, target)
-    miss_in_hdr  <- code_tbl[!tolower(code_tbl) %in% tolower(hdr_tbl)]
+    miss_in_hdr <- code_tbl[!tolower(code_tbl) %in% tolower(hdr_tbl)]
     miss_in_code <- hdr_tbl[!tolower(hdr_tbl) %in% tolower(code_tbl)]
-    if (length(miss_in_hdr))  add("warn", paste("Queried in code but not listed in @source:", paste(miss_in_hdr, collapse = ", ")))
-    if (length(miss_in_code)) add("warn", paste("Listed in @source but not found in code:", paste(miss_in_code, collapse = ", ")))
+    if (length(miss_in_hdr)) {
+      add(
+        "warn",
+        paste(
+          "Queried in code but not listed in @source:",
+          paste(miss_in_hdr, collapse = ", ")
+        )
+      )
+    }
+    if (length(miss_in_code)) {
+      add(
+        "warn",
+        paste(
+          "Listed in @source but not found in code:",
+          paste(miss_in_code, collapse = ", ")
+        )
+      )
+    }
   }
 
   if (is.null(s$columns)) {
@@ -186,12 +325,21 @@ validate_script <- function(s) {
   } else if (!is.null(m$column)) {
     doc_names <- vapply(m$column, function(x) sub("\\s.*$", "", x), "")
     bad <- doc_names[!tolower(doc_names) %in% tolower(s$columns$name)]
-    if (length(bad)) add("warn", paste("@column names not in CREATE TABLE:", paste(bad, collapse = ", ")))
+    if (length(bad)) {
+      add(
+        "warn",
+        paste("@column names not in CREATE TABLE:", paste(bad, collapse = ", "))
+      )
+    }
   }
 
   if (!length(out)) {
-    return(data.frame(script = character(), severity = character(),
-                      message = character(), stringsAsFactors = FALSE))
+    return(data.frame(
+      script = character(),
+      severity = character(),
+      message = character(),
+      stringsAsFactors = FALSE
+    ))
   }
   do.call(rbind, lapply(out, as.data.frame, stringsAsFactors = FALSE))
 }

@@ -16,10 +16,8 @@ layers:
     description: >
       Reporting tables built from the Silver layer and consumed by Power BI.
     run_order:
-      - ActivityCodeReport
       - FacilityDetail
       - ORG2000
-      # add the remaining gold scripts here, in orchestrator order
 
   - name: InfSilver
     title: Silver layer
@@ -41,7 +39,8 @@ layers:
     path: InfBronze
     scripts_dir: Scripts
     orchestrator: INF-BRONZE-ORCHESTRATOR.R
-    description: ...
+    description: >
+      Landing spot for all ingested data prior to any cleaning or application of business logic.
     run_order:
       - archibus_bl
       - archibus_budget_asset_ar

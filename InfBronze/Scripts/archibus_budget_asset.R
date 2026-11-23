@@ -42,7 +42,7 @@
 #' (budget_asset_asset_id, budget_asset_budget_id, bronze_load_ts).
 #'
 #' @owner David Rattray
-#' @last_reviewed TODO
+#' @last_reviewed 2026-11-23
 
 # For server logging
 # Begin timer

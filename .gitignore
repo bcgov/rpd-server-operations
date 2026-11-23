@@ -10,9 +10,7 @@
 .Rhistory
 
 # for quarto documentation files
-/generated/
-_site/
-*_files/
+*/generated/*
 
 # Remove tracking files for SSMS studio vs plugin
 .vs/
@@ -24,7 +22,4 @@ _site/
 # Prevent any logging files from being tracked
 /logs/
 
-# for quarto documentation files
-_site/
-*_files/
-.quarto/
+
