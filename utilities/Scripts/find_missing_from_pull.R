@@ -54,9 +54,14 @@ find_missing_from_pull <- function(
       last_known,
       last_status = dplyr::all_of(status_col)
     )
-  } else {
+  }
+  if (is.null(status_col) & nrow(last_known) >= 1) {
     cols_needed <- "last_status"
     last_known <- ensure_columns(last_known, cols_needed)
+  }
+
+  if (is.null(status_col) & nrow(last_known) == 0) {
+    last_known <- last_known |> mutate(last_status = character())
   }
 
   missing <- last_known |>

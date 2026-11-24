@@ -7,3 +7,7 @@ max_char_lengths <- function(df) {
     integer(1)
   )
 }
+
+basic_str <- function(df) {
+  str(df, vec.len = 0, max.level = 1)
+}

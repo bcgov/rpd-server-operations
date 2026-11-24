@@ -1,3 +1,47 @@
+#' @title PORT_ProjectCosts
+#'
+#' @description
+#' Project cost report at activity-code level for CBRE project management
+#' data. For each project and detail activity code it brings together the
+#' budget, commitment, forecast and payment figures, calculates the variance
+#' against the current budget, and attaches the project manager.
+#'
+#' TODO: confirm and expand this description (intended use, who relies on it).
+#'
+#' @database  BuildingIntelligence
+#' @schema    RealProperty
+#' @table     PORT_ProjectCosts
+#'
+#' @source    RealProperty.FacilityDetail
+#' @source    CbreSilver.pjm_dim_project
+#' @source    CbreSilver.pjm_fact_project_activity
+#' @source    CbreSilver.pjm_fact_project
+#'
+#' @load_type Full reload
+#' @grain     TODO
+#'
+#' @filters   TODO
+#'
+#' @consumers TODO main report or dashboard this table was built for
+#'
+#' @column    RefreshDate  Time the table was last reloaded
+#' @column    Identifier
+#' @column    Name
+#' @column    Address
+#' @column    City
+#' @column    Region
+#' @column    ProjectCount
+#' @column    TotalPaid
+#' @column    BuildingRentableArea
+#' @column    PropertyArea
+#' @column    CostPerSqM
+#' @column    CostPerHA
+#'
+#' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+#'
+#' @owner     David Rattray
+#' @last_reviewed TODO
+#'
 # For server logging
 # Begin timer
 task_start <- Sys.time()

@@ -1,0 +1,154 @@
+# orchestrator_staging.R
+# Sourced by Task Scheduler via Rscript.exe
+# Runs all CBRE staging scripts, continues on error
+source(here::here("renv/activate.R"))
+
+# Load helper functions
+source(here::here("utilities/utilities.R"))
+
+# Load libraries
+library(base64enc, quietly = TRUE, warn.conflicts = FALSE)
+library(dplyr, quietly = TRUE, warn.conflicts = FALSE)
+library(here, quietly = TRUE, warn.conflicts = FALSE)
+library(httr2, quietly = TRUE, warn.conflicts = FALSE)
+library(jsonlite, quietly = TRUE, warn.conflicts = FALSE)
+library(lubridate, quietly = TRUE, warn.conflicts = FALSE)
+library(purrr, quietly = TRUE, warn.conflicts = FALSE)
+library(tibble, quietly = TRUE, warn.conflicts = FALSE)
+library(tidyr, quietly = TRUE, warn.conflicts = FALSE)
+
+library(odbc, quietly = TRUE, warn.conflicts = FALSE)
+library(DBI, quietly = TRUE, warn.conflicts = FALSE)
+
+# Check timezone
+warned <- FALSE
+msg <- NA_character_
+lt <- withCallingHandlers(
+  as.POSIXlt(Sys.time()),
+  warning = function(w) {
+    warned <<- TRUE
+    msg <<- conditionMessage(w)
+    invokeRestart("muffleWarning")
+  }
+)
+
+if (warned) {
+  Sys.setenv(TZ = "Etc/GMT+7")
+  log_etl_warning(
+    api_name = "CBRE",
+    script_name = "INF-SILVER-Orchestrator",
+    table_name = "NA",
+    step = "Timezone Check",
+    message = msg
+  )
+}
+
+# Setup necessary variables
+orchestrator_start <- Sys.time()
+ORCHESTRATOR_NAME <- "INF-BRONZE-ORCHESTRATOR"
+
+etl_window <- get_etl_window()
+
+scripts <- c(
+  "InfBronze/Scripts/archibus_bl.R",
+  "InfBronze/Scripts/archibus_budget_asset_ar.R",
+  "InfBronze/Scripts/archibus_budget_asset.R",
+  "InfBronze/Scripts/archibus_company.R",
+  "InfBronze/Scripts/archibus_cost_cat.R",
+  "InfBronze/Scripts/archibus_cost_tran_recur.R",
+  "InfBronze/Scripts/archibus_cost_tran_sched.R",
+  "InfBronze/Scripts/archibus_costsheet_v.R",
+  "InfBronze/Scripts/archibus_dp.R",
+  "InfBronze/Scripts/archibus_dv.R",
+  "InfBronze/Scripts/archibus_fl.R",
+  "InfBronze/Scripts/archibus_ls.R",
+  "InfBronze/Scripts/archibus_project.R",
+  "InfBronze/Scripts/archibus_projteam.R",
+  "InfBronze/Scripts/archibus_property.R",
+  "InfBronze/Scripts/archibus_rm.R",
+  "InfBronze/Scripts/archibus_rmpct.R"
+)
+
+# -- Per-script result tracking --
+results <- vector("list", length(scripts))
+names(results) <- scripts
+
+for (script in scripts) {
+  script_start <- Sys.time()
+  script_path <- here::here(script)
+
+  tryCatch(
+    {
+      source(script_path)
+      results[[script]] <- list(
+        status = "SUCCESS",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        ))
+      )
+    },
+    no_data_condition = function(e) {
+      results[[script]] <<- list(
+        status = "NO_DATA",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        )),
+        message = conditionMessage(e)
+      )
+    },
+    error = function(e) {
+      results[[script]] <<- list(
+        status = "ERROR",
+        duration = as.numeric(difftime(
+          Sys.time(),
+          script_start,
+          units = "secs"
+        )),
+        message = conditionMessage(e)
+      )
+    }
+  )
+}
+
+# -- Rollup --
+orchestrator_duration <- as.numeric(
+  difftime(Sys.time(), orchestrator_start, units = "secs")
+)
+
+n_success <- sum(sapply(results, \(r) r$status %in% c("SUCCESS", "NO_DATA")))
+n_error <- sum(sapply(results, \(r) r$status == "ERROR"))
+overall_status <- if (n_error == 0) "SUCCESS" else "PARTIAL_FAILURE"
+
+failed_scripts <- names(Filter(\(r) r$status == "ERROR", results))
+rollup_message <- if (n_error == 0) {
+  paste0(
+    n_success,
+    " script(s) succeeded in ",
+    round(orchestrator_duration, 1),
+    "s"
+  )
+} else {
+  paste0(
+    n_success,
+    " succeeded, ",
+    n_error,
+    " failed in ",
+    round(orchestrator_duration, 1),
+    "s. Failed: ",
+    paste(failed_scripts, collapse = "; ")
+  )
+}
+
+log_daily_etl_script(
+  orchestrator_name = ORCHESTRATOR_NAME,
+  status = overall_status,
+  duration = orchestrator_duration,
+  n_success = n_success,
+  n_error = n_error,
+  failed_scripts = paste(failed_scripts, collapse = "; "),
+  message = substr(rollup_message, 1, 500)
+)

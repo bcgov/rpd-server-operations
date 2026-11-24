@@ -1,3 +1,50 @@
+#' @title PORT_WorkOrders
+#'
+#' @description
+#' Project cost report at activity-code level for CBRE project management
+#' data. For each project and detail activity code it brings together the
+#' budget, commitment, forecast and payment figures, calculates the variance
+#' against the current budget, and attaches the project manager.
+#'
+#' TODO: confirm and expand this description (intended use, who relies on it).
+#'
+#' @database  BuildingIntelligence
+#' @schema    RealProperty
+#' @table     ActivityCodeReport
+#'
+#' @source    CbreSilver.pjm_fact_project_activity  budget, cost, invoice and payment amounts
+#' @source    CbreSilver.pjm_dim_project_activity  activity code, type, parent code and description
+#' @source    CbreSilver.pjm_fact_project  project status and phase
+#' @source    CbreSilver.pjm_dim_project  project number and name
+#' @source    CbreSilver.pjm_fact_project_role  project manager role assignments
+#' @source    CbreSilver.pjm_dim_project_role  role names
+#' @source    CbreSilver.pjm_dim_contact  project manager name and email
+#'
+#' @load_type Full reload
+#' @grain     One row per project and detail activity code
+#'
+#' @filters   Only activity codes with code type `detail`
+#' @filters   Where two or more detail codes share a project, parent code and
+#'   characters 5-6 of the activity code, the one without characters 7-9 is dropped
+#' @filters   Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted,
+#'   Invoiced, Retained, Paid and Remaining are all zero are dropped
+#' @filters   Project manager is taken from role records whose source_unique_id
+#'   matches `<digit>_project_manager`
+#'
+#' @consumers TODO main report or dashboard this table was built for
+#'
+#' @column RefreshDate  Time the table was last reloaded
+#' @column ProjectManager  First and last name of the project's manager
+#' @column CurrentBudget  ApprovedBudget + Adjustments + ApprovedBudgetChanges
+#' @column AnticipatedFinalCost  CurrentCommitted + ProjectedExposure
+#' @column Variance  AnticipatedFinalCost - CurrentBudget
+#' @column VariancePercent  Variance / CurrentBudget x 100; NULL where CurrentBudget is zero
+#'
+#' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
+#'
+#' @owner     TODO
+#' @last_reviewed TODO
+#'
 # For server logging
 # Begin timer
 task_start <- Sys.time()

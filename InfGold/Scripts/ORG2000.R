@@ -1,82 +1,203 @@
+#' @title ORG2000
+#'
+#' @description
+#' Produces an organizational reference dataset from Archibus division and
+#' department information. The table combines division and department
+#' hierarchies with customer classifications, fee-recovery attributes,
+#' reconciliation settings, PAM participation indicators, and organizational
+#' contacts to support reporting and operational analysis.
+#'
+#' @database BuildingIntelligence
+#' @schema InfGold
+#' @table ORG2000
+#'
+#' @source InfSilver.ArchibusDepartment Current-state department information
+#' @source InfSilver.ArchibusDivision Current-state division information
+#'
+#' @load_type Full refresh
+#' @grain One row per department within a division
+#'
+#' @filters No filter conditions
+#'
+#' @consumers TODO
+#'
+#' @column RefreshDate Timestamp when the dataset was refreshed
+#' @column Division Division name
+#' @column Department Department name
+#' @column OrgType Organizational business-unit classification
+#' @column DepartmentStatus Department status
+#' @column SalesRepresentative Assigned sales representative
+#' @column Collector Assigned collector
+#' @column FeeRecovery Indicates whether fee recovery is enabled
+#' @column Reconcile Indicates whether reconciliation is enabled
+#' @column ParticipatesInPAM Indicates participation in PAM
+#' @column DivisionId Division identifier
+#' @column DepartmentId Department identifier
+#' @column CustomerType Customer category classification
+#'
+#' @notes
+#' Data is sourced from the current-state Silver layer and is intended for
+#' business reporting rather than operational processing.
+#'
+#' Organizational indicators stored as source-system codes are transformed into
+#' business-friendly values before publication.
+#'
+#' Each run builds the result in a temporary table and replaces the target
+#' table inside a single database transaction. If the load fails, the
+#' previously published dataset remains unchanged.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-23
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
+etl_error <- NULL
 
-# Setup necessary variables
-ETL_STATUS <- "DEV"
-SQL_SERVER <- if (ETL_STATUS == "PROD") {
-  "dynamo.idir.bcgov\\CA_PRD"
-} else {
-  "windfarm.idir.bcgov\\CA_TST"
+# Setup necessary variables ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      ETL_STATUS <- "DEV"
+      SQL_SERVER <- if (ETL_STATUS == "PROD") {
+        "dynamo.idir.bcgov\\CA_PRD"
+      } else {
+        "windfarm.idir.bcgov\\CA_TST"
+      }
+      DB_NAME <- "BuildingIntelligence"
+      SCHEMA_NAME <- "InfGold"
+      TABLE_NAME <- "ORG2000"
+      TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
+      TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
+      SCRIPT_NAME <- "ORG2000"
+      API_NAME <- "None"
+
+      options(scipen = 999)
+      options(digits = 7)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "setup_variables",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
 }
-DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
-TABLE_NAME <- "ORG2000"
-TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
-TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
-SCRIPT_NAME <- "ORG2000"
-API_NAME <- "None"
 
-options(scipen = 999)
-options(digits = 7)
-
-# Connect to SQL database
-con <- dbConnect(
-  odbc(),
-  driver = "ODBC Driver 17 for SQL Server",
-  server = SQL_SERVER,
-  database = DB_NAME,
-  Trusted_Connection = "Yes"
-)
+# Connect to SQL database ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      con <- dbConnect(
+        odbc(),
+        driver = "ODBC Driver 17 for SQL Server",
+        server = SQL_SERVER,
+        database = DB_NAME,
+        Trusted_Connection = "Yes"
+      )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "database_connection",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dp")
-DepartmentData <- dbFetch(query, n = -1)
-dbClearResult(query)
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusDepartment")
+      DepartmentData <- dbFetch(query, n = -1)
+      dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dv")
-DivisionData <- dbFetch(query, n = -1)
-dbClearResult(query)
-
-Org <- DivisionData |>
-  left_join(DepartmentData, by = join_by(dv_dv_id == dp_dv_id)) |>
-  mutate(
-    dp_status = case_when(
-      dp_status == "A" ~ "Active",
-      dp_status == "I" ~ "Inactive"
-    ),
-    dp_recovery_fee = case_when(
-      dp_recovery_fee == 0 ~ "No",
-      dp_recovery_fee == 1 ~ "Yes"
-    ),
-    dp_reconciled = case_when(
-      dp_reconciled == 0 ~ "No",
-      dp_reconciled == 1 ~ "Yes"
-    ),
-    dp_pam = case_when(
-      dp_pam == 0 ~ "No",
-      dp_pam == 1 ~ "Yes"
-    )
-  ) |>
-  select(
-    Division = dv_name,
-    Department = dp_name,
-    OrgType = dv_bu_id,
-    Status = dp_status,
-    SalesRepresentative = dp_sales_rep,
-    Collector = dp_collector,
-    FeeRecovery = dp_recovery_fee,
-    Reconcile = dp_reconciled,
-    ParticipatesInPAM = dp_pam,
-    DivisionId = dv_dv_id,
-    DepartmentId = dp_dp_id,
-    CustomerType = dp_customer_category,
-  ) |>
-  arrange(DivisionId, DepartmentId) |>
-  mutate(
-    RefreshDate = as.POSIXct(Sys.time(), tz = "UTC"),
-    .before = everything()
+      query <- dbSendQuery(
+        con,
+        "SELECT DivisionId, DivisionName, BusinessId FROM InfSilver.ArchibusDivision"
+      )
+      DivisionData <- dbFetch(query, n = -1)
+      dbClearResult(query)
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "query_datasets",
+        condition = e
+      )
+      etl_error <<- e
+    }
   )
+}
+
+# Data Wrangling ####
+if (is.null(etl_error)) {
+  tryCatch(
+    {
+      Org <- DivisionData |>
+        left_join(DepartmentData, by = join_by(DivisionId)) |>
+        mutate(
+          DepartmentStatus = case_when(
+            DepartmentStatus == "A" ~ "Active",
+            DepartmentStatus == "I" ~ "Inactive",
+            TRUE ~ DepartmentStatus
+          ),
+          dp_recovery_fee = case_when(
+            dp_recovery_fee == 0 ~ "No",
+            dp_recovery_fee == 1 ~ "Yes"
+          ),
+          dp_reconciled = case_when(
+            dp_reconciled == 0 ~ "No",
+            dp_reconciled == 1 ~ "Yes"
+          ),
+          dp_pam = case_when(
+            dp_pam == 0 ~ "No",
+            dp_pam == 1 ~ "Yes"
+          )
+        ) |>
+        select(
+          Division = DivisionName,
+          Department = DepartmentName,
+          OrgType = BusinessId,
+          DepartmentStatus,
+          SalesRepresentative = dp_sales_rep,
+          Collector = dp_collector,
+          FeeRecovery = dp_recovery_fee,
+          Reconcile = dp_reconciled,
+          ParticipatesInPAM = dp_pam,
+          DivisionId,
+          DepartmentId,
+          CustomerType = CustomerCategory,
+        ) |>
+        arrange(DivisionId, DepartmentId) |>
+        mutate(
+          RefreshDate = as.POSIXct(Sys.time(), tz = "UTC"),
+          .before = everything()
+        )
+    },
+    error = function(e) {
+      log_etl_error(
+        api_name = API_NAME,
+        script_name = SCRIPT_NAME,
+        table_name = TABLE_NAME,
+        step = "data_wrangling",
+        condition = e
+      )
+      etl_error <<- e
+    }
+  )
+}
 
 # dbRemoveTable(con, Id(schema = SCHEMA_NAME, table = TABLE_NAME))
 if (!dbExistsTable(con, TARGET_TABLE)) {
@@ -90,7 +211,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
     Division                NVARCHAR(100)   NULL,
     Department              NVARCHAR(200)   NULL,
     OrgType                 NVARCHAR(20)    NULL,
-    Status                  NVARCHAR(20)    NULL,
+    DepartmentStatus        NVARCHAR(20)    NULL,
     SalesRepresentative     NVARCHAR(50)    NULL,
     Collector               NVARCHAR(50)    NULL,
     FeeRecovery             NVARCHAR(10)    NULL,
@@ -133,7 +254,7 @@ tryCatch(
           Division                NVARCHAR(100)   NULL,
           Department              NVARCHAR(200)   NULL,
           OrgType                 NVARCHAR(20)    NULL,
-          Status                  NVARCHAR(20)    NULL,
+          DepartmentStatus        NVARCHAR(20)    NULL,
           SalesRepresentative     NVARCHAR(50)    NULL,
           Collector               NVARCHAR(50)    NULL,
           FeeRecovery             NVARCHAR(10)    NULL,
@@ -178,7 +299,7 @@ tryCatch(
         Division,
         Department,
         OrgType,
-        Status,
+        DepartmentStatus,
         SalesRepresentative,
         Collector,
         FeeRecovery,
