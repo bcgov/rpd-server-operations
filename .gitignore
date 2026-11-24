@@ -16,6 +16,9 @@
 /input/
 /output/
 
+# Prevent adhoc requests going into public
+/adhoc/
+
 # Prevent any logging files from being tracked
 /logs/
 
