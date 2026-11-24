@@ -21,6 +21,9 @@ server-documentation/generated/site/_site*
 /input/
 /output/
 
+# Prevent adhoc script files going into public
+/adhoc/
+
 # Prevent any logging files from being tracked
 /logs/
 
