@@ -27,5 +27,3 @@ server-documentation/generated/site/_site*
 # Prevent any logging files from being tracked
 /logs/
 
-# for quarto documentation files
-*/generated/*
