@@ -30,7 +30,8 @@ script_name <- "PROD_Jira_PAR"
 # Setup API parameters ####
 expand_opts = c("names", "fields")
 max_results = 100
-start_time <- etl_window$jira_start_time
+# start_time <- etl_window$jira_start_time
+start_time <- "2026-10-26 00:00"
 
 # Issues Loop ####
 data <- call_jira_api(
@@ -71,136 +72,151 @@ if (length(data$issues) == 0) {
   stop(cond)
 }
 
-tryCatch(
-  {
-    names <- data |>
-      purrr::pluck("names") |>
-      tibble::enframe() |>
-      safe_hoist(value, Value = 1L) |>
-      group_by(Value) |>
-      mutate(row_name = row_number(), row_count = n()) |>
-      mutate(
-        Value = case_when(
-          row_count > 1 ~ paste0(Value, "-", row_name),
-          .default = Value
-        )
-      ) |>
-      select(-c(row_name, row_count)) |>
-      tibble::deframe()
-
-    Issues <- data |>
-      purrr::pluck("issues") |>
-      tibble::enframe() |>
-      tidyr::unnest_wider(value) |>
-      tidyr::unnest_wider(fields) |>
-      plyr::rename(names) |>
-      rename_with(~ gsub(" ", "", .)) |>
-      select(
-        Assignee,
-        IssueKey = key,
-        IssueType,
-        RequestType,
-        Resolution,
-        Reporter,
-        Created,
-        Updated,
-        Resolved,
-        Duedate,
-        Status,
-        StatusCategory = Statuscategory,
-        StatusCategoryChanged = Statuscategorychanged,
-        InterfaceType,
-        InfTeam = `INFDivision/Branch`,
-        KahuaRef = `KahuaReference#`,
-        Requestparticipants,
-        Urgency,
-        PONumber,
-        InvoiceNumber,
-        Comment,
-        Labels,
-        Summary
-      ) #|>
-
-    test <- Issues |>
-      select(IssueKey, Comment) |>
-      unnest_wider(Comment, names_sep = "_") |>
-      unnest_wider(Comment_comments, names_sep = "_") |>
-      unnest_wider(col = where(is.list), names_sep = "_") |>
-      unnest_wider(col = where(is.list), names_sep = "_") |>
-      select(
-        IssueKey,
-        matches(
-          "^Comment_comments_.*(_id|_author_displayName|_created|_updated)$"
-        )
-      )
-
-    safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
-      safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
-      safe_hoist(Status, Status = "name", .remove = FALSE) |>
-      safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
-      safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
-      safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
-      safe_hoist(
-        RequestType,
-        RequestType = list("requestType", "name"),
-        .remove = FALSE
-      ) |>
-      mutate(
-        ProjectEffectiveDate = as.Date(
-          ProjectEffectiveDate,
-          format = "%Y-%m-%d"
-        )
-      ) |>
-      mutate(
-        Created = as.POSIXct(
-          Created,
-          tz = "UTC",
-          format = "%Y-%m-%dT%H:%M:%OS%z"
-        )
-      ) |>
-      mutate(
-        Resolved = as.POSIXct(
-          Resolved,
-          tz = "UTC",
-          format = "%Y-%m-%dT%H:%M:%OS%z"
-        )
-      ) |>
-      mutate(
-        Updated = as.POSIXct(
-          Updated,
-          tz = "UTC",
-          format = "%Y-%m-%dT%H:%M:%OS%z"
-        )
-      ) |>
-      mutate(
-        StatusCategoryChanged = as.POSIXct(
-          StatusCategoryChanged,
-          tz = "UTC",
-          format = "%Y-%m-%dT%H:%M:%OS%z"
-        )
-      ) |>
-      mutate(
-        TimeToCompletion = case_when(
-          is.na(Resolved) ~ NA,
-          !is.na(Resolved) ~
-            ((as.duration(interval(Created, Resolved))@.Data) / 60) / 60
-        )
-      )
-  },
-  error = function(e) {
-    log_daily_etl_run(
-      api_name = api_name,
-      script_name = script_name,
-      table_name = dashboard_id,
-      status = "FAILURE",
-      message = paste0(
-        "Data wrangling failure: ",
-        substr(conditionMessage(e), 1, 500)
-      )
+# tryCatch(
+#   {
+names <- data |>
+  purrr::pluck("names") |>
+  tibble::enframe() |>
+  safe_hoist(value, Value = 1L) |>
+  group_by(Value) |>
+  mutate(row_name = row_number(), row_count = n()) |>
+  mutate(
+    Value = case_when(
+      row_count > 1 ~ paste0(Value, "-", row_name),
+      .default = Value
     )
-    stop(e) # rethrow so Task Scheduler/Nagios still flags it
-  }
-)
+  ) |>
+  select(-c(row_name, row_count)) |>
+  tibble::deframe()
+
+Issues <- data |>
+  purrr::pluck("issues") |>
+  tibble::enframe() |>
+  tidyr::unnest_wider(value) |>
+  tidyr::unnest_wider(fields) |>
+  plyr::rename(names) |>
+  rename_with(~ gsub(" ", "", .)) |>
+  select(
+    Assignee,
+    IssueKey = key,
+    IssueType,
+    RequestType,
+    Resolution,
+    Reporter,
+    Created,
+    Updated,
+    Resolved,
+    Duedate,
+    Status,
+    StatusCategory = Statuscategory,
+    StatusCategoryChanged = Statuscategorychanged,
+    InterfaceType,
+    InfTeam = `INFDivision/Branch`,
+    KahuaRef = `KahuaReference#`,
+    RequestParticipants = Requestparticipants,
+    Urgency,
+    PONumber,
+    InvoiceNumber,
+    Comment,
+    Labels,
+    Summary
+  ) |>
+  safe_hoist(InterfaceType, InterfaceType = "value", .remove = FALSE) |>
+  filter(InterfaceType %in% c("D10", "D11")) |>
+  safe_hoist(Assignee, Assignee = "displayName", .remove = FALSE) |>
+  safe_hoist(IssueType, IssueType = "name", .remove = FALSE) |>
+  safe_hoist(
+    RequestType,
+    RequestType = list("requestType", "name"),
+    .remove = FALSE
+  ) |>
+  safe_hoist(Resolution, Resolution = "name", .remove = FALSE) |>
+  safe_hoist(Reporter, Reporter = "displayName", .remove = FALSE) |>
+  safe_hoist(StatusCategory, StatusCategory = "name", .remove = FALSE) |>
+  safe_hoist(Status, Status = "name", .remove = FALSE) |>
+  safe_hoist(InfTeam, InfDivision = "value", .remove = FALSE) |>
+  safe_hoist(InfTeam, InfBranch = c("child", "value"), .remove = FALSE) |>
+  safe_hoist(
+    RequestParticipants,
+    RequestParticipants = "name",
+    .remove = FALSE
+  ) |>
+  safe_hoist(Urgency, Urgency = "value", .remove = FALSE) |>
+  safe_hoist(Labels, Labels = "name", .remove = FALSE) |> # review
+  select(-c(InfTeam))
+
+
+test <- Issues |>
+  select(IssueKey, Comment) |>
+  unnest_wider(Comment, names_sep = "_") |>
+  unnest_wider(Comment_comments, names_sep = "_") |>
+  unnest_wider(col = where(is.list), names_sep = "_") |>
+  unnest_wider(col = where(is.list), names_sep = "_") |>
+  select(
+    IssueKey,
+    matches(
+      "^Comment_comments_.*(_id|_author_displayName|_created|_updated)$"
+    )
+  )
+
+safe_hoist(Organization, Organization = "value", .remove = FALSE) |>
+
+  mutate(
+    ProjectEffectiveDate = as.Date(
+      ProjectEffectiveDate,
+      format = "%Y-%m-%d"
+    )
+  ) |>
+  mutate(
+    Created = as.POSIXct(
+      Created,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    Resolved = as.POSIXct(
+      Resolved,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    Updated = as.POSIXct(
+      Updated,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    StatusCategoryChanged = as.POSIXct(
+      StatusCategoryChanged,
+      tz = "UTC",
+      format = "%Y-%m-%dT%H:%M:%OS%z"
+    )
+  ) |>
+  mutate(
+    TimeToCompletion = case_when(
+      is.na(Resolved) ~ NA,
+      !is.na(Resolved) ~
+        ((as.duration(interval(Created, Resolved))@.Data) / 60) / 60
+    )
+  )
+#   },
+#   error = function(e) {
+#     log_daily_etl_run(
+#       api_name = api_name,
+#       script_name = script_name,
+#       table_name = dashboard_id,
+#       status = "FAILURE",
+#       message = paste0(
+#         "Data wrangling failure: ",
+#         substr(conditionMessage(e), 1, 500)
+#       )
+#     )
+#     stop(e) # rethrow so Task Scheduler/Nagios still flags it
+#   }
+# )
 
 tryCatch(
   {
