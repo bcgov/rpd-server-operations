@@ -27,7 +27,7 @@
 #' @column DivisionId Associated division identifier
 #' @column CustomerCategory Customer category classification
 #' @column CustomerSegment Customer segment classification
-#' @column Status Current department status
+#' @column DepartmentStatus Current department status
 #' @column BronzeBatchId Source Bronze batch identifier
 #' @column BronzeLoadTs Timestamp of the Bronze record version selected
 #'

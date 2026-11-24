@@ -1,4 +1,4 @@
-#' @title Archibus Department
+#' @title archibus_dp
 #'
 #' @description
 #' Loads department records from the CBRE API into the Bronze layer. The

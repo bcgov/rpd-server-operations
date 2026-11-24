@@ -1,4 +1,4 @@
-#' @title Archibus Recurring Cost Transaction
+#' @title archibus_cost_tran_recur
 #'
 #' @description
 #' Loads recurring cost transaction records from the CBRE API into the Bronze

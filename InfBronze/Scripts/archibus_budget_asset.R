@@ -1,4 +1,4 @@
-#' @title Archibus Budget Asset
+#' @title archibus_budget_asset
 #'
 #' @description
 #' Loads budget asset records from the CBRE API into the Bronze layer. The

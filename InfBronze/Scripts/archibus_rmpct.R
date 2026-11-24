@@ -1,4 +1,4 @@
-#' @title Archibus Room Occupancy
+#' @title archibus_rmpct
 #'
 #' @description
 #' Loads room occupancy and space-allocation records from the CBRE API into the

@@ -1,4 +1,4 @@
-#' @title Archibus Property
+#' @title archibus_property
 #'
 #' @description
 #' Loads property records from the CBRE API into the Bronze layer. The script

@@ -1,4 +1,4 @@
-#' @title ORG2000 Organization Reference Dataset
+#' @title ORG2000
 #'
 #' @description
 #' Produces an organizational reference dataset from Archibus division and

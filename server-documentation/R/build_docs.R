@@ -67,12 +67,35 @@ find_doc_dir <- function() {
 doc_dir <- find_doc_dir()
 root <- dirname(doc_dir)
 
-source(file.path(doc_dir, "R", "parse_headers.R"))
-source(file.path(doc_dir, "R", "render_docs.R"))
+source(
+  file.path(
+    doc_dir,
+    "R",
+    "parse_headers.R"
+  )
+)
+source(
+  file.path(
+    doc_dir,
+    "R",
+    "render_docs.R"
+  )
+)
+source(
+  file.path(
+    doc_dir,
+    "R",
+    "render_handbook.R"
+  )
+)
 
 cfg <- yaml::read_yaml(file.path(doc_dir, "layers.yml"))
-out_dir <- file.path(doc_dir, "generated")
-dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+site_dir <- file.path(doc_dir, "generated", "site")
+handbook_dir <- file.path(doc_dir, "generated", "handbook")
+
+dir.create(site_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(handbook_dir, showWarnings = FALSE, recursive = TRUE)
 
 write_text <- function(lines, path) {
   con <- file(path, open = "wb")
@@ -82,6 +105,7 @@ write_text <- function(lines, path) {
 
 issues <- list()
 layers_info <- list()
+scripts_by_layer <- list()
 
 for (layer in cfg$layers) {
   if (length(only) && !layer$name %in% only) {
@@ -120,6 +144,8 @@ for (layer in cfg$layers) {
   ordered <- c(intersect(order, names(files)), extra)
 
   scripts <- lapply(files[ordered], parse_script)
+  scripts_by_layer[[layer$name]] <- unname(scripts)
+
   for (s in scripts) {
     v <- validate_script(s)
     if (nrow(v)) issues[[length(issues) + 1L]] <- v
@@ -134,7 +160,7 @@ for (layer in cfg$layers) {
   )
   write_text(
     render_layer(layer, unname(scripts), rel),
-    file.path(out_dir, paste0(layer$name, ".qmd"))
+    file.path(site_dir, paste0(layer$name, ".qmd"))
   )
 
   layers_info[[length(layers_info) + 1L]] <- list(
@@ -147,7 +173,23 @@ for (layer in cfg$layers) {
 }
 
 if (length(layers_info) && !length(only)) {
-  write_text(render_index(layers_info), file.path(out_dir, "index.qmd"))
+  write_text(
+    render_index(layers_info),
+    file.path(site_dir, "index.qmd")
+  )
+}
+
+if (length(scripts_by_layer) && !length(only)) {
+  write_text(
+    render_handbook(
+      cfg$layers,
+      scripts_by_layer
+    ),
+    file.path(
+      handbook_dir,
+      "BuildingIntelligence.qmd"
+    )
+  )
 }
 
 if (length(issues)) {
@@ -182,12 +224,38 @@ if ("--render" %in% args) {
     stop("quarto executable not found; add it to PATH or set QUARTO_PATH")
   }
 
-  status <- system2(quarto, c("render", shQuote(out_dir)))
+  status <- system2(quarto, c("render", shQuote(site_dir)))
   if (status != 0) {
     stop("quarto render failed with status ", status)
   }
-  message("Rendered HTML from ", out_dir)
+
+  status <- system2(
+    quarto,
+    c(
+      "render",
+      shQuote(
+        file.path(
+          handbook_dir,
+          "BuildingIntelligence.qmd"
+        )
+      )
+    )
+  )
+
+  if (status != 0) {
+    stop(
+      "handbook render failed with status ",
+      status
+    )
+  }
+  message(
+    "Rendered website from ",
+    site_dir,
+    "\nRendered handbook from ",
+    handbook_dir
+  )
 }
 
 # console override
-# system2("quarto", c("render", "Server-Documentation/generated"))
+# system2("quarto", c("render", "Server-Documentation/generated/site"))
+# system2("quarto", c("render", "Server-Documentation/generated/handbook"))

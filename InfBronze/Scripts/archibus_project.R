@@ -1,4 +1,4 @@
-#' @title Archibus Project
+#' @title archibus_project
 #'
 #' @description
 #' Loads project records from the CBRE API into the Bronze layer. The script

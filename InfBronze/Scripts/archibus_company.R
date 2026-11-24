@@ -1,4 +1,4 @@
-#' @title Archibus Company
+#' @title archibus_company
 #'
 #' @description
 #' Loads company and vendor records from the CBRE API into the Bronze layer.

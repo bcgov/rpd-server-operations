@@ -1,4 +1,4 @@
-#' @title Archibus Lease Cost Sheet
+#' @title archibus_costsheet_v
 #'
 #' @description
 #' This entity contains calculated lease cost-model outputs and financial analyses

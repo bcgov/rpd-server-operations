@@ -1,4 +1,4 @@
-#' @title Archibus Lease
+#' @title archibus_ls
 #'
 #' @description
 #' Loads lease records from the CBRE API into the Bronze layer. The script

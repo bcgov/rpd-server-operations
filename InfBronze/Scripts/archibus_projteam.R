@@ -1,4 +1,4 @@
-#' @title Archibus Project Team Member
+#' @title archibus_projteam
 #'
 #' @description
 #' Loads project team membership records from the CBRE API into the Bronze

@@ -1,4 +1,4 @@
-#' @title Archibus Scheduled Cost Transaction
+#' @title archibus_cost_tran_sched
 #'
 #' @description
 #' Loads scheduled occurrences of recurring cost transactions from the CBRE API into the Bronze

@@ -1,4 +1,4 @@
-#' @title Archibus Building
+#' @title archibus_bl
 #'
 #' @description
 #' Loads building records from the CBRE API archibus_bl entity into the Bronze

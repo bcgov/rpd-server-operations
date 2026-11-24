@@ -1,4 +1,4 @@
-#' @title Archibus Room
+#' @title archibus_rm
 #'
 #' @description
 #' Loads room records from the CBRE API into the Bronze layer. The script

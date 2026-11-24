@@ -1,4 +1,4 @@
-#' @title Archibus Budget Asset Allocation
+#' @title archibus_budget_asset_ar
 #'
 #' @description
 #' Loads budget asset allocation records from the CBRE API into the Bronze

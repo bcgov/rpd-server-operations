@@ -1,4 +1,4 @@
-#' @title Archibus Cost Category
+#' @title archibus_cost_cat
 #'
 #' @description
 #' Loads cost category reference data from the CBRE API into the Bronze layer.
