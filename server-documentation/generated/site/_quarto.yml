@@ -1,0 +1,23 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "ETL Documentation"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: InfGold.qmd
+        text: Gold layer
+      - href: InfSilver.qmd
+        text: Silver layer
+      - href: InfBronze.qmd
+        text: Bronze layer
+
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    embed-resources: true

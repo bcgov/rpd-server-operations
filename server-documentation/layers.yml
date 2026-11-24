@@ -1,0 +1,61 @@
+# One entry per documented folder. build_docs.R generates generated/<name>.qmd
+# for each. Paths are relative to the repo root (the parent of
+# Server-Documentation/).
+#
+# run_order is hard-coded from the orchestrator. Script names are file names
+# without .R. Scripts found in scripts_dir but missing from run_order are
+# appended at the end with a warning; names listed here but missing on disk
+# produce a warning too.
+
+layers:
+  - name: InfGold
+    title: Gold layer
+    path: InfGold
+    scripts_dir: Scripts
+    orchestrator: INF-GOLD-ORCHESTRATOR.R
+    description: >
+      Reporting tables built from the Silver layer and consumed by Power BI.
+    run_order:
+      - FacilityDetail
+      - ORG2000
+
+  - name: InfSilver
+    title: Silver layer
+    path: InfSilver
+    scripts_dir: Scripts
+    orchestrator: INF-SILVER-ORCHESTRATOR.R
+    description: >
+      Raw data tables from the Bronze layer are cleaned, type cast, and prepped to be consumed by Gold layer.
+    run_order:
+      - ArchibusBuilding
+      - ArchibusDepartment
+      - ArchibusDivision
+      - ArchibusFloors
+      - ArchibusProperty
+      - ArchibusRoom
+
+  - name: InfBronze
+    title: Bronze layer
+    path: InfBronze
+    scripts_dir: Scripts
+    orchestrator: INF-BRONZE-ORCHESTRATOR.R
+    description: >
+      Landing spot for all ingested data prior to any cleaning or application of business logic.
+    run_order:
+      - archibus_bl
+      - archibus_budget_asset_ar
+      - archibus_budget_asset
+      - archibus_company
+      - archibus_cost_cat
+      - archibus_cost_tran_recur
+      - archibus_cost_tran_sched
+      - archibus_costsheet_v
+      - archibus_dp
+      - archibus_dv
+      - archibus_fl
+      - archibus_ls
+      - archibus_project
+      - archibus_projteam
+      - archibus_property
+      - archibus_rm
+      - archibus_rmpct

@@ -32,6 +32,7 @@ pkgList <- c(
   "openxlsx2",
   "plyr",
   "purrr",
+  "quarto",
   "readr",
   "renv",
   "stringr",

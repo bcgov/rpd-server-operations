@@ -1,0 +1,9 @@
+project:
+  type: default
+
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    embed-resources: true
+    theme: cosmo

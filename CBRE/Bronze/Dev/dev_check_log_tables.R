@@ -36,7 +36,10 @@ con <- dbConnect(
 )
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM ServerLogs.InfBronze")
+query <- dbSendQuery(
+  con,
+  "SELECT * FROM ServerLogs.InfBronze ORDER BY load_ts DESC"
+)
 InfBronze_logs <- dbFetch(query, n = -1)
 dbClearResult(query)
 
