@@ -1,4 +1,4 @@
-#' @title Activity Code Report
+#' @title Space Allocation Report
 #'
 #' @description
 #' Project cost report at activity-code level for CBRE project management
@@ -9,42 +9,10 @@
 #' TODO: confirm and expand this description (intended use, who relies on it).
 #'
 #' @database  BuildingIntelligence
-#' @schema    RealProperty
-#' @table     ActivityCodeReport
+#' @schema    InfGold
+#' @table     SpaceAllocation
 #'
-#' @source    CbreSilver.pjm_fact_project_activity  budget, cost, invoice and payment amounts
-#' @source    CbreSilver.pjm_dim_project_activity  activity code, type, parent code and description
-#' @source    CbreSilver.pjm_fact_project  project status and phase
-#' @source    CbreSilver.pjm_dim_project  project number and name
-#' @source    CbreSilver.pjm_fact_project_role  project manager role assignments
-#' @source    CbreSilver.pjm_dim_project_role  role names
-#' @source    CbreSilver.pjm_dim_contact  project manager name and email
-#'
-#' @load_type Full reload
-#' @grain     One row per project and detail activity code
-#'
-#' @filters   Only activity codes with code type `detail`
-#' @filters   Where two or more detail codes share a project, parent code and
-#'   characters 5-6 of the activity code, the one without characters 7-9 is dropped
-#' @filters   Rows where PreliminaryBudget, CurrentBudget, CurrentCommitted,
-#'   Invoiced, Retained, Paid and Remaining are all zero are dropped
-#' @filters   Project manager is taken from role records whose source_unique_id
-#'   matches `<digit>_project_manager`
-#'
-#' @consumers TODO main report or dashboard this table was built for
-#'
-#' @column RefreshDate  Time the table was last reloaded
-#' @column ProjectManager  First and last name of the project's manager
-#' @column CurrentBudget  ApprovedBudget + Adjustments + ApprovedBudgetChanges
-#' @column AnticipatedFinalCost  CurrentCommitted + ProjectedExposure
-#' @column Variance  AnticipatedFinalCost - CurrentBudget
-#' @column VariancePercent  Variance / CurrentBudget x 100; NULL where CurrentBudget is zero
-#'
-#' @notes    Each run builds the result in a temp table, then deletes all rows from the target and inserts the new rows inside one transaction, so a failed run leaves the previous data in place.
-#'
-#' @owner     TODO
-#' @last_reviewed TODO
-#'
+
 # For server logging
 # Begin timer
 task_start <- Sys.time()
@@ -57,7 +25,7 @@ SQL_SERVER <- if (ETL_STATUS == "PROD") {
   "windfarm.idir.bcgov\\CA_TST"
 }
 DB_NAME <- "BuildingIntelligence"
-SCHEMA_NAME <- "RealProperty"
+SCHEMA_NAME <- "InfGold"
 TABLE_NAME <- "SpaceAllocation"
 TEMP_TABLE <- paste0("#", TABLE_NAME, "Temp")
 TARGET_TABLE <- DBI::Id(schema = SCHEMA_NAME, table = TABLE_NAME)
@@ -74,39 +42,35 @@ con <- dbConnect(
 )
 
 # Query SQL Datasets ####
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_rmpct")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusRoomPct")
 RoomAllocatedData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_rm")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusRoom")
 RoomTotalData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_bl")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusBuilding")
 BuildingData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_property")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusProperty")
 PropertyData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_ls")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusLease")
 LeasingData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dv")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusDivision")
 DivisionData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(con, "SELECT * FROM CbreSilver.archibus_dp")
+query <- dbSendQuery(con, "SELECT * FROM InfSilver.ArchibusDepartment")
 DepartmentData <- dbFetch(query, n = -1)
 dbClearResult(query)
 
-query <- dbSendQuery(
-  con,
-  "SELECT * FROM RealProperty.FacilityDetail"
-)
-
+query <- dbSendQuery(con, "SELECT * FROM InfGold.FacilityDetail")
 FacilityDetail <- dbFetch(query, n = -1)
 dbClearResult(query)
 

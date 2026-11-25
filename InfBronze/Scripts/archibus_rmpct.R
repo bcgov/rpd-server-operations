@@ -34,6 +34,7 @@
 #' @column rmpct_pct_space Percentage of room space allocated
 #' @column rmpct_pct_time Percentage of occupant time allocated
 #' @column rmpct_status_pobc Current occupancy-assignment lifecycle status
+#' @column rmpct_status Current use status 0 - Proposed, 1 - Active, 2 - VBR, 3 - Retired, 4 - Rejected
 #' @column row_hash MD5 hash of tracked business attributes used for change detection
 #' @column bronze_batch_id ETL batch identifier for the load execution
 #' @column bronze_load_ts UTC timestamp when the Bronze record version was loaded

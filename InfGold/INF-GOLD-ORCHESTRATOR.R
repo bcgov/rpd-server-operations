@@ -51,7 +51,6 @@ orchestrator_start <- Sys.time()
 ORCHESTRATOR_NAME <- "INF-GOLD-ORCHESTRATOR"
 
 scripts <- c(
-  "InfGold/Scripts/ActivityCodeReport.R",
   "InfGold/Scripts/FacilityDetail.R",
   "InfGold/Scripts/ORG2000.R",
   "InfGold/Scripts/PORT_ProjectCosts.R",

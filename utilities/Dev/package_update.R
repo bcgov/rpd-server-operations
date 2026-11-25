@@ -1,9 +1,26 @@
 library(miniCRAN)
-BioCpkgList <- c(
-  "BiocVersion"
+
+# One off R package updates ####
+pkgList <- c("rstudioapi")
+
+fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
+
+makeRepo(
+  fullList,
+  pkgList,
+  path = "C:/Projects/packagerepo",
+  download = TRUE,
+  type = "win.binary",
+  Rversion = getRversion()
 )
 
-pkgList <- c("shinyWidgets")
+tools::write_PACKAGES(
+  "C:/Projects/packagerepo",
+  type = "win.binary",
+  verbose = TRUE
+)
+
+# Full R package update cycle ####
 pkgList <- c(
   "arrow",
   "assertthat",
@@ -35,12 +52,34 @@ pkgList <- c(
   "quarto",
   "readr",
   "renv",
+  "rstudioapi",
   "stringr",
   "testthat",
   "tibble",
   "tidyr",
   "timetk",
   "vroom"
+)
+
+makeRepo(
+  fullList,
+  pkgList,
+  path = "C:/Projects/packagerepo",
+  download = TRUE,
+  type = "win.binary",
+  Rversion = getRversion()
+)
+
+tools::write_PACKAGES(
+  "C:/Projects/packagerepo",
+  type = "win.binary",
+  verbose = TRUE
+)
+
+
+# BioConductor Update ####
+BioCpkgList <- c(
+  "BiocVersion"
 )
 
 BiocRepos <- BiocManager::repositories()
@@ -54,8 +93,6 @@ BioCfullList <- pkgDep(
   Rversion = getRversion()
 )
 
-# fullList <- pkgDep(pkgList, type = "win.binary", Rversion = getRversion())
-
 makeRepo(
   BioCfullList,
   path = "C:/Projects/packagerepo",
@@ -65,20 +102,7 @@ makeRepo(
   Rversion = getRversion()
 )
 
-makeRepo(
-  # fullList,
-  pkgList,
-  path = "C:/Projects/packagerepo",
-  download = TRUE,
-  type = "win.binary",
-  Rversion = getRversion()
-)
 
-tools::write_PACKAGES(
-  "C:/Projects/packagerepo",
-  type = "win.binary",
-  verbose = TRUE
-)
 # Attempts to get Muon sorted out
 # getOption("repos")
 # renv::config$repos.override("file:///E:/Projects/packagerepo")
