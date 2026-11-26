@@ -237,6 +237,26 @@ tryCatch(
   }
 )
 
+# Testing Area ####
+test <- Issues |> select(-Comment)
+str(test)
+basic_str(test)
+
+str(test, max.level = 2, vec.len = 0)
+
+CommentsTable <- Issues |>
+  select(IssueKey, Comment) |>
+  unnest_wider(Comment, names_sep = "_") |>
+  unnest_wider(Comment_comments, names_sep = "_") |>
+  unnest_wider(col = where(is.list), names_sep = "_") |>
+  unnest_wider(col = where(is.list), names_sep = "_") |>
+  select(
+    IssueKey,
+    matches(
+      "^Comment_comments_.*(_id|_author_displayName|_created|_updated)$"
+    )
+  )
+
 # Start database transaction ####
 # dbRemoveTable(con, target_table)
 if (!dbExistsTable(con, target_table)) {
