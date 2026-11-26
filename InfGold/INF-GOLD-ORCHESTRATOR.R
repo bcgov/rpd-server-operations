@@ -52,11 +52,7 @@ ORCHESTRATOR_NAME <- "INF-GOLD-ORCHESTRATOR"
 
 scripts <- c(
   "InfGold/Scripts/FacilityDetail.R",
-  "InfGold/Scripts/ORG2000.R",
-  "InfGold/Scripts/PORT_ProjectCosts.R",
-  "InfGold/Scripts/PORT_WorkOrders.R",
-  "InfGold/Scripts/PRR2015.R",
-  "InfGold/Scripts/SpaceAllocation.R"
+  "InfGold/Scripts/ORG2000.R"
 )
 
 # -- Per-script result tracking --

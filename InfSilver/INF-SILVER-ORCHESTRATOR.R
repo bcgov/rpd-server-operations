@@ -57,8 +57,10 @@ scripts <- c(
   "InfSilver/Scripts/ArchibusDepartment.R",
   "InfSilver/Scripts/ArchibusDivision.R",
   "InfSilver/Scripts/ArchibusFloors.R",
+  "InfSilver/Scripts/ArchibusLease.R",
   "InfSilver/Scripts/ArchibusProperty.R",
-  "InfSilver/Scripts/ArchibusRoom.R"
+  "InfSilver/Scripts/ArchibusRoom.R",
+  "InfSilver/Scripts/ArchibusRoomPct.R"
 )
 
 # -- Per-script result tracking --
