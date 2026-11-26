@@ -1,17 +1,96 @@
 #' @title Space Allocation Report
 #'
 #' @description
-#' Project cost report at activity-code level for CBRE project management
-#' data. For each project and detail activity code it brings together the
-#' budget, commitment, forecast and payment figures, calculates the variance
-#' against the current budget, and attaches the project manager.
+#' Produces a consolidated space-allocation dataset for buildings, properties,
+#' leases, divisions, and departments within the Real Property portfolio. The
+#' table combines occupancy assignments, room inventories, leasing information,
+#' organizational ownership, and facility characteristics to calculate space,
+#' land, and parking allocations across the portfolio.
 #'
-#' TODO: confirm and expand this description (intended use, who relies on it).
+#' @database BuildingIntelligence
+#' @schema InfGold
+#' @table SpaceAllocation
 #'
-#' @database  BuildingIntelligence
-#' @schema    InfGold
-#' @table     SpaceAllocation
+#' @source InfSilver.ArchibusRmpct Current room occupancy assignments
+#' @source InfSilver.ArchibusRoom Current room inventory
+#' @source InfSilver.ArchibusBuilding Current building inventory
+#' @source InfSilver.ArchibusProperty Current property inventory
+#' @source InfSilver.ArchibusLease Current lease inventory
+#' @source InfSilver.ArchibusDivision Current division inventory
+#' @source InfSilver.ArchibusDepartment Current department inventory
+#' @source InfGold.FacilityDetail Address-validated facility information
 #'
+#' @load_type Full refresh
+#' @grain One row per facility allocation relationship
+#'
+#' @filters Only active buildings and properties are included
+#' @filters Buildings marked as TBD or dummy facilities are excluded
+#' @filters Only active and holdover leases are included
+#' @filters Room allocations with retired or rejected room statuses are excluded
+#' @filters Common rooms not associated with allocation agreements are excluded
+#'
+#' @consumers Portfolio space allocation reporting
+#' @consumers Occupancy analysis
+#' @consumers Lease utilization reporting
+#' @consumers Internal property portfolio dashboards
+#'
+#' @column RefreshDate Timestamp when the dataset was refreshed
+#' @column BuildingLandKey Unified facility allocation key
+#' @column Tenure Property ownership status
+#' @column BCPNumber Business identifier derived from tenure and lease relationships
+#' @column DataIntegrityFlag Allocation quality assessment status
+#' @column BuildingId Building identifier
+#' @column PropertyId Property identifier
+#' @column SiteId Site identifier
+#' @column GeoFlag Indicates whether geocoder-derived location information was used
+#' @column Address Facility address
+#' @column City Facility city
+#' @column PrimaryUse Primary facility use classification
+#' @column StrategicClassification Strategic property classification
+#' @column TotalRentableArea Total rentable building area
+#' @column TotalChargableArea Total chargeable building area
+#' @column TotalUsableArea Total usable building area
+#' @column TotalParkingStalls Total parking stalls
+#' @column TotalRentableLand Total rentable land area
+#' @column SpaceStatus Occupancy allocation status
+#' @column LeaseStatus Lease status
+#' @column ContractCode Lease or contract identifier
+#' @column ParentLease Parent lease identifier
+#' @column AgreementType Lease agreement classification
+#' @column LeaseExpiryDate Lease expiry date
+#' @column AllocatedChargableArea Chargeable area allocated to the relationship
+#' @column PercentAreaAllocated Percentage of total rentable area allocated
+#' @column AllocatedParkingStalls Parking stalls allocated to the relationship
+#' @column PercentParkingAllocated Percentage of parking allocated
+#' @column LeaseLandAppropriated Land appropriated by lease agreement
+#' @column PercentLandAllocated Percentage of land allocated
+#' @column CustomerCategory Department customer category
+#' @column DivisionName Division name
+#' @column DepartmentName Department name
+#' @column Latitude Facility latitude
+#' @column Longitude Facility longitude
+#'
+#' @notes
+#' Data is sourced from both Silver and Gold layers and is intended for
+#' business reporting and allocation analysis.
+#'
+#' The dataset combines room occupancy assignments, lease agreements,
+#' organizational ownership structures, and facility reference information to
+#' determine how building area, parking inventory, and land holdings are
+#' allocated across the portfolio.
+#'
+#' Allocation percentages are calculated independently for building area,
+#' parking stalls, and land holdings.
+#'
+#' DataIntegrityFlag provides business-rule validation checks intended to
+#' identify allocation scenarios requiring review, including over-allocation,
+#' missing lease relationships, and unexpected tenure configurations.
+#'
+#' Facility addresses and geographic coordinates are inherited from
+#' InfGold.FacilityDetail.
+#'
+#' @owner David Rattray
+#' @last_reviewed 2026-11-26
 
 # For server logging
 # Begin timer
@@ -94,49 +173,54 @@ FacilityDetail <- FacilityDetail |>
 # Division ####
 Division <- DivisionData |>
   select(
-    dv_dv_id,
-    dv_name
+    DivisionId,
+    DivisionName
   )
 
 # Department ####
 Department <- DepartmentData |>
   select(
-    dp_customer_category,
-    dp_name,
-    dp_dp_id,
-    dp_dv_id
+    CustomerCategory,
+    DepartmentName,
+    DepartmentId,
+    DivisionId
   )
 
 # RoomAllocation ####
 RoomAllocation <- RoomAllocatedData |>
   select(
-    rmpct_bl_id,
-    rmpct_fl_id,
-    rmpct_rm_id,
-    rmpct_status,
-    rmpct_ls_id,
-    rmpct_dv_id,
-    rmpct_dp_id,
-    rmpct_area_chargable,
-    rmpct_date_end,
-    rmpct_rm_cat
+    RoomPctId,
+    BuildingId,
+    FloorId,
+    RoomId,
+    RoomStatus,
+    RoomPctLeaseId = LeaseId,
+    DivisionId,
+    DepartmentId,
+    RoomAreaChargable,
+    DateEnd,
+    RoomCategory
   )
 
 # RoomTotal ###
 RoomTotal <- RoomTotalData |>
   select(
-    rm_bl_id,
-    rm_fl_id,
-    rm_rm_id,
-    rm_ls_id,
-    rm_dv_id,
-    rm_dp_id,
-    rm_area_chargable
+    BuildingId,
+    FloorId,
+    RoomId,
+    RoomLeaseId = LeaseId,
+    # DivisionId,
+    # DepartmentId,
+    ChargableArea
   )
 
 # Building ####
 Building <- BuildingData |>
-  filter(PobcStatus == "Active") |>
+  rename(
+    linkAddress = Address,
+    linkCity = City
+  ) |>
+  filter(PoBCStatus == "Active") |>
   filter(BuildingId != "TBD") |>
   filter(linkAddress != "Dummy Building") |>
   left_join(
@@ -157,23 +241,28 @@ Building <- BuildingData |>
     Name,
     Tenure,
     PrimaryUse,
-    StrategicClassification,
-    TotalRentableArea = bl_area_rentable,
-    TotalUsableArea = bl_area_usable,
-    lat = bl_lat,
-    lon = bl_lon
+    StrategicClassification = StrategicClass,
+    TotalRentableArea = AreaRentable,
+    TotalUsableArea = AreaUsable,
+    Latitude,
+    Longitude
   )
 
 # Property ####
 Property <- PropertyData |>
-  filter(PobcStatus == "Active") |>
+  rename(
+    linkAddress = Address,
+    linkCity = City,
+    PoBCStatus = Status
+  ) |>
+  filter(PoBCStatus == "Active") |>
   left_join(
     FacilityDetail,
     by = join_by(PropertyId, SiteId, linkAddress, linkCity)
   ) |>
   filter(is.na(BuildingId)) |>
   select(
-    PobcStatus,
+    PoBCStatus,
     BuildingId,
     PropertyId,
     SiteId,
@@ -184,126 +273,124 @@ Property <- PropertyData |>
     Score,
     linkAddress,
     linkCity,
-    Name,
+    Name = PropertyName,
     Tenure,
     PrimaryUse,
-    StrategicClassification,
-    TotalRentableLand,
-    lat,
-    lon
+    StrategicClassification = StrategicClass,
+    TotalRentableLand = LandArea,
+    Latitude,
+    Longitude
   )
 
 # Leasing ####
 Leasing <- LeasingData |>
-  filter(ls_fasb_ls_type != "Non Prop") |>
+  filter(LeaseType != "Non Prop") |>
   select(
-    ls_status,
-    ls_ls_id,
-    ls_bl_id,
-    ls_pr_id,
-    ls_ls_parent_id,
-    ls_option1,
-    ls_date_end,
-    ls_fasb_ls_type,
-    ls_appropriated_hectares,
-    ls_appropriated_parking_stalls,
-    ls_area_negotiated,
-    ls_appropriated_sqm,
-    ls_area_common,
-    ls_area_rentable,
-    ls_area_usable,
-    ls_lease_sublease,
-    ls_multi_tenant,
-    ls_non_standard,
-    ls_op_cost_type,
-    ls_tn_name,
-    ls_version
+    LeaseStatus,
+    LeaseId,
+    LeaseBuildingId,
+    LeasePropertyId,
+    LeaseParentId,
+    Option1,
+    DateEnd,
+    LeaseType,
+    AppropriatedHectares,
+    AppropriatedParkingStalls,
+    AreaNegotiated,
+    AppropriatedSqM,
+    AreaCommon,
+    AreaRentable,
+    AreaUsable,
+    Sublease,
+    MultiTenant,
+    NonStandard,
+    OperationCostType,
+    LeaseTenantName,
+    LeaseVersion
   ) |>
-  filter(ls_status %in% c("Active", "Holdover"))
+  filter(LeaseStatus %in% c("Active", "Holdover"))
 
 # Assemble Tables ############################################################
 Dual_Properties <- PropertyData |>
-  filter(PobcStatus == "Active") |>
-  select(PropertyId, TotalRentableLand)
+  filter(Status == "Active") |>
+  select(PropertyId, TotalRentableLand = LandArea)
 
 Building_Start <- RoomTotal |>
   full_join(
     RoomAllocation,
     by = join_by(
-      rm_bl_id == rmpct_bl_id,
-      rm_fl_id == rmpct_fl_id,
-      rm_rm_id == rmpct_rm_id
+      BuildingId,
+      FloorId,
+      RoomId
     )
   ) |>
   # keep rows without an end date or an end date that hasn't occurred,
   # which will cover duplicate rows that were ended for some reason (often retired)
   # filter(is.na(rmpct_date_end)) |>
-  filter(rmpct_date_end > as.POSIXct(Sys.Date()) | is.na(rmpct_date_end)) |>
+  filter(DateEnd > as.POSIXct(Sys.Date()) | is.na(DateEnd)) |>
   # Filter out cases where the chargable area of a common room is not part of the agreement.
   filter(
-    !(is.na(rmpct_ls_id) & rmpct_rm_cat %in% c("FLOOR COMMON", "BUILDING COM"))
+    !(is.na(RoomPctLeaseId) &
+      RoomCategory %in% c("FLOOR COMMON", "BUILDING COM"))
   ) |>
   # Filter out anything not assigned to any of a lease, division, or department as this is not allocated
   # filter(
   #   !(is.na(rmpct_ls_id) & is.na(rmpct_dv_id) & is.na(rmpct_dp_id))
   # ) |>
-  filter(!rmpct_status %in% c("3", "4")) |>
-  group_by(rm_bl_id) |>
+  filter(!RoomStatus %in% c("3", "4")) |>
+  group_by(BuildingId) |>
   mutate(
-    TotalChargableArea = sum(rm_area_chargable, na.rm = TRUE),
+    TotalChargableArea = sum(RoomAreaChargable, na.rm = TRUE),
     TotalParkingStalls = sum(
-      grepl("^P", rm_rm_id, ignore.case = TRUE),
+      grepl("^P", RoomId, ignore.case = TRUE),
       na.rm = TRUE
     ),
-    NumberOfFloors = n_distinct(rm_fl_id),
+    NumberOfFloors = n_distinct(FloorId),
     NumberOfParkingFloors = n_distinct(
-      rm_fl_id[grepl("^P", rm_fl_id, ignore.case = TRUE)],
+      FloorId[grepl("^P", FloorId, ignore.case = TRUE)],
       na.rm = TRUE
     )
   ) |>
   group_by(
-    rm_bl_id,
-    rm_ls_id,
-    rmpct_ls_id,
-    rmpct_dv_id,
-    rmpct_dp_id,
-    rmpct_status
+    BuildingId,
+    RoomLeaseId,
+    RoomPctLeaseId,
+    DivisionId,
+    DepartmentId,
+    RoomStatus
   ) |>
   summarise(
     TotalChargableArea = first(TotalChargableArea),
     TotalParkingStalls = first(TotalParkingStalls),
-    AllocatedChargableArea = sum(rmpct_area_chargable, na.rm = TRUE),
+    AllocatedChargableArea = sum(RoomAreaChargable, na.rm = TRUE),
     AllocatedParkingStalls = sum(
-      grepl("^P", rm_rm_id, ignore.case = TRUE),
+      grepl("^P", RoomId, ignore.case = TRUE),
       na.rm = TRUE
     ),
     NumberOfFloors = first(NumberOfFloors),
-    NumberOfParkingFloors = first(NumberOfParkingFloors)
+    NumberOfParkingFloors = first(NumberOfParkingFloors),
+    .groups = "drop_last"
   ) |>
   ungroup() |>
   filter(
-    !(if_all(c(rmpct_ls_id, rmpct_dv_id, rmpct_dp_id), is.na) &
+    !(if_all(c(RoomPctLeaseId, DivisionId, DepartmentId), is.na) &
       (AllocatedChargableArea == 0 & AllocatedParkingStalls == 0))
   ) |>
-  left_join(Leasing, by = join_by(rmpct_ls_id == ls_ls_id)) |>
-  full_join(Building, by = join_by(rm_bl_id == BuildingId)) |>
-  left_join(Department, by = join_by(rmpct_dp_id == dp_dp_id)) |>
-  left_join(Division, by = join_by(rmpct_dv_id == dv_dv_id)) |>
+  left_join(Leasing, by = join_by(RoomPctLeaseId == LeaseId)) |>
+  full_join(Building, by = join_by(BuildingId)) |>
+  left_join(Division, by = join_by(DivisionId)) |>
+  left_join(Department, by = join_by(DivisionId, DepartmentId)) |>
   mutate(
-    CustomerCategory = dp_customer_category,
-    DivisionName = dv_name,
-    DepartmentName = dp_name,
     Source = "Building"
   ) |>
   filter(!is.na(Tenure)) |>
-  left_join(Dual_Properties, by = join_by(rm_bl_id == PropertyId))
+  left_join(Dual_Properties, by = join_by(BuildingId == PropertyId))
 
 
 Building_Final <- Building_Start |>
   select(
-    BuildingLandKey = rm_bl_id,
     Tenure,
-    BuildingId = rm_bl_id,
+    BuildingId,
     PropertyId,
     SiteId,
     GeoFlag,
@@ -316,35 +403,36 @@ Building_Final <- Building_Start |>
     TotalUsableArea,
     TotalParkingStalls,
     TotalRentableLand,
-    SpaceStatus = rmpct_status,
-    RmTotalLease = rm_ls_id,
-    LeaseStatus = ls_status,
-    ContractCode = rmpct_ls_id,
-    ParentLease = ls_ls_parent_id,
-    Option1 = ls_option1,
-    LeaseType = ls_lease_sublease,
-    AgreementType = ls_fasb_ls_type,
-    LeaseExpiryDate = ls_date_end,
-    LeaseVersion = ls_version,
-    LeaseMultiTenant = ls_multi_tenant,
-    LeaseOptionCostType = ls_op_cost_type,
-    LeaseNonStandard = ls_non_standard,
-    LeaseAreaNegotiated = ls_area_negotiated,
-    LeaseParkingAppropriated = ls_appropriated_parking_stalls,
+    SpaceStatus = RoomStatus,
+    RmTotalLease = RoomLeaseId,
+    LeaseStatus,
+    ContractCode = RoomPctLeaseId,
+    ParentLease = LeaseParentId,
+    Option1,
+    LeaseType = Sublease,
+    AgreementType = LeaseType,
+    LeaseExpiryDate = DateEnd,
+    LeaseVersion,
+    LeaseMultiTenant = MultiTenant,
+    LeaseOptionCostType = OperationCostType,
+    LeaseNonStandard = NonStandard,
+    LeaseAreaNegotiated = AreaNegotiated,
+    LeaseParkingAppropriated = AppropriatedParkingStalls,
     AllocatedChargableArea,
     AllocatedParkingStalls,
-    LeaseLandAppropriated = ls_appropriated_hectares,
+    LeaseLandAppropriated = AppropriatedHectares,
     CustomerCategory,
     DivisionName,
     DepartmentName,
-    lat,
-    lon,
+    Latitude,
+    Longitude,
     Precision,
     Score,
     linkAddress,
     linkCity,
     Source
   ) |>
+  mutate(BuildingLandKey = BuildingId, .before = everything()) |>
   # Handle weird edge case with B0029637 - N0001220 as part of dual property identifier for parking
   rowwise() |>
   mutate(
@@ -365,14 +453,11 @@ Building_Final <- Building_Start |>
   )
 
 Property_Start <- Property |>
-  filter(!PropertyId %in% Building_Start$rm_bl_id) |>
-  left_join(Leasing, by = join_by(PropertyId == ls_pr_id)) |>
-  left_join(Department, by = join_by(ls_tn_name == dp_dp_id)) |>
-  left_join(Division, by = join_by(dp_dv_id == dv_dv_id)) |>
+  filter(!PropertyId %in% Building_Start$BuildingId) |>
+  left_join(Leasing, by = join_by(PropertyId == LeasePropertyId)) |>
+  left_join(Department, by = join_by(LeaseTenantName == DepartmentId)) |>
+  left_join(Division, by = join_by(DivisionId)) |>
   mutate(
-    CustomerCategory = dp_customer_category,
-    DivisionName = dv_name,
-    DepartmentName = dp_name,
     SpaceStatus = NA_character_,
     RmTotalLease = NA_character_,
     TotalChargableArea = NA_integer_,
@@ -388,10 +473,9 @@ Property_Start <- Property |>
 
 Property_Final <- Property_Start |>
   select(
-    BuildingLandKey = PropertyId,
     Tenure,
     BuildingId,
-    PropertyId = PropertyId,
+    PropertyId,
     SiteId,
     GeoFlag,
     Address,
@@ -405,32 +489,36 @@ Property_Final <- Property_Start |>
     TotalRentableLand,
     SpaceStatus,
     RmTotalLease,
-    LeaseStatus = ls_status,
-    ContractCode = ls_ls_id,
-    ParentLease = ls_ls_parent_id,
-    Option1 = ls_option1,
-    LeaseType = ls_lease_sublease,
-    AgreementType = ls_fasb_ls_type,
-    LeaseExpiryDate = ls_date_end,
-    LeaseVersion = ls_version,
-    LeaseMultiTenant = ls_multi_tenant,
-    LeaseOptionCostType = ls_op_cost_type,
-    LeaseNonStandard = ls_non_standard,
-    LeaseAreaNegotiated = ls_area_negotiated,
-    LeaseParkingAppropriated = ls_appropriated_parking_stalls,
+    LeaseStatus,
+    ContractCode = LeaseId,
+    ParentLease = LeaseParentId,
+    Option1,
+    LeaseType = Sublease,
+    AgreementType = LeaseType,
+    LeaseExpiryDate = DateEnd,
+    LeaseVersion,
+    LeaseMultiTenant = MultiTenant,
+    LeaseOptionCostType = OperationCostType,
+    LeaseNonStandard = NonStandard,
+    LeaseAreaNegotiated = AreaNegotiated,
+    LeaseParkingAppropriated = AreaNegotiated,
     AllocatedChargableArea,
     AllocatedParkingStalls,
-    LeaseLandAppropriated = ls_appropriated_hectares,
+    LeaseLandAppropriated = AppropriatedHectares,
     CustomerCategory,
     DivisionName,
     DepartmentName,
-    lat,
-    lon,
+    Latitude,
+    Longitude,
     Precision,
     Score,
     linkAddress,
     linkCity,
     Source
+  ) |>
+  mutate(
+    BuildingLandKey = PropertyId,
+    .before = everything()
   )
 
 # Create Final Report ########################################################
@@ -534,7 +622,7 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         BuildingLandKey           NVARCHAR(50)    NULL,
         Tenure                    NVARCHAR(20)    NULL,
         BCPNumber                 NVARCHAR(50)    NULL,
-        DataIntegrityFlag         NVARCHAR(20)    NULL,
+        DataIntegrityFlag         NVARCHAR(50)    NULL,
         BuildingId                NVARCHAR(50)    NULL,
         PropertyId                NVARCHAR(50)    NULL,
         SiteId                    NVARCHAR(50)    NULL,
@@ -558,9 +646,9 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         AgreementType             NVARCHAR(50)    NULL,
         LeaseExpiryDate           DATETIME2(3)    NULL,
         LeaseVersion              NVARCHAR(10)    NULL,
-        LeaseMultiTenant          NVARCHAR(10)    NULL,
+        LeaseMultiTenant          BIT             NULL,
         LeaseOptionCostType       NVARCHAR(10)    NULL,
-        LeaseNonStandard          NVARCHAR(10)    NULL,
+        LeaseNonStandard          BIT             NULL,
         LeaseAreaNegotiated       DECIMAL(18,5)   NULL,
         LeaseParkingAppropriated  DECIMAL(18,5)   NULL,
         AllocatedChargableArea    DECIMAL(18,5)   NULL,
@@ -572,8 +660,8 @@ if (!dbExistsTable(con, TARGET_TABLE)) {
         CustomerCategory          NVARCHAR(100)   NULL,
         DivisionName              NVARCHAR(100)   NULL,
         DepartmentName            NVARCHAR(100)   NULL,
-        lat                       NVARCHAR(30)    NULL,
-        lon                       NVARCHAR(30)    NULL,
+        Latitude                  DECIMAL(9,6)    NULL,
+        Longitude                 DECIMAL(9,6)    NULL,
         Precision                 DECIMAL(5,2)    NULL,
         Score                     DECIMAL(5,2)    NULL,
         linkAddress               NVARCHAR(150)   NULL,
@@ -612,7 +700,7 @@ tryCatch(
         BuildingLandKey           NVARCHAR(50)    NULL,
         Tenure                    NVARCHAR(20)    NULL,
         BCPNumber                 NVARCHAR(50)    NULL,
-        DataIntegrityFlag         NVARCHAR(20)    NULL,
+        DataIntegrityFlag         NVARCHAR(50)    NULL,
         BuildingId                NVARCHAR(50)    NULL,
         PropertyId                NVARCHAR(50)    NULL,
         SiteId                    NVARCHAR(50)    NULL,
@@ -636,9 +724,9 @@ tryCatch(
         AgreementType             NVARCHAR(50)    NULL,
         LeaseExpiryDate           DATETIME2(3)    NULL,
         LeaseVersion              NVARCHAR(10)    NULL,
-        LeaseMultiTenant          NVARCHAR(10)    NULL,
+        LeaseMultiTenant          BIT             NULL,
         LeaseOptionCostType       NVARCHAR(10)    NULL,
-        LeaseNonStandard          NVARCHAR(10)    NULL,
+        LeaseNonStandard          BIT             NULL,
         LeaseAreaNegotiated       DECIMAL(18,5)   NULL,
         LeaseParkingAppropriated  DECIMAL(18,5)   NULL,
         AllocatedChargableArea    DECIMAL(18,5)   NULL,
@@ -650,8 +738,8 @@ tryCatch(
         CustomerCategory          NVARCHAR(100)   NULL,
         DivisionName              NVARCHAR(100)   NULL,
         DepartmentName            NVARCHAR(100)   NULL,
-        lat                       NVARCHAR(30)    NULL,
-        lon                       NVARCHAR(30)    NULL,
+        Latitude                  DECIMAL(9,6)    NULL,
+        Longitude                 DECIMAL(9,6)    NULL,
         Precision                 DECIMAL(5,2)    NULL,
         Score                     DECIMAL(5,2)    NULL,
         linkAddress               NVARCHAR(150)   NULL,
@@ -730,8 +818,8 @@ tryCatch(
         CustomerCategory,
         DivisionName,
         DepartmentName,
-        lat,
-        lon,
+        Latitude,
+        Longitude,
         Precision,
         Score,
         linkAddress,
@@ -747,6 +835,7 @@ tryCatch(
     dbCommit(con)
     #     n_deleted <<- n_deleted
     n_inserted <<- n_inserted
+    cat("ETL complete — inserted:", n_inserted, "\n")
     #     n_updated <<- n_updated
     #     # Rollback transaction on failure
   },
